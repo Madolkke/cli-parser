@@ -1,0 +1,3 @@
+testdata/real_command_outputs/**/*.raw text eol=lf -whitespace
+testdata/real_command_outputs/**/*.txt text eol=lf -whitespace
+testdata/real_command_outputs/**/*.json text eol=lf
