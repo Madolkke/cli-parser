@@ -46,6 +46,26 @@ def _line_schema(field: str = "value", field_type: str = "string") -> dict:
     }
 
 
+def _array_schema(container: str, field: str) -> dict:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            container: {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {field: {"type": "string"}},
+                    "required": [field],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": [container],
+        "additionalProperties": False,
+    }
+
+
 def _codes(issues) -> set[str]:
     return {issue.code for issue in issues}
 
@@ -217,9 +237,9 @@ def test_duplicate_variable_on_one_line_is_rejected_before_ttp() -> None:
     assert duplicate.details == {"variable": "_line_"}
 
 
-def test_ignore_may_repeat_on_one_line_without_creating_result_fields() -> None:
+def test_supported_ignore_forms_may_repeat_without_creating_result_fields() -> None:
     template = (
-        "{{ ignore | WORD }} {{ ignore | WORD }} {{ value | WORD }} {{ ignore | WORD }}"
+        r'{{ ignore }} {{ ignore(WORD) }} {{ value | WORD }} {{ ignore(r"\S+") }}'
     )
 
     result = validate_ttp_template(template, ["a b value c"], _line_schema())
@@ -228,13 +248,48 @@ def test_ignore_may_repeat_on_one_line_without_creating_result_fields() -> None:
     assert result.records == [{"value": "value"}]
 
 
-@pytest.mark.parametrize("control", ["_start_", "_end_", "_line_"])
-def test_line_controls_cannot_target_ignore(control: str) -> None:
-    issues = inspect_ttp_template(f"{{{{ ignore | {control} }}}}")
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "ignore()",
+        "ignore(WORD, DIGIT)",
+        "ignore(pattern=WORD)",
+        "ignore(UNKNOWN)",
+        'ignore(re(".*"))',
+        'ignore.__call__(".*")',
+        'ignore["pattern"]',
+        'ignore("a" + "b")',
+        'ignore(f"{value}")',
+        "ignore(x for x in values)",
+        'ignore("[")',
+        "ignore | ORPHRASE",
+        'ignore | re(".*")',
+        'ignore(".*") | WORD',
+        "value | ignore",
+        "value | ignore(WORD)",
+    ],
+)
+def test_invalid_ignore_forms_are_rejected_with_fixed_feedback(
+    expression: str,
+) -> None:
+    issues = inspect_ttp_template(f"{{{{ {expression} }}}}")
 
     assert len(issues) == 1
-    assert issues[0].code == "ttp.unsafe_variable_attribute"
-    assert issues[0].details == {"attribute": control}
+    assert issues[0].code == "ttp.invalid_ignore_syntax"
+    assert issues[0].details == {
+        "required_action": "replace_with_ignore_call",
+    }
+    assert expression not in issues[0].message
+    assert expression not in str(issues[0].details)
+
+
+def test_ignore_regex_uses_the_existing_regex_limit() -> None:
+    issues = inspect_ttp_template(
+        '{{ ignore("abcd") }} {{ value }}',
+        max_ttp_regex_chars=3,
+    )
+
+    assert _codes(issues) == {"ttp.invalid_ignore_syntax"}
 
 
 def test_deep_xml_and_repeated_static_issues_remain_bounded() -> None:
@@ -287,6 +342,75 @@ def test_regex_alternation_is_not_mistaken_for_a_pipeline_separator() -> None:
     assert result.records == [{"state": "up"}]
 
 
+def test_real_linux_outputs_are_fully_parsed_with_ignore_calls() -> None:
+    directory = (
+        Path(__file__).resolve().parents[2]
+        / "testdata"
+        / "real_command_outputs"
+        / "ttp_templates"
+        / "linux"
+        / "ip_address_show"
+    )
+    outputs = [
+        (directory / "ip_address_show_multiple_addresses.txt").read_text(
+            encoding="utf-8",
+        ),
+        (directory / "ip_address_show.txt").read_text(encoding="utf-8"),
+        (directory / "ip_address_show_short_header.txt").read_text(
+            encoding="utf-8",
+        ),
+    ]
+    template = (
+        '<group name="interfaces*">\n'
+        "{{ ignore(DIGIT) }}: {{ name | WORD }}: "
+        "&lt;{{ ignore(ORPHRASE) }}&gt; mtu {{ ignore(DIGIT) }} "
+        'qdisc {{ ignore(".*?") }}state {{ ignore(WORD) }}'
+        "{{ ignore(ORPHRASE) }}\n"
+        "</group>\n"
+    )
+
+    result = validate_ttp_template(
+        template,
+        outputs,
+        _array_schema("interfaces", "name"),
+    )
+
+    assert result.valid, result.issues
+    assert [len(record["interfaces"]) for record in result.records] == [5, 6, 2]
+
+
+def test_real_inventory_outputs_capture_every_serial_number() -> None:
+    directory = (
+        Path(__file__).resolve().parents[2]
+        / "testdata"
+        / "real_command_outputs"
+        / "ttp_templates"
+        / "cisco_ios"
+        / "show_inventory"
+    )
+    outputs = [
+        (directory / "show_inventory.txt").read_text(encoding="utf-8"),
+        (directory / "show_inventory_modular_router.txt").read_text(
+            encoding="utf-8",
+        ),
+    ]
+    template = """\
+<group name="inventory*">
+PID: {{ ignore(".*?") }}, VID: {{ ignore(".*?") }}, SN: {{ sn | WORD }}
+</group>
+"""
+
+    result = validate_ttp_template(
+        template,
+        outputs,
+        _array_schema("inventory", "sn"),
+    )
+
+    assert result.valid, result.issues
+    assert [len(record["inventory"]) for record in result.records] == [4, 6]
+    assert all(item["sn"] for record in result.records for item in record["inventory"])
+
+
 def test_empty_root_record_is_reported_as_no_match_before_schema_errors() -> None:
     result = validate_ttp_template(
         "Value: {{ value | WORD }}",
@@ -305,7 +429,7 @@ def test_no_match_does_not_hide_other_sample_schema_errors() -> None:
         _line_schema(field_type="integer"),
     )
 
-    assert result.records == []
+    assert result.records == [{}, {"value": "text"}]
     assert [issue.code for issue in result.issues] == [
         "ttp.no_match",
         "schema.record_mismatch",

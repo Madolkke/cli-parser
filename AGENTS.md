@@ -27,8 +27,10 @@
 - 默认预算为总时长 `300` 秒、AgentScope `12` 轮、最多 `8` 次 TTP 提交、Schema/TTP 阶段各最多 `3` 次零工具重试；单次隔离解析默认 `20` 秒。限制均通过 `GenerationPolicy` 配置，所有零工具回复和语义重试都计入总轮次与总时长，任一预算先耗尽即终止。
 - 模型侧输入总预算为 `240,000` 字符，按样例均分并确定性保留约 `75%` 头部和 `25%` 尾部；随后按最终提示序列化长度和 AgentScope 初始 token 估算继续收紧，避免控制字符/多字节文本膨胀或上下文压缩丢失证据；最终 TTP 验收始终使用未经采样的完整输入。
 - Agent 工具通过候选后，generator 必须在 Agent 外再次执行完整安全检查、全文解析、records 映射和冻结 Schema 校验。模型自述或工具阶段的成功不能代替最终验收。
+- `LMNR_PROJECT_API_KEY` 非空时自动启用 Laminar Python tracing，可用 `LMNR_BASE_URL` 指向自托管实例；自托管 HTTP/gRPC 端口分别由可选的 `LMNR_HTTP_PORT` / `LMNR_GRPC_PORT` 显式配置。独立调用时 `ttp.generate` 创建 Trace 根；存在上游 Agent span 时加入同一 Trace。模型和两个提交工具的 span 继承该上下文，`GenerationMetadata.laminar_trace_id` 用于定位 Trace。未配置 Key 时 tracing 完全禁用，初始化错误直接传播。
 - 首版不提供 CLI、`evals/` 或 `examples/`，也不预建多 Agent 编排、HTTP/A2A/MCP 适配、持久化、部署或消息总线。
-- `testdata/real_command_outputs/` 是固定版本的公开 raw CLI 开发测试语料，不属于产品包、`evals/`、`examples/` 或 pytest fixtures；不得把上游解析模板、参考 YAML、mock 数据或 JSON 命令结果一并复制进来。
+- Laminar 仅作为可选的完整调试通道，不引入 `lmnr-cli`、Debugger session 或 replay；两个短进程开发脚本在运行结束前 flush，语料 `list` 和 `preflight` 不初始化 Laminar 或产生网络请求。
+- `testdata/real_command_outputs/` 是固定版本的公开 raw CLI 开发测试语料，不属于产品包、`evals/` 或 `examples/`；除 Linux `ip address show` 与 Cisco IOS `show inventory` 的确定性 TTP 语法回归外，不把完整语料套件接入 pytest。不得把上游解析模板、参考 YAML、mock 数据或 JSON 命令结果一并复制进来。
 - `scripts/run_live_corpus.py` 只用于语料 preflight 和人工触发的真实模型闭环，不是产品 CLI，不得改变或绕过公共 `TtpGenerator` API。
 
 ## 安全约束
@@ -39,7 +41,7 @@
 - TTP 模板按不可信代码处理。实例化解析器前执行标签、属性、过滤器和参数 AST 白名单预检；禁止 macro、vars、lookup、input、output、extend、returner、外部文件/URL、DNS/GeoIP、自定义函数和动态扩展。
 - TTP 解析在独立 spawn 进程和临时缓存目录中执行，设置模板、嵌套、参数、结果大小和时间上限；超时必须终止子进程。不得因 TTP 的字符串路径识别或参数 `eval` 行为引入文件访问或任意表达式。
 - spawn 宿主必须能够重新导入 `__main__`；交互式 `python -`/不具备可导入入口的宿主返回结构化 `ttp.worker_host_unsupported`，不得把 bootstrap 失败伪装成解析超时。
-- 日志、异常、事件和 tracing 默认不得包含原始命令输出、凭据、字段证据片段、解析值、assistant/Thinking 文本或工具参数增量；零工具重试只允许记录请求 ID、阶段和有界计数等结构化事实。
+- 普通日志、异常和公共 issues 默认不得包含原始命令输出、凭据、字段证据片段、解析值、assistant/Thinking 文本或工具参数增量；零工具重试只允许记录请求 ID、阶段和有界计数等结构化事实。请求内的 `submit_ttp_template` 反馈可以包含最多 `32 KiB` 的实际捕获结果，供同一 Agent 修正候选，但不得写入失败的公共 `GenerationResult`、`last_attempt` 或普通日志。显式设置 `LMNR_PROJECT_API_KEY` 是完整调试采集的另一例外：Laminar Trace 可以包含命令输出、模型回复、evidence、模板、捕获结果和验证反馈，但任何模型或 Laminar API Key 都不得进入 Trace。
 
 ## 质量要求
 
@@ -48,6 +50,7 @@
 - 测试覆盖 Schema 修正与冻结、TTP 提交修正协议、零工具中文提醒及分阶段重试上限、预算耗尽、所有 records 与输入一一对应，以及嵌套结构的 Schema 回验；真实模型修正测试由 validator 确定性拒绝首个有效候选，避免依赖随机的首次失败。
 - 公开真实语料 manifest 固定为 `13` 个 case、`40` 份文本；无凭据时必须可以独立执行 preflight，验证文件编码、大小、终端噪声、凭据模式和 SHA-256，不得产生模型请求。
 - 真实语料闭环独立于 pytest：先要求 smoke 的 `5/5` case（`12` 份文本）通过，再用同一结果目录 resume 完整代表集并达到 `13/13`；只有当前 `prompt_version` 的成功 case 才能被跳过，每个成功 case 都要在 Agent 外使用全文重新验收。
+- Laminar 单测必须覆盖可选初始化、幂等行为、独立/继承 Trace、根与 TOOL span 的正常/失败/异常/取消生命周期、trace ID 契约和短进程 flush；语料 `list`/`preflight` 必须证明不触发 tracing 初始化或网络访问。
 - 首版交付前至少完成一次真实模型的端到端闭环；普通测试仍必须离线、稳定且不依赖模型。
 
 ## 后续 Agent 工作规则

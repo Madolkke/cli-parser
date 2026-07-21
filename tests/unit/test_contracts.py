@@ -145,6 +145,29 @@ def test_failed_result_requires_an_error_issue() -> None:
         )
 
 
+def test_generation_metadata_supports_an_optional_laminar_trace_id() -> None:
+    assert _metadata().laminar_trace_id is None
+
+    metadata = GenerationMetadata(
+        model_name="model",
+        command_output_count=1,
+        laminar_trace_id="01234567-89ab-cdef-0123-456789abcdef",
+    )
+
+    assert metadata.laminar_trace_id == "01234567-89ab-cdef-0123-456789abcdef"
+    assert (
+        metadata.model_dump(mode="json")["laminar_trace_id"]
+        == "01234567-89ab-cdef-0123-456789abcdef"
+    )
+
+    with pytest.raises(ValidationError):
+        GenerationMetadata(
+            model_name="model",
+            command_output_count=1,
+            laminar_trace_id="",
+        )
+
+
 def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> None:
     settings = TtpGeneratorSettings.from_env(
         {

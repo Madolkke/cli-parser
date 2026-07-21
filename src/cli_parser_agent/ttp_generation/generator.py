@@ -7,10 +7,17 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from typing import Any, TypeVar
+from uuid import uuid4
 
 from pydantic import ValidationError
 
 from ..config import GenerationPolicy, TtpGeneratorSettings
+from ..observability import (
+    current_laminar_trace_id,
+    finish_laminar_span,
+    initialize_laminar_from_env,
+    start_laminar_span,
+)
 from .agent import (
     PROMPT_VERSION,
     GenerationSession,
@@ -237,6 +244,7 @@ class TtpGenerator:
         *,
         settings: TtpGeneratorSettings,
         policy: GenerationPolicy | None = None,
+        _laminar_environ: Mapping[str, str] | None = None,
     ) -> None:
         self.settings = TtpGeneratorSettings.model_validate(settings)
         self.policy = (
@@ -244,6 +252,7 @@ class TtpGenerator:
             if policy is None
             else GenerationPolicy.model_validate(policy)
         )
+        initialize_laminar_from_env(_laminar_environ)
 
     @classmethod
     def from_env(
@@ -257,15 +266,118 @@ class TtpGenerator:
         resolved_policy = (
             GenerationPolicy.from_env(environ) if policy is None else policy
         )
+        settings = TtpGeneratorSettings.from_env(environ)
         return cls(
-            settings=TtpGeneratorSettings.from_env(environ),
+            settings=settings,
             policy=resolved_policy,
+            _laminar_environ=environ,
         )
 
     async def generate(self, request: GenerationRequest) -> GenerationResult:
-        """Run the request-local AgentScope loop and final full-input acceptance."""
+        """Trace one request and preserve the framework-neutral public API."""
 
         request = GenerationRequest.model_validate(request)
+        request_id = str(uuid4())
+        base_attributes = {
+            "request_id": request_id,
+            "model_name": self.settings.model_name,
+            "prompt_version": PROMPT_VERSION,
+            "command_output_count": len(request.command_outputs),
+        }
+        result: GenerationResult | None = None
+        pending_error: BaseException | None = None
+
+        with start_laminar_span(
+            "ttp.generate",
+            input=request.model_dump(mode="json"),
+            tags=("ttp-generation",),
+            attributes=base_attributes,
+        ) as span_scope:
+            try:
+                result = await self._generate(request, request_id=request_id)
+            except asyncio.CancelledError as error:
+                pending_error = error
+                trace_metadata = (
+                    {
+                        **base_attributes,
+                        "termination_reason": "cancelled",
+                        "status": "cancelled",
+                    }
+                    if span_scope.creates_trace
+                    else None
+                )
+                finish_laminar_span(
+                    output={
+                        "status": "cancelled",
+                        "exception_type": type(error).__name__,
+                    },
+                    outcome="cancelled",
+                    attributes={
+                        "termination_reason": "cancelled",
+                        "status": "cancelled",
+                        "exception_type": type(error).__name__,
+                    },
+                    trace_metadata=trace_metadata,
+                )
+            except BaseException as error:
+                pending_error = error
+                trace_metadata = (
+                    {
+                        **base_attributes,
+                        "termination_reason": "exception",
+                        "status": "failed",
+                    }
+                    if span_scope.creates_trace
+                    else None
+                )
+                finish_laminar_span(
+                    output={
+                        "status": "failed",
+                        "exception_type": type(error).__name__,
+                    },
+                    outcome="exception",
+                    attributes={
+                        "termination_reason": "exception",
+                        "status": "failed",
+                        "exception_type": type(error).__name__,
+                    },
+                    trace_metadata=trace_metadata,
+                )
+            else:
+                result_metadata = result.metadata
+                final_attributes = {
+                    "request_id": result_metadata.request_id,
+                    "model_name": result_metadata.model_name,
+                    "prompt_version": result_metadata.prompt_version,
+                    "command_output_count": result_metadata.command_output_count,
+                    "schema_submissions": result_metadata.schema_submissions,
+                    "ttp_submissions": result_metadata.ttp_submissions,
+                    "termination_reason": result_metadata.termination_reason or "",
+                    "status": result.status,
+                }
+                finish_laminar_span(
+                    output=result.model_dump(mode="json"),
+                    outcome=result.status,
+                    attributes=final_attributes,
+                    trace_metadata=(
+                        final_attributes if span_scope.creates_trace else None
+                    ),
+                )
+
+        if pending_error is not None:
+            raise pending_error
+        if result is None:  # pragma: no cover - guarded by the branches above
+            raise RuntimeError("generation completed without a result")
+        return result
+
+    async def _generate(
+        self,
+        request: GenerationRequest,
+        *,
+        request_id: str,
+    ) -> GenerationResult:
+        """Run the request-local AgentScope loop and final full-input acceptance."""
+
         started = time.monotonic()
         deadline = started + self.policy.total_timeout_seconds
         sampled: list[SampledCommandOutput] = []
@@ -374,6 +486,7 @@ class TtpGenerator:
 
         def metadata(termination_reason: str) -> GenerationMetadata:
             return GenerationMetadata(
+                request_id=request_id,
                 model_name=self.settings.model_name,
                 prompt_version=PROMPT_VERSION,
                 command_output_count=len(request.command_outputs),
@@ -391,6 +504,7 @@ class TtpGenerator:
                 ttp_no_tool_retries=session.ttp_no_tool_retries,
                 first_ttp_passed=session.first_ttp_valid,
                 termination_reason=termination_reason,
+                laminar_trace_id=current_laminar_trace_id(),
             )
 
         def failure(

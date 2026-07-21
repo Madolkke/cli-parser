@@ -1,5 +1,11 @@
 """Deterministic validation boundary for generated schemas and TTP templates."""
 
+from .capture import (
+    MAX_CAPTURE_BYTES,
+    MAX_SCALAR_VALUE_CHARS,
+    ParseCapture,
+    build_parse_capture,
+)
 from .json_schema import (
     schema_leaf_paths,
     validate_field_evidence,
@@ -14,7 +20,11 @@ from .ttp import (
 )
 
 __all__ = [
+    "MAX_CAPTURE_BYTES",
+    "MAX_SCALAR_VALUE_CHARS",
+    "ParseCapture",
     "TtpValidationResult",
+    "build_parse_capture",
     "inspect_ttp_template",
     "schema_leaf_paths",
     "validate_field_evidence",

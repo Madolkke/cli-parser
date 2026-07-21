@@ -2,8 +2,8 @@
 
 <!-- markdownlint-disable MD013 -->
 
-- 状态：首版实现完成，待真实模型 live 验收
-- 日期：2026-07-19
+- 状态：首版实现完成，已完成单例 live 闭环；完整语料验收待完成
+- 日期：2026-07-21
 - AgentScope 基线：2.0.4
 
 ## 1. 目标与边界
@@ -50,6 +50,14 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 模型侧命令输出总预算为 `240,000` 字符，按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后还按最终提示序列化长度和 AgentScope 初始 token 估算收紧，避免 JSON 控制字符/多字节文本膨胀超过上下文。请求级 middleware 禁止 AgentScope 用摘要替换这些证据；若后续轮次确实超出模型上下文，返回结构化模型失败。确定性验收始终读取全文。
 
+### 2.4 可选 Laminar 调试 Trace
+
+`LMNR_PROJECT_API_KEY` 非空时，`TtpGenerator` 自动初始化 Laminar，并且只启用 OpenAI instrumentation；`LMNR_BASE_URL` 可选用于自托管实例，自托管 HTTP/gRPC 端口分别通过 `LMNR_HTTP_PORT` / `LMNR_GRPC_PORT` 显式传给 SDK。端口必须是 `1..65535` 的 ASCII 十进制整数。未配置 Key 时 tracing 完全禁用，初始化错误作为配置错误直接传播，已由调用方初始化的 Laminar 不会被覆盖。
+
+独立调用 `generate` 时，`ttp.generate` 创建 Trace 根；若调用方已有上游 Agent span，则 `ttp.generate` 继承当前上下文并加入同一 Trace，不覆盖上游 Trace metadata。AgentScope 的 OpenAI 兼容请求形成 LLM 子 span，`submit_result_schema` 和 `submit_ttp_template` 形成 TOOL 子 span。由本生成器创建的 Trace 记录请求 ID、模型、prompt 版本、输入数量、提交次数、终止原因和状态；`GenerationMetadata.laminar_trace_id` 允许调用方定位同一次运行。根 span 与 TOOL span 采用显式生命周期管理，使正常返回、结构化失败、异常和协作式取消都能结束并导出；强制杀进程仍不保证上传。
+
+Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。TTP 候选只要完成隔离解析，即使无匹配或 Schema 不一致，也会在请求内工具反馈中返回最多 `32 KiB` 的完整 records 或结构化 preview；该 capture 同时进入 TOOL span，但不进入失败的公共结果。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
+
 ## 3. 目录与职责
 
 ```text
@@ -61,6 +69,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 ├── uv.lock
 ├── .env.example
 ├── docs/
+│   ├── agent-architecture-and-runtime.md
 │   ├── architecture.md
 │   └── live-corpus-test-plan.md
 ├── scripts/
@@ -70,6 +79,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 │   └── cli_parser_agent/
 │       ├── __init__.py
 │       ├── config.py
+│       ├── observability.py
 │       └── ttp_generation/
 │           ├── __init__.py
 │           ├── contracts.py
@@ -83,6 +93,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 │           │   └── tools.py
 │           └── validation/
 │               ├── __init__.py
+│               ├── capture.py
 │               ├── json_schema.py
 │               └── ttp.py
 ├── testdata/
@@ -101,6 +112,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 | 模块 | 职责 | 允许依赖 AgentScope |
 | --- | --- | --- |
 | `config.py` | OpenAI 兼容配置与独立的执行/安全策略 | 否 |
+| `observability.py` | 可选 Laminar 幂等初始化与 trace 边界辅助函数 | 否 |
 | `contracts.py` | 请求、成功/失败结果、artifact、issue、metadata 和 Schema evidence | 否 |
 | `sampling.py` | 确定性模型上下文采样，不改变全文验收输入；generator 另做最终序列化/token fitting | 否 |
 | `generator.py` | 唯一公开用例；编排 Agent、预算、异常映射和 Agent 外终验 | 否；通过切片内窄接口调用 Agent 适配层 |
@@ -109,11 +121,12 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 | `agent/prompt.py` | 版本化纯文本提示词，把输入明确标记为不可信数据 | 否 |
 | `agent/runner.py` | 消费事件、统计模型轮次与分阶段零工具回复、发起固定中文提醒，并在终止工具结果后安全中断和清理事件流 | 是 |
 | `agent/tools.py` | 两个非并发提交工具与请求级 generation session | 是 |
+| `validation/capture.py` | 将无效 TTP 候选的实际 records 编码为不超过 `32 KiB` 的完整反馈或结构化 preview | 否 |
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
 | `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema/来源终验 | 否 |
-| `scripts/run_agent_once.py` | 使用源码常量运行一个人工选择的真实模型请求，并把完整结果写入忽略版本控制的开发产物目录 | 否；只调用公共 API |
-| `scripts/run_live_corpus.py` | 开发期公开语料 preflight、真实模型运行、独立终验与 resume | 否；只调用公共 API 和确定性 validation |
-| `testdata/real_command_outputs/` | 固定版本的第三方 raw CLI 输出、manifest、来源和许可证 | 不适用；不进入公共包或 pytest |
+| `scripts/run_agent_once.py` | 使用源码常量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
+| `scripts/run_live_corpus.py` | 开发期公开语料 preflight、真实模型运行、独立终验与 resume；仅 `run` 路径在退出前 flush | 否；只调用公共 API 和确定性 validation |
+| `testdata/real_command_outputs/` | 固定版本的第三方 raw CLI 输出、manifest、来源和许可证 | 不适用；不进入公共包，只有两个确定性 parser 回归由 pytest 直接读取 |
 
 所有领域逻辑留在 `ttp_generation` 垂直切片中。即使 `validation/` 不依赖 AgentScope，也不提升到项目顶层；只有第二个真实用例需要复用时才提取共享模块。
 
@@ -137,13 +150,14 @@ GenerationResult
   last_attempt: LastAttempt | None    # 失败候选，validated 固定为 false
 
 GenerationMetadata
+  laminar_trace_id: str | None         # 未启用 tracing 时为 None
   schema_no_tool_responses: int       # Schema 阶段正常完成但没有工具调用的次数
   ttp_no_tool_responses: int          # TTP 阶段正常完成但没有工具调用的次数
   schema_no_tool_retries: int         # 实际发起的 Schema 中文提醒重试次数
   ttp_no_tool_retries: int            # 实际发起的 TTP 中文提醒重试次数
 ```
 
-`TtpGenerator.from_env()` 从环境创建模型配置；也可使用 `TtpGeneratorSettings` 和独立的 `GenerationPolicy` 程序化构造。请求格式和缺失配置由 Pydantic/配置异常报告；模型请求、零工具协议、超时、预算和生成失败统一返回 `status="failed"` 的结构化结果；`asyncio.CancelledError` 原样传播。
+`TtpGenerator.from_env()` 从环境创建模型配置；也可使用 `TtpGeneratorSettings` 和独立的 `GenerationPolicy` 程序化构造。普通构造从进程环境初始化可选 Laminar tracing，`from_env(environ=...)` 则使用传入 mapping；公共辅助函数 `initialize_laminar_from_env(environ=None) -> bool` 可供其他入口显式初始化，缺少 Key 时返回 `False`，已初始化或成功初始化时返回 `True`。请求格式和缺失配置由 Pydantic/配置异常报告；模型请求、零工具协议、超时、预算和生成失败统一返回 `status="failed"` 的结构化结果；`asyncio.CancelledError` 原样传播。
 
 成功结果必须有 artifact，且 records 数量等于输入数量。失败结果不得携带 artifact，必须至少有一个 error issue；未通过验收的模板只能进入 `last_attempt`，不能标记为有效产物。
 
@@ -176,26 +190,27 @@ GenerationRequest
 
 Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象完整声明 `required` 并设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径必须提交一条真实存在于指定完整输入中的连续原文证据。
 
-TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
+TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
 
 由于 TTP 0.10.1 会对参数求值并可能把字符串识别为路径，模板和输入在安全检查后以不可成为路径的形式传入，清除模板路径环境变量，并使用临时 `TTPCACHEFOLDER`。每次解析在独立 spawn 进程中执行；超时立即终止，不调用 shell。无法重新导入 `__main__` 的交互式宿主返回 `ttp.worker_host_unsupported`，不会等待完整解析超时。
 
 ## 6. 测试策略
 
 - 确定性单元测试覆盖输入边界、采样、Schema 安全子集与字段证据、TTP 标签/参数攻击、解析超时、嵌套记录、一一映射、Schema 回验和失败候选标记。
-- pytest 中的稳定夹具服务于确定性模块测试，不读取 `testdata/real_command_outputs/`，也不隐式访问网络或模型。
+- pytest 中的稳定测试不隐式访问网络或模型；仅 Linux `ip address show` 与 Cisco IOS `show inventory` 两组测试直接读取固定 raw 语料，用真实 TTP 0.10.1 回归 `ignore(...)` 子语言，其余 corpus 仍由独立 runner 管理。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖成功闭环、轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求模型根据工具反馈重提，避免把随机失败当作断言前提。零工具检测、固定中文提醒、分阶段重试上限、metadata 计数和内容脱敏由确定性事件级单元测试覆盖，不依赖真实模型随机省略工具。
+- Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
 此外，仓库保留独立于 pytest 的公开真实命令输出语料：`networktocode/ntc-templates` `v9.2.0` 和 `dmulyalin/ttp_templates` `0.5.9` 中选取的 `13` 个 case、`40` 份 raw 文本。`corpus.json` 固定文件顺序、suite、来源版本和 SHA-256；不复制上游 YAML、解析模板、mock 数据或 JSON 输出。两份第三方许可证与版本说明随语料保存，本项目自身使用根目录 Apache-2.0 `LICENSE`。
 
-`scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
+`scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
 真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `13/13`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 
 ## 7. 暂缓事项
 
-长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、统一 tracing、`evals/` 和 `examples/` 均不属于首版。`scripts/run_live_corpus.py` 是独立开发测试工具，不扩大产品边界；生成产物通过 API 返回，语料 runner 的测试记录只写入 `.artifacts/`，不写入源码目录。只有出现明确消费者、第二个用例或统计质量目标后，才新增相应边界。
+长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、生产级监控与告警、Laminar CLI/Debugger/replay、`evals/` 和 `examples/` 均不属于首版。`scripts/run_live_corpus.py` 是独立开发测试工具，不扩大产品边界；生成产物通过 API 返回，语料 runner 的测试记录只写入 `.artifacts/`，不写入源码目录。只有出现明确消费者、第二个用例或统计质量目标后，才新增相应边界。
 
 ## 8. 官方依据
 

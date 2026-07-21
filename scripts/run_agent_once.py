@@ -26,7 +26,7 @@ from cli_parser_agent import (
 
 # Configuration: edit these values, then run this file without arguments.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODEL_NAME = "deepseek-v4-flash"
+MODEL_NAME = "deepseek-v4-pro"
 BASE_URL = "https://api.deepseek.com"
 
 COMMAND_OUTPUT_FILES = (
@@ -39,9 +39,10 @@ COMMAND_OUTPUT_FILES = (
 )
 
 ARTIFACT_ROOT = PROJECT_ROOT / ".artifacts" / "agent-once"
-TOTAL_TIMEOUT_SECONDS = 300.0
-MAX_AGENT_ROUNDS = 12
-MAX_TTP_SUBMISSIONS = 8
+# Accuracy-first settings for this no-argument development runner.
+TOTAL_TIMEOUT_SECONDS = 1_800.0
+MAX_AGENT_ROUNDS = 24
+MAX_TTP_SUBMISSIONS = 16
 MAX_SCHEMA_NO_TOOL_RETRIES = 3
 MAX_TTP_NO_TOOL_RETRIES = 3
 TTP_VALIDATION_TIMEOUT_SECONDS = 20.0
@@ -52,7 +53,7 @@ PARALLEL_TOOL_CALLS = False
 MAX_TOKENS = 8_192
 CONTEXT_SIZE = 128_000
 MODEL_MAX_RETRIES = 2
-MODEL_TIMEOUT_SECONDS = 60.0
+MODEL_TIMEOUT_SECONDS = 120.0
 
 MAX_COMMAND_OUTPUTS = 5
 MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024
@@ -160,6 +161,7 @@ def _write_json(path: Path, value: Any) -> None:
 def _print_result_summary(result: Any, result_path: Path) -> None:
     metadata = result.metadata
     print(f"status: {result.status}")
+    print(f"laminar_trace_id: {metadata.laminar_trace_id}")
     print(f"termination_reason: {metadata.termination_reason}")
     print(f"elapsed_seconds: {metadata.elapsed_seconds:.3f}")
     print(f"agent_rounds: {metadata.agent_rounds}")
@@ -244,6 +246,23 @@ async def _run() -> int:
     return 0 if result.status == "success" else 1
 
 
+def _flush_laminar() -> None:
+    from lmnr import Laminar
+
+    if not Laminar.is_initialized():
+        return
+    try:
+        flushed = Laminar.flush()
+    except Exception as error:
+        print(
+            f"warning: Laminar flush failed ({type(error).__name__})",
+            file=sys.stderr,
+        )
+        return
+    if not flushed:
+        print("warning: Laminar flush did not complete", file=sys.stderr)
+
+
 def main() -> int:
     try:
         return asyncio.run(_run())
@@ -253,6 +272,8 @@ def main() -> int:
     except KeyboardInterrupt:
         print("cancelled", file=sys.stderr)
         return 130
+    finally:
+        _flush_laminar()
 
 
 if __name__ == "__main__":

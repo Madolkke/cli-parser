@@ -21,6 +21,9 @@ from agentscope.permission import (
 from agentscope.tool import ParamsBase, ToolBase, ToolChunk
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from ...observability import finish_laminar_span, start_laminar_span
+from ..validation import ParseCapture, build_parse_capture
+
 SUBMIT_SCHEMA_TOOL_NAME = "submit_result_schema"
 SUBMIT_TEMPLATE_TOOL_NAME = "submit_ttp_template"
 
@@ -382,6 +385,84 @@ def _result_chunk(
     )
 
 
+def _tool_chunk_payload(chunk: ToolChunk) -> dict[str, Any]:
+    """Recover the JSON payload produced by ``_result_chunk`` for tracing."""
+
+    if len(chunk.content) == 1 and isinstance(chunk.content[0], TextBlock):
+        try:
+            payload = json.loads(chunk.content[0].text)
+        except (TypeError, ValueError):
+            pass
+        else:
+            if isinstance(payload, dict):
+                return payload
+    return {"status": "tool_result_unavailable"}
+
+
+async def _run_traced_tool_call(
+    *,
+    name: str,
+    input: Mapping[str, Any],
+    operation: Callable[[], Awaitable[ToolChunk]],
+) -> ToolChunk:
+    """Run one submission tool while closing its span before re-raising."""
+
+    result: ToolChunk | None = None
+    pending_error: BaseException | None = None
+    with start_laminar_span(
+        name,
+        input=dict(input),
+        span_type="TOOL",
+    ):
+        try:
+            result = await operation()
+        except asyncio.CancelledError as error:
+            pending_error = error
+            finish_laminar_span(
+                output={
+                    "status": "cancelled",
+                    "exception_type": type(error).__name__,
+                },
+                outcome="cancelled",
+                attributes={"exception_type": type(error).__name__},
+            )
+        except BaseException as error:
+            pending_error = error
+            finish_laminar_span(
+                output={
+                    "status": "failed",
+                    "exception_type": type(error).__name__,
+                },
+                outcome="exception",
+                attributes={"exception_type": type(error).__name__},
+            )
+        else:
+            payload = _tool_chunk_payload(result)
+            attributes: dict[str, Any] = {
+                "phase": str(payload.get("phase", "")),
+                "accepted": payload.get("accepted") is True,
+            }
+            for key in ("schema_submission", "ttp_submission"):
+                value = payload.get(key)
+                if isinstance(value, int) and not isinstance(value, bool):
+                    attributes[key] = value
+            finish_laminar_span(
+                output=payload,
+                outcome="success",
+                attributes=attributes,
+            )
+
+    if pending_error is not None:
+        raise pending_error
+    if result is None:  # pragma: no cover - guarded by the branches above
+        raise RuntimeError("submission tool completed without a result")
+    return result
+
+
+def _unavailable_capture() -> ParseCapture:
+    return build_parse_capture(())
+
+
 def _safe_boundary_issue(*, phase: str, failure: str) -> dict[str, str]:
     """Return fixed feedback for errors that may contain candidate data."""
 
@@ -444,6 +525,26 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
         result_schema: dict[str, Any],
         evidence: list[dict[str, Any]],
         assumptions: list[str] | None = None,
+    ) -> ToolChunk:
+        return await _run_traced_tool_call(
+            name=self.name,
+            input={
+                "result_schema": result_schema,
+                "evidence": evidence,
+                "assumptions": assumptions,
+            },
+            operation=lambda: self._call(
+                result_schema=result_schema,
+                evidence=evidence,
+                assumptions=assumptions,
+            ),
+        )
+
+    async def _call(
+        self,
+        result_schema: dict[str, Any],
+        evidence: list[dict[str, Any]],
+        assumptions: list[str] | None,
     ) -> ToolChunk:
         if self.session.schema_is_frozen:
             return _result_chunk(
@@ -537,10 +638,18 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
     input_schema = TemplateSubmissionInput.model_json_schema()
 
     async def call(self, ttp_template: str) -> ToolChunk:
+        return await _run_traced_tool_call(
+            name=self.name,
+            input={"ttp_template": ttp_template},
+            operation=lambda: self._call(ttp_template),
+        )
+
+    async def _call(self, ttp_template: str) -> ToolChunk:
         if not self.session.schema_is_frozen:
             return _result_chunk(
                 phase="template",
                 accepted=False,
+                capture=_unavailable_capture(),
                 issues=(
                     {
                         "code": "schema_not_frozen",
@@ -553,6 +662,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             return _result_chunk(
                 phase="template",
                 accepted=False,
+                capture=_unavailable_capture(),
                 issues=(
                     {
                         "code": "generation_already_succeeded",
@@ -566,6 +676,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             return _result_chunk(
                 phase="template",
                 accepted=False,
+                capture=_unavailable_capture(),
                 issues=(
                     {
                         "code": "ttp_submission_limit",
@@ -583,6 +694,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             return _result_chunk(
                 phase="template",
                 accepted=False,
+                capture=_unavailable_capture(),
                 issues=issues,
                 ttp_submission=self.session.ttp_submissions,
                 remaining_submissions=max(
@@ -609,6 +721,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             return _result_chunk(
                 phase="template",
                 accepted=False,
+                capture=_unavailable_capture(),
                 issues=issues,
                 ttp_submission=self.session.ttp_submissions,
                 remaining_submissions=max(
@@ -643,6 +756,13 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
                     ),
                 ),
             )
+
+        capture_records: Sequence[Any] = ()
+        if len(outcome.records) == len(self.session.command_outputs) and all(
+            isinstance(item, dict) for item in outcome.records
+        ):
+            capture_records = outcome.records
+        capture = build_parse_capture(capture_records)
 
         issues = list(outcome.issues)
         records: tuple[dict[str, Any], ...] = ()
@@ -684,6 +804,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         return _result_chunk(
             phase="template",
             accepted=accepted,
+            capture=capture,
             issues=issues,
             ttp_submission=self.session.ttp_submissions,
             remaining_submissions=max(

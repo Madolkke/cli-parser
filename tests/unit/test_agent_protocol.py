@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import contextmanager
 from typing import Any, cast
 
 import pytest
@@ -25,6 +26,7 @@ from cli_parser_agent.ttp_generation.agent import (
     build_submission_tools,
     build_task_prompt,
 )
+from cli_parser_agent.ttp_generation.agent import tools as tools_module
 
 
 def _schema(field_name: str = "value") -> dict[str, Any]:
@@ -112,12 +114,17 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_prompt_protocol_is_chinese_and_preserves_machine_tokens() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v7-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v8-zh-cn"
     assert _contains_chinese(SYSTEM_PROMPT)
     assert "最多填写两句简短中文" in SYSTEM_PROMPT
     assert "绝不意味着删除冻结 Schema 的 required 字段捕获" in SYSTEM_PROMPT
     assert "每个未建模列保留 `ignore` 占位" in SYSTEM_PROMPT
     assert "表格 group 不使用 `_start_`、`_end_` 或 `_line_`" in SYSTEM_PROMPT
+    assert "`{{ ignore }}`" in SYSTEM_PROMPT
+    assert "`{{ ignore(ORPHRASE) }}`" in SYSTEM_PROMPT
+    assert '`{{ ignore("PID:.*SN:") }}`' in SYSTEM_PROMPT
+    assert "ignore |" not in SYSTEM_PROMPT
+    assert "`capture` 与 `issues` 一起用于修正" in SYSTEM_PROMPT
 
     machine_tokens = (
         "submit_result_schema",
@@ -134,6 +141,8 @@ def test_prompt_protocol_is_chinese_and_preserves_machine_tokens() -> None:
         "invalid_xml",
         "unsafe_variable_attribute",
         "ttp.no_match",
+        "ttp.invalid_ignore_syntax",
+        "replace_with_ignore_call",
         "/interfaces/*/name",
     )
     for token in machine_tokens:
@@ -143,6 +152,8 @@ def test_prompt_protocol_is_chinese_and_preserves_machine_tokens() -> None:
 def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert SubmitResultSchemaTool.name == SUBMIT_SCHEMA_TOOL_NAME
     assert SubmitTtpTemplateTool.name == SUBMIT_TEMPLATE_TOOL_NAME
+    assert not hasattr(SubmitResultSchemaTool.call, "__wrapped__")
+    assert not hasattr(SubmitTtpTemplateTool.call, "__wrapped__")
     assert _contains_chinese(SubmitResultSchemaTool.description)
     assert _contains_chinese(SubmitTtpTemplateTool.description)
 
@@ -266,6 +277,63 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     assert len(seen) == 2
     assert session.frozen_schema == _schema()
 
+
+@pytest.mark.asyncio
+async def test_schema_tool_span_records_the_full_submission_and_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    starts: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        starts.append({"name": name, **kwargs})
+        yield object()
+
+    monkeypatch.setattr(tools_module, "start_laminar_span", start)
+    monkeypatch.setattr(
+        tools_module,
+        "finish_laminar_span",
+        lambda **kwargs: finishes.append(kwargs),
+    )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=lambda candidate: ValidatorOutcome(valid=True),
+        template_validator=_unused_template_validator,
+    )
+    schema = _schema()
+    evidence = [{"path": "/value", "output_index": 0, "excerpt": "one"}]
+
+    result = await SubmitResultSchemaTool(session).call(
+        result_schema=schema,
+        evidence=evidence,
+        assumptions=["按字符串处理。"],
+    )
+    payload = _payload(result)
+
+    assert starts == [
+        {
+            "name": SUBMIT_SCHEMA_TOOL_NAME,
+            "input": {
+                "result_schema": schema,
+                "evidence": evidence,
+                "assumptions": ["按字符串处理。"],
+            },
+            "span_type": "TOOL",
+        },
+    ]
+    assert finishes == [
+        {
+            "output": payload,
+            "outcome": "success",
+            "attributes": {
+                "phase": "schema",
+                "accepted": True,
+                "schema_submission": 1,
+            },
+        },
+    ]
 
 @pytest.mark.asyncio
 async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> None:
@@ -456,11 +524,149 @@ async def test_template_validator_exception_is_redacted_from_agent_events() -> N
 
 
 @pytest.mark.asyncio
-async def test_template_validator_cancellation_propagates() -> None:
+async def test_rejected_template_returns_index_mapped_capture_without_storing_it(
+) -> None:
+    captured_records = [
+        {},
+        {"items": [{"name": "second"}]},
+    ]
+    issues = (
+        {
+            "code": "schema.record_mismatch",
+            "stage": "schema",
+            "message": "record does not match",
+            "output_index": 1,
+        },
+    )
+
+    def reject(candidate: TemplateCandidate) -> ValidatorOutcome:
+        return ValidatorOutcome(
+            valid=False,
+            issues=issues,
+            records=tuple(captured_records),
+        )
+
+    session = GenerationSession(
+        command_outputs=["first", "second"],
+        schema_validator=_unused_schema_validator,
+        template_validator=reject,
+    )
+    session.frozen_schema = _schema()
+
+    result = await SubmitTtpTemplateTool(session).call("{{ value }}")
+
+    payload = _payload(result)
+    assert payload["capture"] == {
+        "available": True,
+        "complete": True,
+        "serialized_bytes": len(
+            json.dumps(
+                captured_records,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8"),
+        ),
+        "records": captured_records,
+        "previews": [],
+    }
+    assert session.records == ()
+    assert session.validated_ttp_template is None
+    assert session.last_issues == issues
+    assert "capture" not in json.dumps(payload["issues"])
+
+
+@pytest.mark.asyncio
+async def test_template_tool_span_records_the_same_bounded_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    starts: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        starts.append({"name": name, **kwargs})
+        yield object()
+
+    monkeypatch.setattr(tools_module, "start_laminar_span", start)
+    monkeypatch.setattr(
+        tools_module,
+        "finish_laminar_span",
+        lambda **kwargs: finishes.append(kwargs),
+    )
+
+    def reject(candidate: TemplateCandidate) -> ValidatorOutcome:
+        return ValidatorOutcome(
+            valid=False,
+            issues=(
+                {
+                    "code": "ttp.no_match",
+                    "stage": "ttp",
+                    "message": "no match",
+                    "output_index": 0,
+                },
+            ),
+            records=({},),
+        )
+
+    session = GenerationSession(
+        command_outputs=["unmatched"],
+        schema_validator=_unused_schema_validator,
+        template_validator=reject,
+    )
+    session.frozen_schema = _schema()
+
+    result = await SubmitTtpTemplateTool(session).call("Value: {{ value }}")
+    payload = _payload(result)
+
+    assert starts == [
+        {
+            "name": SUBMIT_TEMPLATE_TOOL_NAME,
+            "input": {"ttp_template": "Value: {{ value }}"},
+            "span_type": "TOOL",
+        },
+    ]
+    assert finishes == [
+        {
+            "output": payload,
+            "outcome": "success",
+            "attributes": {
+                "phase": "template",
+                "accepted": False,
+                "ttp_submission": 1,
+            },
+        },
+    ]
+    assert finishes[0]["output"]["capture"]["records"] == [{}]
+
+
+@pytest.mark.asyncio
+async def test_template_validator_cancellation_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    error = asyncio.CancelledError("private cancellation text")
+    events: list[str] = []
+    finishes: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(*_: Any, **__: Any) -> Any:
+        events.append("entered")
+        try:
+            yield object()
+        finally:
+            events.append("exited")
+
+    monkeypatch.setattr(tools_module, "start_laminar_span", start)
+
+    def finish(**kwargs: Any) -> None:
+        events.append("finished")
+        finishes.append(kwargs)
+
+    monkeypatch.setattr(tools_module, "finish_laminar_span", finish)
+
     async def cancel_validation(
         candidate: TemplateCandidate,
     ) -> ValidatorOutcome:
-        raise asyncio.CancelledError
+        raise error
 
     session = GenerationSession(
         command_outputs=["value: one"],
@@ -469,9 +675,22 @@ async def test_template_validator_cancellation_propagates() -> None:
     )
     session.frozen_schema = _schema()
 
-    with pytest.raises(asyncio.CancelledError):
+    with pytest.raises(asyncio.CancelledError) as caught:
         await SubmitTtpTemplateTool(session).call("value: {{ value }}")
 
+    assert caught.value is error
+    assert events == ["entered", "finished", "exited"]
+    assert finishes == [
+        {
+            "output": {
+                "status": "cancelled",
+                "exception_type": "CancelledError",
+            },
+            "outcome": "cancelled",
+            "attributes": {"exception_type": "CancelledError"},
+        },
+    ]
+    assert "private" not in str(finishes)
     assert session.ttp_submissions == 1
     assert session.validated_ttp_template is None
 

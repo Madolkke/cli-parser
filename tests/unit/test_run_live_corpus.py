@@ -5,8 +5,13 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from argparse import Namespace
 from pathlib import Path
 from types import ModuleType
+from typing import Any
+
+import pytest
+from lmnr import Laminar
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_live_corpus.py"
 
@@ -98,3 +103,88 @@ def test_resume_rejects_success_from_a_different_prompt_version(
         )
         is not None
     )
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["list", "--suite", "smoke"],
+        ["preflight"],
+    ],
+)
+def test_non_run_commands_do_not_initialize_or_flush_laminar(
+    monkeypatch: pytest.MonkeyPatch,
+    argv: list[str],
+) -> None:
+    script = _load_script()
+    monkeypatch.setattr(
+        Laminar,
+        "initialize",
+        lambda **_: pytest.fail("Laminar must not initialize for list/preflight"),
+    )
+    monkeypatch.setattr(
+        Laminar,
+        "flush",
+        lambda: pytest.fail("Laminar must not flush for list/preflight"),
+    )
+    monkeypatch.setattr(
+        script,
+        "_command_run",
+        lambda _: pytest.fail("list/preflight must not enter the live run path"),
+    )
+
+    assert script.main(argv) == 0
+
+
+@pytest.mark.parametrize("initialized", [False, True])
+def test_live_run_flushes_an_initialized_sdk_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    initialized: bool,
+) -> None:
+    script = _load_script()
+    flush_calls: list[None] = []
+    monkeypatch.setattr(Laminar, "is_initialized", lambda: initialized)
+    monkeypatch.setattr(Laminar, "flush", lambda: flush_calls.append(None) or True)
+
+    def fail_preflight() -> Any:
+        raise script.CorpusError("invalid corpus")
+
+    monkeypatch.setattr(script, "load_and_preflight_corpus", fail_preflight)
+    args = Namespace(
+        suite="smoke",
+        case_ids=[],
+        source=None,
+        platform=None,
+        max_cases=None,
+        concurrency=1,
+        output_dir=None,
+        resume=None,
+    )
+
+    with pytest.raises(script.CorpusError, match="invalid corpus"):
+        script._command_run(args)
+
+    assert len(flush_calls) == int(initialized)
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_live_runner_flush_failure_only_warns(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    raises: bool,
+) -> None:
+    script = _load_script()
+    monkeypatch.setattr(Laminar, "is_initialized", lambda: True)
+
+    def flush() -> bool:
+        if raises:
+            raise RuntimeError("private exporter details")
+        return False
+
+    monkeypatch.setattr(Laminar, "flush", flush)
+
+    script._flush_laminar()
+
+    error = capsys.readouterr().err
+    assert "warning: Laminar flush" in error
+    assert "private exporter details" not in error

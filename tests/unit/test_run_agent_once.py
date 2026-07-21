@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 
 import pytest
+from lmnr import Laminar
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_agent_once.py"
 
@@ -49,3 +50,87 @@ def test_api_key_prefers_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(script.API_KEY_ENVIRONMENT_VARIABLE, "test-key")
 
     assert script._resolve_api_key() == "test-key"
+
+
+def test_result_summary_prints_laminar_trace_id(
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+) -> None:
+    script = _load_script()
+    metadata = SimpleNamespace(
+        laminar_trace_id="01234567-89ab-cdef-0123-456789abcdef",
+        termination_reason="success",
+        elapsed_seconds=1.25,
+        agent_rounds=2,
+        tool_call_starts=2,
+        tool_result_errors=0,
+        schema_submissions=1,
+        ttp_submissions=1,
+        schema_no_tool_responses=0,
+        ttp_no_tool_responses=0,
+        schema_no_tool_retries=0,
+        ttp_no_tool_retries=0,
+        first_ttp_passed=True,
+    )
+    result = SimpleNamespace(status="success", metadata=metadata, issues=[])
+
+    script._print_result_summary(result, tmp_path / "result.json")
+
+    assert (
+        "laminar_trace_id: 01234567-89ab-cdef-0123-456789abcdef"
+        in capsys.readouterr().out
+    )
+
+
+@pytest.mark.parametrize("initialized", [False, True])
+def test_flush_laminar_only_flushes_an_initialized_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+    initialized: bool,
+) -> None:
+    script = _load_script()
+    flush_calls: list[None] = []
+    monkeypatch.setattr(Laminar, "is_initialized", lambda: initialized)
+    monkeypatch.setattr(Laminar, "flush", lambda: flush_calls.append(None) or True)
+
+    script._flush_laminar()
+
+    assert len(flush_calls) == int(initialized)
+
+
+@pytest.mark.parametrize("raises", [False, True])
+def test_flush_laminar_failure_only_warns(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    raises: bool,
+) -> None:
+    script = _load_script()
+    monkeypatch.setattr(Laminar, "is_initialized", lambda: True)
+
+    def flush() -> bool:
+        if raises:
+            raise RuntimeError("private exporter details")
+        return False
+
+    monkeypatch.setattr(Laminar, "flush", flush)
+
+    script._flush_laminar()
+
+    error = capsys.readouterr().err
+    assert "warning: Laminar flush" in error
+    assert "private exporter details" not in error
+
+
+def test_main_flushes_laminar_on_the_exit_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = _load_script()
+    flush_calls: list[None] = []
+
+    async def run() -> int:
+        return 1
+
+    monkeypatch.setattr(script, "_run", run)
+    monkeypatch.setattr(script, "_flush_laminar", lambda: flush_calls.append(None))
+
+    assert script.main() == 1
+    assert flush_calls == [None]

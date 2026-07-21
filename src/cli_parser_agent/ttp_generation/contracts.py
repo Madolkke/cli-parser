@@ -169,6 +169,11 @@ class GenerationMetadata(ContractModel):
     ttp_no_tool_retries: int = Field(default=0, ge=0)
     first_ttp_passed: bool | None = None
     termination_reason: str | None = Field(default=None, max_length=128)
+    laminar_trace_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+    )
 
     @model_validator(mode="after")
     def sampled_count_does_not_exceed_input(self) -> Self:

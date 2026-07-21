@@ -1027,37 +1027,59 @@ def _command_run(args: argparse.Namespace) -> int:
     from cli_parser_agent import TtpGenerator
     from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION
 
-    manifest = load_and_preflight_corpus()
-    selected = _select_cases(
-        manifest,
-        suite=args.suite,
-        requested_ids=args.case_ids,
-        source=args.source,
-        platform=args.platform,
-        max_cases=args.max_cases,
-    )
     try:
-        generator = TtpGenerator.from_env()
+        manifest = load_and_preflight_corpus()
+        selected = _select_cases(
+            manifest,
+            suite=args.suite,
+            requested_ids=args.case_ids,
+            source=args.source,
+            platform=args.platform,
+            max_cases=args.max_cases,
+        )
+        try:
+            generator = TtpGenerator.from_env()
+        except Exception as error:
+            raise CorpusError(
+                "live model configuration is missing or invalid "
+                f"({type(error).__name__})",
+            ) from None
+        output_dir, is_resume = _prepare_output_dir(args.output_dir, args.resume)
+        print(
+            f"selected cases={len(selected)} samples="
+            f"{sum(len(case.samples) for case in selected)} "
+            f"concurrency={args.concurrency}",
+        )
+        return asyncio.run(
+            _run_selected_cases(
+                args=args,
+                manifest=manifest,
+                selected=selected,
+                output_dir=output_dir,
+                is_resume=is_resume,
+                generator=generator,
+                prompt_version=PROMPT_VERSION,
+            ),
+        )
+    finally:
+        _flush_laminar()
+
+
+def _flush_laminar() -> None:
+    from lmnr import Laminar
+
+    if not Laminar.is_initialized():
+        return
+    try:
+        flushed = Laminar.flush()
     except Exception as error:
-        raise CorpusError(
-            f"live model configuration is missing or invalid ({type(error).__name__})",
-        ) from None
-    output_dir, is_resume = _prepare_output_dir(args.output_dir, args.resume)
-    print(
-        f"selected cases={len(selected)} samples="
-        f"{sum(len(case.samples) for case in selected)} concurrency={args.concurrency}",
-    )
-    return asyncio.run(
-        _run_selected_cases(
-            args=args,
-            manifest=manifest,
-            selected=selected,
-            output_dir=output_dir,
-            is_resume=is_resume,
-            generator=generator,
-            prompt_version=PROMPT_VERSION,
-        ),
-    )
+        print(
+            f"warning: Laminar flush failed ({type(error).__name__})",
+            file=sys.stderr,
+        )
+        return
+    if not flushed:
+        print("warning: Laminar flush did not complete", file=sys.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:

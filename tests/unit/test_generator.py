@@ -26,6 +26,99 @@ async def test_generate_validates_the_request_before_model_construction() -> Non
         await generator.generate({"command_outputs": []})  # type: ignore[arg-type]
 
 
+def test_constructor_attempts_optional_laminar_initialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cli_parser_agent.ttp_generation import generator as generator_module
+
+    calls: list[object] = []
+    monkeypatch.setattr(
+        generator_module,
+        "initialize_laminar_from_env",
+        lambda environ=None: calls.append(environ) or False,
+    )
+
+    TtpGenerator(settings=_settings())
+
+    assert calls == [None]
+
+
+def test_from_env_passes_the_same_mapping_to_laminar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from lmnr import Instruments, Laminar
+
+    environ = {
+        "OPENAI_API_KEY": "secret",
+        "OPENAI_MODEL": "test-model",
+        "LMNR_PROJECT_API_KEY": "trace-key",
+        "LMNR_BASE_URL": "https://laminar.example.test",
+    }
+    initialized = False
+    calls: list[dict[str, object]] = []
+
+    def is_initialized() -> bool:
+        return initialized
+
+    def initialize(**kwargs: object) -> None:
+        nonlocal initialized
+        initialized = True
+        calls.append(kwargs)
+
+    monkeypatch.setattr(Laminar, "is_initialized", is_initialized)
+    monkeypatch.setattr(Laminar, "initialize", initialize)
+
+    generator = TtpGenerator.from_env(environ=environ)
+
+    assert generator.settings.model_name == "test-model"
+    assert calls == [
+        {
+            "project_api_key": "trace-key",
+            "base_url": "https://laminar.example.test",
+            "instruments": {Instruments.OPENAI},
+        },
+    ]
+
+
+def test_from_env_initializes_once_with_the_supplied_mapping(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cli_parser_agent.ttp_generation import generator as generator_module
+
+    environ = {
+        "OPENAI_API_KEY": "secret",
+        "OPENAI_MODEL": "test-model",
+        "LMNR_PROJECT_API_KEY": "trace-key",
+    }
+    calls: list[object] = []
+    monkeypatch.setattr(
+        generator_module,
+        "initialize_laminar_from_env",
+        lambda supplied=None: calls.append(supplied) or True,
+    )
+
+    TtpGenerator.from_env(environ=environ)
+
+    assert calls == [environ]
+
+
+def test_from_env_validates_model_configuration_before_initializing_laminar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cli_parser_agent.ttp_generation import generator as generator_module
+
+    monkeypatch.setattr(
+        generator_module,
+        "initialize_laminar_from_env",
+        lambda _=None: pytest.fail("invalid model config must fail first"),
+    )
+
+    with pytest.raises(ValueError):
+        TtpGenerator.from_env(
+            environ={"LMNR_PROJECT_API_KEY": "trace-key"},
+        )
+
+
 def test_from_env_loads_model_and_generation_budgets() -> None:
     generator = TtpGenerator.from_env(
         environ={

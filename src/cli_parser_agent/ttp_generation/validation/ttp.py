@@ -72,7 +72,6 @@ _NO_ARGUMENT_ATTRIBUTES = _BUILTIN_PATTERNS | {
     "_line_",
     "_start_",
     "columns",
-    "ignore",
     "isdigit",
     "notdigit",
     "to_cidr",
@@ -105,7 +104,11 @@ _GROUP_FILTERS = {"contains", "containsall", "equal", "exclude", "excludeall"}
 
 @dataclass(frozen=True, slots=True)
 class TtpValidationResult:
-    """Records and deterministic issues produced by one full validation run."""
+    """Captured records and issues produced by one full validation run.
+
+    Once the isolated parser returns an index-mapped result, ``records`` keeps
+    that result even when a record is empty or later acceptance checks fail.
+    """
 
     records: list[dict[str, Any]]
     issues: list[ValidationIssue]
@@ -120,6 +123,16 @@ class _ParsedAttribute:
     name: str
     args: tuple[str | int | float | bool | None, ...]
     kwargs: Mapping[str, str | int | float | bool | None]
+
+
+@dataclass(frozen=True, slots=True)
+class _ParsedVariableHead:
+    name: str
+    is_ignore: bool = False
+
+
+class _InvalidIgnoreSyntax(ValueError):
+    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -232,6 +245,63 @@ def _validate_regex(pattern: Any, limits: _TtpLimits) -> None:
         re.compile(pattern)
     except re.error as exc:
         raise ValueError("regular expression argument is invalid") from exc
+
+
+def _parse_variable_head(text: str, limits: _TtpLimits) -> _ParsedVariableHead:
+    """Parse a result variable or TTP's special ignore capture."""
+
+    mentions_ignore = bool(
+        re.search(r"(?<![A-Za-z0-9_])ignore(?![A-Za-z0-9_])", text),
+    )
+    if len(text) > limits.attribute_chars:
+        if mentions_ignore:
+            raise _InvalidIgnoreSyntax
+        raise ValueError("variable expression is too long")
+    try:
+        expression = ast.parse(text.strip(), mode="eval").body
+    except (SyntaxError, ValueError) as exc:
+        if mentions_ignore:
+            raise _InvalidIgnoreSyntax from exc
+        raise ValueError("variable expression is not valid") from exc
+
+    if isinstance(expression, ast.Name):
+        return _ParsedVariableHead(
+            name=expression.id,
+            is_ignore=expression.id == "ignore",
+        )
+
+    if (
+        isinstance(expression, ast.Call)
+        and isinstance(expression.func, ast.Name)
+        and expression.func.id == "ignore"
+    ):
+        if expression.keywords or len(expression.args) != 1:
+            raise _InvalidIgnoreSyntax
+        argument = expression.args[0]
+        if isinstance(argument, ast.Name) and argument.id in _BUILTIN_PATTERNS:
+            return _ParsedVariableHead(name="ignore", is_ignore=True)
+        if isinstance(argument, ast.Constant) and type(argument.value) is str:
+            try:
+                _validate_regex(argument.value, limits)
+            except ValueError as exc:
+                raise _InvalidIgnoreSyntax from exc
+            return _ParsedVariableHead(name="ignore", is_ignore=True)
+        raise _InvalidIgnoreSyntax
+
+    if mentions_ignore or any(
+        isinstance(node, ast.Name) and node.id == "ignore"
+        for node in ast.walk(expression)
+    ):
+        raise _InvalidIgnoreSyntax
+    raise ValueError("variable must be a simple name or supported ignore call")
+
+
+def _invalid_ignore_issue() -> ValidationIssue:
+    return _issue(
+        "ttp.invalid_ignore_syntax",
+        "TTP ignore must be bare or called once with a built-in pattern or regex",
+        details={"required_action": "replace_with_ignore_call"},
+    )
 
 
 def _validate_attribute(attribute: _ParsedAttribute, limits: _TtpLimits) -> None:
@@ -569,12 +639,13 @@ def inspect_ttp_template(
                     line_parts = _split_variable_pipeline(
                         line_match.group(1).strip(),
                     )
+                    if not line_parts or not line_parts[0]:
+                        continue
+                    line_head = _parse_variable_head(line_parts[0], limits)
                 except ValueError:
                     continue
-                if not line_parts:
-                    continue
-                line_variable = line_parts[0]
-                if line_variable != "ignore" and line_variable in line_variables:
+                line_variable = line_head.name
+                if not line_head.is_ignore and line_variable in line_variables:
                     details = {}
                     if len(line_variable) <= 128:
                         details["variable"] = line_variable
@@ -612,7 +683,23 @@ def inspect_ttp_template(
                     ),
                 )
                 continue
-            variable_name = parts[0]
+            try:
+                variable_head = _parse_variable_head(parts[0], limits)
+            except _InvalidIgnoreSyntax:
+                issues.append(_invalid_ignore_issue())
+                continue
+            except ValueError:
+                issues.append(
+                    _issue(
+                        "ttp.invalid_field_name",
+                        "TTP result field names must be ASCII snake_case",
+                    ),
+                )
+                continue
+            variable_name = variable_head.name
+            if variable_head.is_ignore and len(parts) != 1:
+                issues.append(_invalid_ignore_issue())
+                continue
             special_names = {
                 "_end_",
                 "_headers_",
@@ -646,15 +733,10 @@ def inspect_ttp_template(
                 attribute: _ParsedAttribute | None = None
                 try:
                     attribute = _parse_attribute(raw_attribute, limits)
+                    if attribute.name == "ignore":
+                        issues.append(_invalid_ignore_issue())
+                        break
                     _validate_attribute(attribute, limits)
-                    if variable_name == "ignore" and attribute.name in {
-                        "_end_",
-                        "_line_",
-                        "_start_",
-                    }:
-                        raise ValueError(
-                            "line controls cannot target the ignore variable",
-                        )
                 except ValueError:
                     details = {}
                     if attribute is not None:
@@ -1076,7 +1158,7 @@ def validate_ttp_template(
             ),
         )
     return TtpValidationResult(
-        records=[] if no_match_indexes else records,
+        records=records,
         issues=issues[:MAX_TTP_VALIDATION_ISSUES],
     )
 

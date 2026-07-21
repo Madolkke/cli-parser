@@ -12,6 +12,7 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "agentscope>=2.0.4,<2.1",
     "jsonschema>=4.26,<5",
+    "lmnr>=0.7.56,<0.8",
     "pydantic>=2.13,<3",
     "ttp>=0.10.1,<0.11",
 ]
