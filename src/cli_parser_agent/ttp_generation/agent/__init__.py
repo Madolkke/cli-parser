@@ -2,43 +2,52 @@
 
 from .builder import (
     build_agent,
-    build_task_message,
-    build_ttp_generator_agent,
+    build_schema_task_message,
+    build_ttp_task_message,
     estimate_initial_model_tokens,
 )
-from .middleware import GenerationPhaseMiddleware
+from .middleware import LosslessContextMiddleware
 from .prompt import (
     PROMPT_VERSION,
     SCHEMA_NO_TOOL_RETRY_PROMPT,
-    SYSTEM_PROMPT,
+    SCHEMA_SYSTEM_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
-    build_task_prompt,
+    TTP_SYSTEM_PROMPT,
+    build_schema_task_prompt,
+    build_ttp_task_prompt,
 )
-from .runner import AgentRunOutcome, run_generation_agent
-from .tools import (
-    SUBMIT_SCHEMA_TOOL_NAME,
-    SUBMIT_TEMPLATE_TOOL_NAME,
+from .runner import AgentRunOutcome, run_generation_phase
+from .session import (
+    GenerationPhase,
     GenerationSession,
     SchemaCandidate,
     SchemaValidator,
-    SubmitResultSchemaTool,
-    SubmitTtpTemplateTool,
     TemplateCandidate,
     TemplateValidator,
     ValidatorOutcome,
+    ValidatorOutcomeAttributes,
+    ValidatorOutcomeLike,
+)
+from .tools import (
+    SUBMIT_SCHEMA_TOOL_NAME,
+    SUBMIT_TEMPLATE_TOOL_NAME,
+    SubmitResultSchemaTool,
+    SubmitTtpTemplateTool,
     build_submission_tools,
 )
 
 __all__ = [
-    "GenerationPhaseMiddleware",
+    "GenerationPhase",
     "GenerationSession",
+    "LosslessContextMiddleware",
     "AgentRunOutcome",
     "PROMPT_VERSION",
     "SCHEMA_NO_TOOL_RETRY_PROMPT",
     "SUBMIT_SCHEMA_TOOL_NAME",
     "SUBMIT_TEMPLATE_TOOL_NAME",
-    "SYSTEM_PROMPT",
+    "SCHEMA_SYSTEM_PROMPT",
     "TTP_NO_TOOL_RETRY_PROMPT",
+    "TTP_SYSTEM_PROMPT",
     "SchemaCandidate",
     "SchemaValidator",
     "SubmitResultSchemaTool",
@@ -46,11 +55,14 @@ __all__ = [
     "TemplateCandidate",
     "TemplateValidator",
     "ValidatorOutcome",
+    "ValidatorOutcomeAttributes",
+    "ValidatorOutcomeLike",
     "build_agent",
+    "build_schema_task_message",
+    "build_schema_task_prompt",
     "build_submission_tools",
-    "build_task_message",
-    "build_task_prompt",
-    "build_ttp_generator_agent",
+    "build_ttp_task_message",
+    "build_ttp_task_prompt",
     "estimate_initial_model_tokens",
-    "run_generation_agent",
+    "run_generation_phase",
 ]

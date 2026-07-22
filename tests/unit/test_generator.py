@@ -7,8 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from cli_parser_agent import TtpGenerator, TtpGeneratorSettings
-from cli_parser_agent.ttp_generation.agent import build_task_prompt
-from cli_parser_agent.ttp_generation.generator import (
+from cli_parser_agent.ttp_generation.agent import build_schema_task_prompt
+from cli_parser_agent.ttp_generation.workflow import (
     _fit_sampled_outputs,
     _run_before_deadline,
 )
@@ -187,17 +187,38 @@ async def test_sampling_fits_final_prompt_for_unicode_and_control_text() -> None
     outputs = ["界\x00" * 2_000, "尾部\n" * 2_000]
 
     async def estimate_tokens(texts: list[str]) -> int:
-        return len(build_task_prompt(texts).encode("utf-8")) // 4
+        return len(build_schema_task_prompt(texts).encode("utf-8")) // 4
 
     sampled, fits = await _fit_sampled_outputs(
         outputs,
         total_char_budget=2_000,
         max_initial_tokens=300,
+        serialize_prompt=build_schema_task_prompt,
         estimate_tokens=estimate_tokens,
     )
 
-    prompt = build_task_prompt([item.text for item in sampled])
+    prompt = build_schema_task_prompt([item.text for item in sampled])
     assert fits
     assert len(prompt) <= 2_000
     assert await estimate_tokens([item.text for item in sampled]) <= 300
     assert sum(item.sampled_char_count for item in sampled) < 2_000
+
+
+@pytest.mark.asyncio
+async def test_sampling_rejects_marker_only_or_missing_input_views() -> None:
+    outputs = [f"value: {index}\n" for index in range(5)]
+
+    async def estimate_tokens(texts: list[str]) -> int:
+        del texts
+        return 1
+
+    sampled, fits = await _fit_sampled_outputs(
+        outputs,
+        total_char_budget=1,
+        max_initial_tokens=10_000,
+        serialize_prompt=build_schema_task_prompt,
+        estimate_tokens=estimate_tokens,
+    )
+
+    assert fits is False
+    assert any(not item.text for item in sampled)

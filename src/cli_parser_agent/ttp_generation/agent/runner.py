@@ -18,17 +18,18 @@ from agentscope.message import ToolResultState, UserMsg
 from agentscope.model import FinishedReason
 
 from .prompt import SCHEMA_NO_TOOL_RETRY_PROMPT, TTP_NO_TOOL_RETRY_PROMPT
+from .session import GenerationPhase, GenerationSession
 from .tools import (
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
-    GenerationSession,
 )
 
 
 @dataclass(frozen=True, slots=True)
 class AgentRunOutcome:
-    """Framework-neutral facts observed across bounded AgentScope replies."""
+    """Framework-neutral facts observed during one generation phase."""
 
+    phase_completed: bool = False
     exceeded_max_iters: bool = False
     stopped_after_terminal_tool: bool = False
     model_no_tool_retry_limit: bool = False
@@ -82,17 +83,55 @@ def _retry_message(tool_name: str) -> UserMsg:
     return UserMsg(name="user", content=content)
 
 
-async def run_generation_agent(
+def _expected_tool_name(phase: GenerationPhase) -> str:
+    if phase == "schema":
+        return SUBMIT_SCHEMA_TOOL_NAME
+    if phase == "ttp":
+        return SUBMIT_TEMPLATE_TOOL_NAME
+    raise ValueError(f"Unsupported generation phase: {phase!r}")
+
+
+def _phase_completed(session: GenerationSession, phase: GenerationPhase) -> bool:
+    if phase == "schema":
+        return session.schema_is_frozen
+    return session.succeeded
+
+
+def _terminal_tool_observed(
+    session: GenerationSession,
+    phase: GenerationPhase,
+) -> bool:
+    """Return whether the current reply must stop after a tool result."""
+
+    if _phase_completed(session, phase):
+        return True
+    return phase == "ttp" and (
+        session.terminal_reason == "ttp_worker_unavailable"
+        or session.ttp_submissions >= session.max_ttp_submissions
+    )
+
+
+async def run_generation_phase(
     agent: Any,
     message: Any,
     session: GenerationSession,
+    phase: GenerationPhase,
 ) -> AgentRunOutcome:
-    """Run bounded replies, retrying only sanitized no-tool completions."""
+    """Run one isolated phase, retrying only sanitized no-tool completions."""
 
+    expected_tool = _expected_tool_name(phase)
     exceeded_max_iters = False
     stopped_after_terminal_tool = False
     model_no_tool_retry_limit = False
     next_message = message
+
+    if _phase_completed(session, phase):
+        return AgentRunOutcome(
+            phase_completed=True,
+            tool_call_starts=session.tool_call_starts,
+            tool_result_errors=session.tool_result_errors,
+            submission_tool_call_invalids=session.submission_tool_call_invalids,
+        )
 
     while session.agent_rounds < session.max_agent_rounds:
         remaining_rounds = session.max_agent_rounds - session.agent_rounds
@@ -121,9 +160,9 @@ async def run_generation_agent(
                     continue
 
                 if isinstance(event, ModelCallStartEvent):
-                    session.agent_rounds += 1
+                    session.record_agent_round(phase)
                     last_checkpoint = _checkpoint_context(agent)
-                    last_expected_tool = session.current_phase_tool_name()
+                    last_expected_tool = expected_tool
                     last_call_had_tool = False
                     last_call_interrupted = False
 
@@ -141,7 +180,7 @@ async def run_generation_agent(
                         _submission_count(session, tool_name),
                     )
                     if tool_name == last_expected_tool:
-                        session.reset_no_tool_sequence(tool_name)
+                        session.reset_no_tool_sequence(phase)
 
                 elif isinstance(event, ExceedMaxItersEvent):
                     exceeded_max_iters = True
@@ -164,10 +203,12 @@ async def run_generation_agent(
                                 session.submission_tool_call_invalids += 1
 
                     if (
-                        session.succeeded
-                        or session.terminal_reason == "ttp_worker_unavailable"
-                        or session.ttp_submissions >= session.max_ttp_submissions
-                    ) and not stopped_after_terminal_tool:
+                        _terminal_tool_observed(
+                            session,
+                            phase,
+                        )
+                        and not stopped_after_terminal_tool
+                    ):
                         stopped_after_terminal_tool = True
                         terminal_checkpoint = _checkpoint_context(agent)
                         agent.react_config.max_iters = agent.state.cur_iter + 1
@@ -221,7 +262,7 @@ async def run_generation_agent(
             if terminal_checkpoint is not None:
                 _restore_context(agent, terminal_checkpoint)
 
-        if stopped_after_terminal_tool or session.succeeded:
+        if stopped_after_terminal_tool or _phase_completed(session, phase):
             break
         if session.terminal_reason in {
             "generation_timeout",
@@ -241,7 +282,7 @@ async def run_generation_agent(
             break
 
         _restore_context(agent, last_checkpoint)
-        retry_allowed = session.record_no_tool_response(last_expected_tool)
+        retry_allowed = session.record_no_tool_response(phase)
         if not retry_allowed:
             session.terminal_reason = "model_no_tool_retry_limit"
             model_no_tool_retry_limit = True
@@ -250,17 +291,19 @@ async def run_generation_agent(
             exceeded_max_iters = True
             break
 
-        session.record_no_tool_retry(last_expected_tool)
+        session.record_no_tool_retry(phase)
         next_message = _retry_message(last_expected_tool)
 
+    phase_completed = _phase_completed(session, phase)
     if (
-        not session.succeeded
+        not phase_completed
         and session.agent_rounds >= session.max_agent_rounds
         and session.terminal_reason is None
     ):
         exceeded_max_iters = True
 
     return AgentRunOutcome(
+        phase_completed=phase_completed,
         exceeded_max_iters=exceeded_max_iters,
         stopped_after_terminal_tool=stopped_after_terminal_tool,
         model_no_tool_retry_limit=model_no_tool_retry_limit,
@@ -270,4 +313,4 @@ async def run_generation_agent(
     )
 
 
-__all__ = ["AgentRunOutcome", "run_generation_agent"]
+__all__ = ["AgentRunOutcome", "run_generation_phase"]

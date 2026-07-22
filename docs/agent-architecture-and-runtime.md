@@ -2,207 +2,107 @@
 
 <!-- markdownlint-disable MD013 -->
 
-当前 Agent 本质上是一个“模型提出候选，确定性代码负责验收”的两阶段生成器。
+当前 Agent 是一个“模型提出候选，确定性代码负责验收”的两阶段生成器。输入是 `1-5` 份同一命令的实际输出，目标是生成一份共享 TTP 模板、一份描述单条解析结果的 JSON Schema、与输入一一对应的 `records`，以及必要的 `assumptions`。
 
-输入不是命令本身，而是 `1–5` 份同一命令的实际输出。最终目标是生成：
-
-- 一份共享的 TTP 模板；
-- 一份描述单条解析结果的 JSON Schema；
-- 与输入按索引一一对应的解析结果 `records`；
-- 必要的推断说明 `assumptions`。
+本文用于理解运行过程。精确的公共契约、模块边界、默认限制和安全规则以 [首版架构](architecture.md) 为准。
 
 ## 整体架构
 
 ```mermaid
 flowchart TD
     U["上游调用方 / 未来其他 Agent"] --> API["TtpGenerator.generate()"]
+    API --> REQ["校验请求并保存全文"]
+    API --> ROOT["Laminar: ttp.generate"]
 
-    API --> REQ["请求校验与输入采样"]
-    API --> TRACE["Laminar: ttp.generate 根 Span"]
+    REQ --> SESSION["GenerationSession<br/>唯一跨阶段领域状态"]
+    REQ --> SSAMPLE["Schema 阶段独立采样"]
+    SSAMPLE --> SAGENT["ttp_schema_generator<br/>独立 Model + AgentState + Toolkit"]
+    SAGENT --> STOOL["submit_result_schema"]
+    STOOL --> SVALIDATE["Schema + evidence 校验"]
+    SVALIDATE -->|拒绝| SAGENT
+    SVALIDATE -->|冻结| HANDOFF["安全暂停<br/>仅交接冻结 Schema"]
 
-    REQ --> SESSION["GenerationSession<br/>请求级领域状态"]
-    REQ --> AGENT["AgentScope Agent<br/>AgentState + Model + Toolkit + Middleware"]
+    HANDOFF --> TSAMPLE["从全文重新采样"]
+    TSAMPLE --> TAGENT["ttp_template_generator<br/>全新 Model + AgentState + Toolkit"]
+    TAGENT --> TTOOL["submit_ttp_template"]
+    TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射 / 来源校验"]
+    TVALIDATE -->|拒绝| CAPTURE["issues + 有界 capture"]
+    CAPTURE --> TAGENT
+    TVALIDATE -->|工具阶段通过| FINAL["Agent 外最终全文重验"]
+    FINAL --> RESULT["GenerationResult"]
 
-    AGENT --> MODEL["OpenAI 兼容模型"]
-    AGENT --> PHASE["阶段 Middleware<br/>每阶段只暴露一个工具"]
-
-    PHASE --> SCHEMA["submit_result_schema"]
-    SCHEMA --> SV["Schema + Evidence 确定性校验"]
-    SV -->|拒绝| AGENT
-    SV -->|接受并冻结| TTP["submit_ttp_template"]
-
-    TTP --> TV["TTP 静态安全检查"]
-    TV --> WORKER["独立 spawn 进程全文解析"]
-    WORKER --> ACCEPT["Schema、映射和标量来源校验"]
-
-    ACCEPT -->|拒绝| CAPTURE["issues + 实际 capture"]
-    CAPTURE --> AGENT
-
-    ACCEPT -->|工具阶段通过| FINAL["Agent 外最终全文重验"]
-    FINAL -->|通过| ARTIFACT["ArtifactBundle"]
-    FINAL -->|失败| FAILED["结构化 GenerationResult"]
-
-    MODEL -.-> TRACE
-    SCHEMA -.-> TRACE
-    TTP -.-> TRACE
+    ROOT --> SPHASE["schema.phase"]
+    SPHASE --> SLLM["openai.chat"]
+    SPHASE --> STOOLSPAN["submit_result_schema TOOL"]
+    ROOT --> TPHASE["ttp.phase<br/>仅成功交接后创建"]
+    TPHASE --> TLLM["openai.chat"]
+    TPHASE --> TTOOLSPAN["submit_ttp_template TOOL"]
 ```
 
-代码采用 `ttp_generation` 垂直切片：
+## 关键边界
 
-```text
-src/cli_parser_agent/
-├── config.py                    # 模型设置、执行和安全预算
-├── observability.py             # Laminar 初始化与 Span 生命周期
-└── ttp_generation/
-    ├── contracts.py             # 公共请求、结果和错误契约
-    ├── generator.py             # 顶层编排与最终验收
-    ├── sampling.py              # 模型输入采样
-    ├── agent/
-    │   ├── builder.py           # 构建请求级 AgentScope Agent
-    │   ├── middleware.py        # 当前阶段工具过滤
-    │   ├── runner.py            # 事件循环、重试和中断
-    │   ├── tools.py             # 两个提交工具与 GenerationSession
-    │   └── prompt.py            # 中文提示词
-    └── validation/
-        ├── json_schema.py       # Schema、evidence、record 校验
-        ├── ttp.py               # TTP 安全检查和隔离解析
-        └── capture.py           # 有界的实际捕获反馈
-```
+### 公共入口与私有工作流
 
-## 关键设计
-
-### 公共 API 与 AgentScope 解耦
-
-对外只有异步 Python API：
+调用方只使用框架无关的异步 API：
 
 ```python
-generator = TtpGenerator.from_env()
-
-result = await generator.generate(
+result = await TtpGenerator.from_env().generate(
     GenerationRequest(command_outputs=[output_1, output_2]),
 )
 ```
 
-调用方看不到 AgentScope 的 `Msg`、Event 或 `AgentState`。这使未来的上游 Agent 可以像调用普通 Python 服务一样调用它。
+[`generator.py`](../src/cli_parser_agent/ttp_generation/generator.py) 是公共门面，负责构造入口、请求检查和 `ttp.generate` 根 Trace；它把一次请求委托给私有 [`workflow.py`](../src/cli_parser_agent/ttp_generation/workflow.py)。workflow 显式编排 Schema 阶段、受控交接、TTP 阶段和最终验收。AgentScope 的 `Msg`、Event 与 `AgentState` 不进入公共结果。
 
-公共入口见 [generator.py](../src/cli_parser_agent/ttp_generation/generator.py)，数据契约见 [contracts.py](../src/cli_parser_agent/ttp_generation/contracts.py)。
+### 三个数据范围
 
-### 每次请求完全隔离
+一次请求中的状态分为三个互不替代的范围：
 
-每个 `generate()` 都创建新的：
+- 阶段 `AgentState` 保存本阶段模型对话。Schema 和 TTP 使用完全不同的 Model、Agent、`AgentState` 与 Toolkit。
+- [`GenerationSession`](../src/cli_parser_agent/ttp_generation/agent/session.py) 保存完整输入、冻结 Schema、候选、提交计数和验收状态，是唯一跨阶段领域状态。
+- Laminar Trace 可以只读观察两个阶段的完整过程，但 Trace 内容不会进入 handoff，也不会回灌模型上下文。
 
-- `Agent`；
-- `AgentState`；
-- `Toolkit`；
-- `GenerationSession`。
+Schema Agent 的 rejected candidate、evidence、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 都不会进入 TTP `AgentState`。evidence 与 assumptions 仍留在 session 中，供最终验收和 artifact 使用。
 
-其中：
+### 阶段专属工具
 
-- `AgentState` 保存模型对话上下文；
-- `GenerationSession` 保存冻结 Schema、候选模板、提交次数、校验问题等领域状态；
-- 只有提交工具可以修改 `GenerationSession`；
-- 模型普通文本永远不会被解析成产物。
-
-Agent 构造位于 [builder.py](../src/cli_parser_agent/ttp_generation/agent/builder.py)，请求状态位于 [tools.py](../src/cli_parser_agent/ttp_generation/agent/tools.py)。
-
-### 两阶段单工具状态机
-
-第一阶段只允许：
+两个 Toolkit 都只有一个工具：
 
 ```text
-submit_result_schema
+Schema Agent -> submit_result_schema
+TTP Agent    -> submit_ttp_template
 ```
 
-Schema 通过以下校验后永久冻结：
+HTTP 请求省略 `tool_choice`，因此模型自主决定是否调用当前唯一工具。普通 assistant 文本不被解析为产物。若一次模型调用没有工具调用，runner 回滚该回复新增的文本、Thinking 和 usage，再追加不引用回复内容的固定中文提醒；重试只发生在当前阶段，并继续消耗同一请求的全局轮次和 deadline。
 
-- 使用 Draft 2020-12；
-- 根类型为 `object`；
-- 使用 ASCII `snake_case` 字段；
-- 所有对象必须完整声明 `required` 并设置 `additionalProperties: false`；
-- 禁止 `$ref`、`oneOf`、`anyOf` 等复杂结构；
-- 每个叶子字段必须有一条原文 evidence；
-- evidence 必须确实存在于指定的完整输入中。
+## 一次请求的运行流程
 
-Schema 冻结后进入第二阶段，只允许：
+### 1. 校验并建立请求状态
 
-```text
-submit_ttp_template
-```
+Pydantic 首先检查输入数量、空白内容和 UTF-8 字节上限。workflow 保存未经采样的完整输出，创建 `GenerationSession` 与共享 deadline。模型只读取后续阶段样本，工具校验和最终验收始终读取全文。
 
-Middleware 虽然在 Toolkit 中注册两个工具，但每次模型请求只保留当前阶段的一个工具，并且不强制 `tool_choice`。见 [middleware.py](../src/cli_parser_agent/ttp_generation/agent/middleware.py)。
+### 2. 为 Schema 阶段拟合输入
 
-### 模型不调用工具时的处理
+Schema 阶段从完整输出确定性采样，并按自己的系统提示、任务消息和唯一工具描述估算上下文。超限输入在完整行边界保留头部与尾部；若最小可用样本仍无法容纳，请求以带阶段信息的结构化上下文预算错误结束。
 
-模型可以思考，也可以返回普通文本，但普通文本不算提交。
+workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度业务 Schema、字段 evidence 和 assumptions，不包含 TTP 提交协议或语法。
 
-如果一轮没有工具调用：
+### 3. 提交、修正并冻结 Schema
 
-1. 回滚该轮新增的 Text、Thinking 和 usage；
-2. 不记录或复述模型自由文本；
-3. 加入固定中文提醒；
-4. 在同一阶段重新请求模型。
+Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每个叶子字段的原文证据和 assumptions。工具在完整输入上检查元模式、安全子集、复杂度、封闭对象、字段名、required 集合和 evidence。
 
-Schema 与 TTP 阶段默认各允许重试 `3` 次。具体事件循环见 [runner.py](../src/cli_parser_agent/ttp_generation/agent/runner.py)。
+无效候选及其 issues 留在 Schema `AgentState` 中，模型可以继续修正。第一个通过校验的 Schema 被深拷贝并永久冻结；对应的 `ToolResultEndEvent` 是安全暂停点，runner 立即结束当前 reply。若 Schema 恰好耗尽了全局轮次，请求直接失败，不启动 TTP Agent。
 
-## 一次请求的主要运行流程
+### 4. 受控交接并重新采样
 
-### 第一步：请求校验
+进入 TTP 阶段时，workflow 只从 session 读取冻结 Schema，并重新从完整输出执行 TTP 阶段采样和 token fitting。冻结 Schema 会计入该阶段的上下文预算。
 
-系统首先确认：
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和单工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。
 
-- 输入数量为 `1–5`；
-- 每项非空；
-- 每项 UTF-8 编码后不超过 `1 MiB`。
+### 5. 生成和修正 TTP
 
-格式错误直接抛出 Pydantic 异常，不进入模型。
+TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言白名单和参数 AST 检查，再在独立 `spawn` 进程中对所有完整输入执行解析。校验器要求每份输入恰好产生一个根 `dict`，逐个使用冻结 Schema 验证 record，并检查标量能否追溯到原始输出。
 
-### 第二步：为模型准备采样输入
-
-模型侧总字符预算默认 `240,000`。
-
-过长输入按照完整行保留约：
-
-- `75%` 头部；
-- `25%` 尾部。
-
-随后再根据最终 Prompt 长度和模型 token 预算继续收紧。
-
-这里有一个重要区别：
-
-- 模型看到采样文本；
-- Schema evidence、TTP 校验和最终验收始终使用完整原文。
-
-### 第三步：生成并冻结 Schema
-
-模型调用 `submit_result_schema`，提交：
-
-```text
-result_schema
-evidence
-assumptions
-```
-
-无效时工具返回结构化 `issues`，模型继续修正。第一个通过的 Schema 会被深拷贝并永久冻结。
-
-### 第四步：生成和修正 TTP
-
-模型调用 `submit_ttp_template`。
-
-每次候选都会依次经过：
-
-1. XML/TTP 子语言白名单检查；
-2. group、变量和参数 AST 检查；
-3. 独立 `spawn` 进程执行 TTP；
-4. 对全部完整输入执行 `parse(one=True)`；
-5. 检查每份输入恰好产生一个根 `dict`；
-6. 根据冻结 Schema 验证 records；
-7. 检查所有标量能否追溯到原始输出。
-
-隔离执行见 [ttp.py](../src/cli_parser_agent/ttp_generation/validation/ttp.py)。
-
-### 第五步：把实际捕获结果反馈给模型
-
-只要 TTP worker 成功运行，即使候选最终不合格，也会把真实解析结果返回模型：
+只要 worker 成功运行，即使候选最终不合格，工具也会把实际捕获结果反馈给同一 TTP Agent：
 
 ```json
 {
@@ -214,94 +114,34 @@ assumptions
 }
 ```
 
-完整反馈最多 `32 KiB`；超限后转换为 JSON Pointer、容器大小和标量 head/tail preview。实现见 [capture.py](../src/cli_parser_agent/ttp_generation/validation/capture.py)。
+完整 capture 有固定大小上限；超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 保留在 TTP 阶段的修正链中，不会写入失败的公共结果，也不会回传 Schema Agent。
 
-这让模型能够看到“当前模板实际解析出了什么”，而不是只收到笼统的错误。
+### 6. Agent 外最终验收
 
-### 第六步：Agent 外最终验收
+提交工具报告通过后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射、Schema 与标量来源。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存。
 
-即使提交工具报告通过，也不能直接返回成功。
-
-`generator` 会在 Agent 外重新执行：
-
-- 冻结 Schema 与 evidence 校验；
-- TTP 静态安全检查；
-- 新的 spawn 进程全文解析；
-- records 数量和顺序检查；
-- Schema 验证；
-- 标量来源检查。
-
-最终 `ArtifactBundle.records` 使用这次重验的结果，而不是直接信任工具阶段缓存。
-
-## 结果契约
-
-成功时：
-
-```text
-GenerationResult
-├── status = "success"
-├── artifact
-│   ├── ttp_template
-│   ├── result_schema
-│   ├── records
-│   └── assumptions
-├── issues
-└── metadata
-```
-
-失败时：
-
-```text
-GenerationResult
-├── status = "failed"
-├── artifact = None
-├── issues
-├── metadata
-└── last_attempt
-    ├── ttp_template
-    ├── result_schema
-    └── validated = false
-```
-
-失败结果不会携带 partial records 或 capture。
+失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
 
 ## Laminar Trace
 
-启用 Laminar 后，一次请求通常形成：
+显式启用 Laminar 后，一次成功交接的请求形成一棵端到端 Trace：
 
 ```text
 ttp.generate
-├── openai.chat
-├── submit_result_schema
-├── openai.chat
-├── submit_result_schema
-├── openai.chat
-└── submit_ttp_template
+├── schema.phase
+│   ├── openai.chat
+│   └── submit_result_schema [TOOL]
+└── ttp.phase
+    ├── openai.chat
+    └── submit_ttp_template [TOOL]
 ```
 
-其中：
+重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，两个提交工具使用手动 TOOL span；TTP capture 位于工具 span 输出中。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
 
-- `ttp.generate` 是完整请求根 Span；
-- `openai.chat` 来自 OpenAI 自动 instrumentation；
-- 两个提交工具是手动 `TOOL` Span；
-- TTP capture 位于工具 Span 输出中；
-- `GenerationMetadata.laminar_trace_id` 用于定位运行；
-- 如果未来由其他 Agent 调用，它可以继承上游 Trace，而不是另起一条 Trace。
+Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observability.py`](../src/cli_parser_agent/observability.py)，精确的采集范围和生命周期规则见 [首版架构](architecture.md#24-可选-laminar-调试-trace)。
 
-实现位于 [observability.py](../src/cli_parser_agent/observability.py)。
+## 当前运行特性
 
-## 默认预算
+总时间限制是协作式超时，而不是进程强杀。底层模型请求的取消和清理可能继续占用时间，因此实际墙钟耗时可能超过配置值；TTP worker 的单次解析超时仍会终止独立子进程。
 
-- 总时间：`300` 秒；
-- 最多 `12` 个模型轮次；
-- 最多 `8` 次 TTP 提交；
-- 每次 TTP 解析最多 `20` 秒；
-- Schema/TTP 阶段各最多 `3` 次零工具重试。
-
-预算配置位于 [config.py](../src/cli_parser_agent/config.py)。
-
-## 当前值得注意的运行特性
-
-总时间目前属于协作式超时，不是进程强杀。底层模型请求取消和清理可能继续占用时间，因此实际墙钟耗时可能超过配置的总时间预算。
-
-目前架构的安全和隔离边界相对完整。主要质量风险是模型能否稳定生成具有足够语义粒度的 Schema，并理解冻结 Schema 的 JSON 结构与 TTP group 实际结果之间的对应关系。确定性验收保证安全、结构一致和来源可追溯，但不等同于完整的业务语义正确性证明。
+确定性验收保证安全、结构一致、全文执行和来源可追溯，但不等同于业务语义完整性的证明。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。

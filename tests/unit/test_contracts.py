@@ -168,6 +168,45 @@ def test_generation_metadata_supports_an_optional_laminar_trace_id() -> None:
         )
 
 
+def test_generation_metadata_tracks_isolated_phase_counts() -> None:
+    metadata = GenerationMetadata(
+        model_name="model",
+        command_output_count=2,
+        input_char_count=1_000,
+        schema_sampled_char_count=700,
+        ttp_sampled_char_count=600,
+        agent_rounds=5,
+        schema_agent_rounds=2,
+        ttp_agent_rounds=3,
+    )
+
+    assert metadata.agent_rounds == 5
+    assert metadata.schema_agent_rounds == 2
+    assert metadata.ttp_agent_rounds == 3
+    assert metadata.schema_sampled_char_count == 700
+    assert metadata.ttp_sampled_char_count == 600
+    assert "sampled_char_count" not in metadata.model_dump(mode="json")
+
+
+@pytest.mark.parametrize(
+    "values",
+    [
+        {"input_char_count": 10, "schema_sampled_char_count": 11},
+        {"input_char_count": 10, "ttp_sampled_char_count": 11},
+        {"agent_rounds": 2, "schema_agent_rounds": 1, "ttp_agent_rounds": 0},
+    ],
+)
+def test_generation_metadata_rejects_inconsistent_phase_counts(
+    values: dict[str, int],
+) -> None:
+    with pytest.raises(ValidationError):
+        GenerationMetadata(
+            model_name="model",
+            command_output_count=1,
+            **values,
+        )
+
+
 def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> None:
     settings = TtpGeneratorSettings.from_env(
         {

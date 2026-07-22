@@ -21,16 +21,17 @@ from cli_parser_agent.ttp_generation.agent import (
     TemplateCandidate,
     ValidatorOutcome,
     build_agent,
-    build_task_message,
-    run_generation_agent,
+    build_schema_task_message,
+    build_ttp_task_message,
+    run_generation_phase,
 )
 from cli_parser_agent.ttp_generation.contracts import FieldEvidence, ValidationIssue
-from cli_parser_agent.ttp_generation.generator import _run_before_deadline
 from cli_parser_agent.ttp_generation.validation import (
     validate_result_schema,
     validate_schema_proposal,
     validate_ttp_template,
 )
+from cli_parser_agent.ttp_generation.workflow import _run_before_deadline
 
 COMMAND_OUTPUTS = [
     """\
@@ -200,19 +201,46 @@ async def test_real_model_reacts_to_schema_and_template_rejections() -> None:
         max_ttp_submissions=policy.max_ttp_submissions,
         deadline_monotonic=deadline,
     )
-    agent = build_agent(settings=settings, policy=policy, session=session)
-    completed, _ = await _run_before_deadline(
-        lambda: run_generation_agent(
-            agent,
-            build_task_message(COMMAND_OUTPUTS),
+    schema_agent = build_agent(
+        settings=settings,
+        policy=policy,
+        session=session,
+        phase="schema",
+    )
+    schema_completed, schema_outcome = await _run_before_deadline(
+        lambda: run_generation_phase(
+            schema_agent,
+            build_schema_task_message(COMMAND_OUTPUTS),
             session,
+            "schema",
         ),
         deadline_monotonic=deadline,
     )
 
-    assert completed
+    assert schema_completed
+    assert schema_outcome is not None and schema_outcome.phase_completed
     assert schema_valid_rejected
     assert session.schema_submissions >= 2
+    assert session.frozen_schema is not None
+
+    ttp_agent = build_agent(
+        settings=settings,
+        policy=policy,
+        session=session,
+        phase="ttp",
+    )
+    ttp_completed, ttp_outcome = await _run_before_deadline(
+        lambda: run_generation_phase(
+            ttp_agent,
+            build_ttp_task_message(COMMAND_OUTPUTS, session.frozen_schema),
+            session,
+            "ttp",
+        ),
+        deadline_monotonic=deadline,
+    )
+
+    assert ttp_completed
+    assert ttp_outcome is not None and ttp_outcome.phase_completed
     assert session.succeeded, session.last_issues
     assert session.ttp_submissions >= 2
     assert first_valid_template is not None

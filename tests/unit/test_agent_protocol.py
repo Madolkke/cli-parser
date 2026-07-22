@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from contextlib import contextmanager
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -13,18 +14,21 @@ from agentscope.tool import ToolChunk, Toolkit, ToolResponse
 
 from cli_parser_agent.ttp_generation.agent import (
     PROMPT_VERSION,
+    SCHEMA_SYSTEM_PROMPT,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
-    SYSTEM_PROMPT,
-    GenerationPhaseMiddleware,
+    TTP_SYSTEM_PROMPT,
+    GenerationPhase,
     GenerationSession,
+    LosslessContextMiddleware,
     SchemaCandidate,
     SubmitResultSchemaTool,
     SubmitTtpTemplateTool,
     TemplateCandidate,
     ValidatorOutcome,
+    build_schema_task_prompt,
     build_submission_tools,
-    build_task_prompt,
+    build_ttp_task_prompt,
 )
 from cli_parser_agent.ttp_generation.agent import tools as tools_module
 
@@ -54,12 +58,15 @@ def _unused_template_validator(candidate: TemplateCandidate) -> ValidatorOutcome
     raise AssertionError(f"template validator should not be called: {candidate!r}")
 
 
-def _tool_event_agent(session: GenerationSession) -> Agent:
+def _tool_event_agent(
+    session: GenerationSession,
+    phase: GenerationPhase,
+) -> Agent:
     return Agent(
         name="test_agent",
         system_prompt="test",
         model=cast(Any, object()),
-        toolkit=Toolkit(tools=build_submission_tools(session)),
+        toolkit=Toolkit(tools=build_submission_tools(session, phase)),
     )
 
 
@@ -67,7 +74,10 @@ async def _tool_result_events(
     session: GenerationSession,
     tool_call: ToolCallBlock,
 ) -> list[Any]:
-    agent = _tool_event_agent(session)
+    phase: GenerationPhase = (
+        "schema" if tool_call.name == SUBMIT_SCHEMA_TOOL_NAME else "ttp"
+    )
+    agent = _tool_event_agent(session, phase)
     events: list[Any] = []
     async for item in agent._acting(tool_call):
         if isinstance(item, ToolChunk):
@@ -98,55 +108,63 @@ def _event_text(events: list[Any]) -> str:
     )
 
 
-def _model_tool_schema(name: str) -> dict[str, Any]:
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": f"{name} description",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    }
-
-
 def _contains_chinese(text: str) -> bool:
     return any("\u4e00" <= character <= "\u9fff" for character in text)
 
 
-def test_prompt_protocol_is_chinese_and_preserves_machine_tokens() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v8-zh-cn"
-    assert _contains_chinese(SYSTEM_PROMPT)
-    assert "最多填写两句简短中文" in SYSTEM_PROMPT
-    assert "绝不意味着删除冻结 Schema 的 required 字段捕获" in SYSTEM_PROMPT
-    assert "每个未建模列保留 `ignore` 占位" in SYSTEM_PROMPT
-    assert "表格 group 不使用 `_start_`、`_end_` 或 `_line_`" in SYSTEM_PROMPT
-    assert "`{{ ignore }}`" in SYSTEM_PROMPT
-    assert "`{{ ignore(ORPHRASE) }}`" in SYSTEM_PROMPT
-    assert '`{{ ignore("PID:.*SN:") }}`' in SYSTEM_PROMPT
-    assert "ignore |" not in SYSTEM_PROMPT
-    assert "`capture` 与 `issues` 一起用于修正" in SYSTEM_PROMPT
+def test_phase_prompts_are_independent_chinese_protocols() -> None:
+    assert PROMPT_VERSION == "ttp-generator-v9-phase-isolated-zh-cn"
+    assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
+    assert _contains_chinese(TTP_SYSTEM_PROMPT)
+    assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
 
-    machine_tokens = (
-        "submit_result_schema",
-        "submit_ttp_template",
+    assert "submit_result_schema" in SCHEMA_SYSTEM_PROMPT
+    assert "固定字段数量" in SCHEMA_SYSTEM_PROMPT
+    assert "整条数据行" in SCHEMA_SYSTEM_PROMPT
+    assert "中文" in SCHEMA_SYSTEM_PROMPT
+    assert "1-3" not in SCHEMA_SYSTEM_PROMPT
+    assert "TTP" not in SCHEMA_SYSTEM_PROMPT
+    assert "submit_ttp_template" not in SCHEMA_SYSTEM_PROMPT
+    assert "<group" not in SCHEMA_SYSTEM_PROMPT
+    assert "{{" not in SCHEMA_SYSTEM_PROMPT
+
+    assert "submit_ttp_template" in TTP_SYSTEM_PROMPT
+    assert "语义字段" in TTP_SYSTEM_PROMPT
+    assert "未建模列" in TTP_SYSTEM_PROMPT
+    assert "表格" in TTP_SYSTEM_PROMPT
+    assert "`{{ ignore }}`" in TTP_SYSTEM_PROMPT
+    assert "`{{ ignore(ORPHRASE) }}`" in TTP_SYSTEM_PROMPT
+    assert '`{{ ignore("PID:.*SN:") }}`' in TTP_SYSTEM_PROMPT
+    assert "ignore |" not in TTP_SYSTEM_PROMPT
+    assert "capture 必须与 issues 一起用于修正" in TTP_SYSTEM_PROMPT
+    assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
+    assert "evidence" not in TTP_SYSTEM_PROMPT
+    assert "assumptions" not in TTP_SYSTEM_PROMPT
+
+    schema_tokens = (
         "JSON Schema",
-        "TTP",
-        "XML",
         "evidence_not_found",
         "required_action",
         "replace_excerpt",
         "change_output_index",
         "matching_output_indexes",
+        "/interfaces/*/name",
+    )
+    for token in schema_tokens:
+        assert token in SCHEMA_SYSTEM_PROMPT
+
+    ttp_tokens = (
+        "TTP",
+        "XML",
         "forbidden_tag",
         "invalid_xml",
         "unsafe_variable_attribute",
         "ttp.no_match",
         "ttp.invalid_ignore_syntax",
         "replace_with_ignore_call",
-        "/interfaces/*/name",
     )
-    for token in machine_tokens:
-        assert token in SYSTEM_PROMPT
+    for token in ttp_tokens:
+        assert token in TTP_SYSTEM_PROMPT
 
 
 def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
@@ -158,6 +176,12 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert _contains_chinese(SubmitTtpTemplateTool.description)
 
     schema_contract = SubmitResultSchemaTool.input_schema
+    schema_protocol = SubmitResultSchemaTool.description + json.dumps(
+        schema_contract,
+        ensure_ascii=False,
+    )
+    assert "TTP" not in schema_protocol
+    assert "submit_ttp_template" not in schema_protocol
     assert set(schema_contract["properties"]) == {
         "result_schema",
         "evidence",
@@ -181,34 +205,53 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert "中文 assumptions" in assumptions_description
 
     template_contract = SubmitTtpTemplateTool.input_schema
+    template_protocol = SubmitTtpTemplateTool.description + json.dumps(
+        template_contract,
+        ensure_ascii=False,
+    )
+    assert "submit_result_schema" not in template_protocol
+    assert "evidence" not in template_protocol
+    assert "assumptions" not in template_protocol
     assert set(template_contract["properties"]) == {"ttp_template"}
     assert _contains_chinese(
         template_contract["properties"]["ttp_template"]["description"],
     )
 
 
-def test_task_prompt_round_trips_untrusted_unicode_json() -> None:
+def test_phase_task_prompts_round_trip_only_their_inputs() -> None:
     outputs = [
         '接口 "Gi0/1"\n状态: <up> & ready',
         "第二份输出\r\n值：雪",
     ]
+    schema = _schema()
 
-    prompt = build_task_prompt(outputs)
+    schema_prompt = build_schema_task_prompt(outputs)
+    ttp_prompt = build_ttp_task_prompt(outputs, schema)
 
     opening_tag = "<command_outputs_json>"
     closing_tag = "</command_outputs_json>"
-    assert opening_tag in prompt
-    assert closing_tag in prompt
-    serialized = prompt.split(opening_tag, maxsplit=1)[1].split(
-        closing_tag,
+    for prompt in (schema_prompt, ttp_prompt):
+        serialized = prompt.split(opening_tag, maxsplit=1)[1].split(
+            closing_tag,
+            maxsplit=1,
+        )[0]
+        assert json.loads(serialized) == outputs
+        assert "接口" in serialized
+        assert '\\"Gi0/1\\"' in serialized
+        assert "\\n" in serialized
+        assert "<up>" in serialized
+        assert "& ready" in serialized
+
+    schema_tag = "<frozen_result_schema_json>"
+    schema_end_tag = "</frozen_result_schema_json>"
+    assert schema_tag not in schema_prompt
+    serialized_schema = ttp_prompt.split(schema_tag, maxsplit=1)[1].split(
+        schema_end_tag,
         maxsplit=1,
     )[0]
-    assert json.loads(serialized) == outputs
-    assert "接口" in serialized
-    assert '\\"Gi0/1\\"' in serialized
-    assert "\\n" in serialized
-    assert "<up>" in serialized
-    assert "& ready" in serialized
+    assert json.loads(serialized_schema) == schema
+    assert "evidence" not in ttp_prompt
+    assert "assumptions" not in ttp_prompt
 
 
 @pytest.mark.asyncio
@@ -236,8 +279,6 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     )
     tool = SubmitResultSchemaTool(session)
 
-    assert session.current_phase_tool_name() == SUBMIT_SCHEMA_TOOL_NAME
-
     rejected = await tool.call(
         result_schema=_schema("wrong"),
         evidence=[{"path": "/wrong", "output_index": 0, "excerpt": "one"}],
@@ -245,8 +286,6 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     assert _payload(rejected)["accepted"] is False
     assert session.frozen_schema is None
     assert session.schema_submissions == 1
-    assert session.current_phase_tool_name() == SUBMIT_SCHEMA_TOOL_NAME
-
     accepted_schema = _schema()
     accepted = await tool.call(
         result_schema=accepted_schema,
@@ -254,6 +293,7 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
         assumptions=["这些值按标签处理。"],
     )
     assert _payload(accepted)["accepted"] is True
+    assert _payload(accepted)["next_action"] == "finish_schema"
     assert session.schema_submissions == 2
     assert session.frozen_schema == _schema()
     assert session.field_evidence == (
@@ -261,8 +301,6 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     )
     assert session.assumptions == ("这些值按标签处理。",)
     assert seen[-1].command_outputs == ("value: one", "value: two")
-    assert session.current_phase_tool_name() == SUBMIT_TEMPLATE_TOOL_NAME
-
     accepted_schema["properties"]["value"]["type"] = "integer"
     replacement = await tool.call(
         result_schema=_schema("replacement"),
@@ -334,6 +372,7 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
             },
         },
     ]
+
 
 @pytest.mark.asyncio
 async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> None:
@@ -524,8 +563,9 @@ async def test_template_validator_exception_is_redacted_from_agent_events() -> N
 
 
 @pytest.mark.asyncio
-async def test_rejected_template_returns_index_mapped_capture_without_storing_it(
-) -> None:
+async def test_rejected_template_returns_index_mapped_capture_without_storing_it() -> (
+    None
+):
     captured_records = [
         {},
         {"items": [{"name": "second"}]},
@@ -731,10 +771,26 @@ async def test_async_template_validator_preserves_record_index_mapping() -> None
     assert session.validated_ttp_template == "value: {{ value }}"
     assert session.first_ttp_valid is True
     assert session.terminal_reason == "success"
-    assert session.current_phase_tool_name() is None
-
     returned_records[0]["nested"]["index"] = 99
     assert session.records[0]["nested"]["index"] == 0
+
+
+@pytest.mark.asyncio
+async def test_attribute_validator_outcome_remains_supported() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=lambda candidate: SimpleNamespace(
+            valid=True,
+            records=({"value": "one"},),
+        ),
+    )
+    session.frozen_schema = _schema()
+
+    result = await SubmitTtpTemplateTool(session).call("value: {{ value }}")
+
+    assert _payload(result)["accepted"] is True
+    assert session.records == ({"value": "one"},)
 
 
 @pytest.mark.parametrize(
@@ -767,7 +823,6 @@ async def test_valid_validator_outcome_still_requires_one_object_per_input(
     assert session.validated_ttp_template is None
     assert session.records == ()
     assert session.first_ttp_valid is False
-    assert session.current_phase_tool_name() == SUBMIT_TEMPLATE_TOOL_NAME
 
 
 @pytest.mark.asyncio
@@ -809,7 +864,6 @@ async def test_template_submission_budget_blocks_validator_after_limit() -> None
     assert session.ttp_submissions == 2
     assert session.last_ttp_template == "second: {{ value }}"
     assert session.terminal_reason == "ttp_submission_limit"
-    assert session.current_phase_tool_name() is None
 
 
 @pytest.mark.asyncio
@@ -851,149 +905,41 @@ async def test_unchanged_template_is_rejected_without_revalidating() -> None:
     assert session.last_issues == tuple(payload["issues"])
 
 
-@pytest.mark.asyncio
-async def test_phase_middleware_exposes_only_current_phase_tool() -> None:
-    session = GenerationSession(
-        command_outputs=["value: one"],
-        schema_validator=_unused_schema_validator,
-        template_validator=_unused_template_validator,
-    )
-    middleware = GenerationPhaseMiddleware(session)
-    captured: list[dict[str, Any]] = []
-    tools = [
-        _model_tool_schema(SUBMIT_SCHEMA_TOOL_NAME),
-        _model_tool_schema(SUBMIT_TEMPLATE_TOOL_NAME),
-    ]
-
-    async def next_handler(**kwargs: Any) -> str:
-        captured.append(kwargs)
-        return "model-result"
-
-    result = await middleware.on_model_call(
-        object(),
-        {"messages": [], "tools": tools, "tool_choice": "required"},
-        next_handler,
-    )
-
-    assert result == "model-result"
-    assert captured[0]["tools"] == [
-        _model_tool_schema(SUBMIT_SCHEMA_TOOL_NAME),
-    ]
-    assert captured[0]["tool_choice"] is None
-
-    session.frozen_schema = _schema()
-    captured.clear()
-    result = await middleware.on_model_call(
-        object(),
-        {"messages": [], "tools": tools},
-        next_handler,
-    )
-
-    assert result == "model-result"
-    assert captured[0]["tools"] == [
-        _model_tool_schema(SUBMIT_TEMPLATE_TOOL_NAME),
-    ]
-    assert captured[0]["tool_choice"] is None
-
-
-@pytest.mark.asyncio
-async def test_phase_middleware_disables_tools_after_termination() -> None:
-    session = GenerationSession(
-        command_outputs=["value: one"],
-        schema_validator=_unused_schema_validator,
-        template_validator=_unused_template_validator,
-    )
-    session.terminal_reason = "ttp_worker_unavailable"
-    captured: list[dict[str, Any]] = []
-
-    async def next_handler(**kwargs: Any) -> object:
-        captured.append(kwargs)
-        return object()
-
-    await GenerationPhaseMiddleware(session).on_model_call(
-        object(),
-        {
-            "tools": [
-                _model_tool_schema(SUBMIT_SCHEMA_TOOL_NAME),
-                _model_tool_schema(SUBMIT_TEMPLATE_TOOL_NAME),
-            ],
-            "tool_choice": "required",
-        },
-        next_handler,
-    )
-
-    assert captured[0]["tools"] == []
-    assert captured[0]["tool_choice"] is None
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "tools",
+    ("phase", "tool_type"),
     [
-        [_model_tool_schema(SUBMIT_TEMPLATE_TOOL_NAME)],
-        [
-            _model_tool_schema(SUBMIT_SCHEMA_TOOL_NAME),
-            _model_tool_schema(SUBMIT_SCHEMA_TOOL_NAME),
-        ],
+        ("schema", SubmitResultSchemaTool),
+        ("ttp", SubmitTtpTemplateTool),
     ],
-    ids=["missing", "duplicate"],
 )
-async def test_phase_middleware_fails_closed_for_invalid_current_tool_set(
-    tools: list[dict[str, Any]],
+def test_phase_toolkit_builder_returns_exactly_one_tool(
+    phase: GenerationPhase,
+    tool_type: type[Any],
 ) -> None:
     session = GenerationSession(
         command_outputs=["value: one"],
         schema_validator=_unused_schema_validator,
         template_validator=_unused_template_validator,
     )
-    called = False
 
-    async def next_handler(**kwargs: Any) -> None:
-        nonlocal called
-        called = True
+    tools = build_submission_tools(session, phase)
 
-    with pytest.raises(
-        RuntimeError,
-        match="Exactly one current-phase submission tool schema is required",
-    ):
-        await GenerationPhaseMiddleware(session).on_model_call(
-            object(),
-            {"tools": tools},
-            next_handler,
-        )
-
-    assert called is False
+    assert len(tools) == 1
+    assert isinstance(tools[0], tool_type)
 
 
 @pytest.mark.asyncio
-async def test_phase_middleware_never_lossily_compresses_source_context() -> None:
-    session = GenerationSession(
-        command_outputs=["value: one"],
-        schema_validator=_unused_schema_validator,
-        template_validator=_unused_template_validator,
-    )
+async def test_lossless_middleware_never_compresses_source_context() -> None:
     called = False
 
     async def next_handler(**kwargs: Any) -> None:
         nonlocal called
         called = True
 
-    await GenerationPhaseMiddleware(session).on_compress_context(
+    await LosslessContextMiddleware().on_compress_context(
         object(),
         {},
         next_handler,
     )
 
     assert called is False
-
-
-def test_fatal_worker_state_disables_further_tools() -> None:
-    session = GenerationSession(
-        command_outputs=["value: one"],
-        schema_validator=_unused_schema_validator,
-        template_validator=_unused_template_validator,
-    )
-    session.frozen_schema = _schema()
-    session.terminal_reason = "ttp_worker_unavailable"
-
-    assert session.current_phase_tool_name() is None

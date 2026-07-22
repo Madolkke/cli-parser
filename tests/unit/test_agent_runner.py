@@ -14,6 +14,7 @@ from agentscope.message import (
     TextBlock,
     ThinkingBlock,
     ToolCallBlock,
+    ToolResultBlock,
     ToolResultState,
     UserMsg,
 )
@@ -21,17 +22,15 @@ from agentscope.model import ChatResponse, ChatUsage
 from agentscope.state import AgentState
 from agentscope.tool import Toolkit
 
-from cli_parser_agent.ttp_generation.agent.middleware import (
-    GenerationPhaseMiddleware,
-)
 from cli_parser_agent.ttp_generation.agent.prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
-from cli_parser_agent.ttp_generation.agent.runner import run_generation_agent
+from cli_parser_agent.ttp_generation.agent.runner import run_generation_phase
 from cli_parser_agent.ttp_generation.agent.tools import (
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    GenerationPhase,
     GenerationSession,
     SchemaCandidate,
     ValidatorOutcome,
@@ -71,12 +70,15 @@ def _schema_call(call_id: str = "schema") -> ChatResponse:
     )
 
 
-def _template_call(call_id: str = "template") -> ChatResponse:
+def _template_call(
+    call_id: str = "template",
+    ttp_template: str = "value: {{ value }}",
+) -> ChatResponse:
     return _response(
         ToolCallBlock(
             id=call_id,
             name=SUBMIT_TEMPLATE_TOOL_NAME,
-            input=json.dumps({"ttp_template": "value: {{ value }}"}),
+            input=json.dumps({"ttp_template": ttp_template}),
         ),
     )
 
@@ -150,19 +152,23 @@ def _session(
 def _agent(
     model: _ScriptedModel,
     session: GenerationSession,
+    phase: GenerationPhase,
 ) -> Agent:
     return Agent(
-        name="ttp_generator",
+        name=f"{phase}_generator",
         system_prompt="test",
         model=model,  # type: ignore[arg-type]
-        toolkit=Toolkit(tools=build_submission_tools(session)),
-        middlewares=[GenerationPhaseMiddleware(session)],
+        toolkit=Toolkit(tools=build_submission_tools(session, phase=phase)),
         state=AgentState(),
         react_config=ReActConfig(
             max_iters=session.max_agent_rounds,
             interruption_raise_cancelled_error=True,
         ),
     )
+
+
+def _freeze_schema(session: GenerationSession) -> None:
+    session.frozen_schema = _schema()
 
 
 def _message_text(messages: list[Any]) -> str:
@@ -186,20 +192,25 @@ async def test_schema_no_tool_response_is_removed_then_recovers() -> None:
         ],
     )
     session = _session()
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    outcome = await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
-    assert session.succeeded
+    assert session.schema_is_frozen
+    assert not session.succeeded
+    assert outcome.phase_completed
     assert outcome.stopped_after_terminal_tool
     assert session.schema_no_tool_responses == 1
     assert session.schema_no_tool_retries == 1
     assert session.ttp_no_tool_responses == 0
-    assert session.agent_rounds == 3
+    assert session.agent_rounds == 2
+    assert session.schema_agent_rounds == 2
+    assert session.ttp_agent_rounds == 0
     assert model.calls[0]["tool_choice"] is None
     assert SCHEMA_NO_TOOL_RETRY_PROMPT in _message_text(
         model.calls[1]["messages"],
@@ -209,13 +220,15 @@ async def test_schema_no_tool_response_is_removed_then_recovers() -> None:
     assert secret not in repr(session)
     assert session.last_issues == ()
     usages = [message.usage for message in agent.state.context if message.usage]
-    assert sum(usage.input_tokens for usage in usages) == 22
-    assert sum(usage.output_tokens for usage in usages) == 14
-    assert len(model.calls) == 3
+    assert sum(usage.input_tokens for usage in usages) == 11
+    assert sum(usage.output_tokens for usage in usages) == 7
+    assert len(model.calls) == 2
+    assert len(model.responses) == 1
 
 
 async def test_terminal_tool_interrupts_reply_without_generator_exit() -> None:
     session = _session()
+    _freeze_schema(session)
     loop = asyncio.get_running_loop()
     captured_loop_errors: list[dict[str, Any]] = []
     previous_handler = loop.get_exception_handler()
@@ -273,10 +286,11 @@ async def test_terminal_tool_interrupts_reply_without_generator_exit() -> None:
         lambda _loop, context: captured_loop_errors.append(context),
     )
     try:
-        outcome = await run_generation_agent(
+        outcome = await run_generation_phase(
             agent,
             UserMsg(name="user", content="value: one"),
             session,
+            "ttp",
         )
         gc.collect()
         await asyncio.sleep(0)
@@ -284,6 +298,7 @@ async def test_terminal_tool_interrupts_reply_without_generator_exit() -> None:
     finally:
         loop.set_exception_handler(previous_handler)
 
+    assert outcome.phase_completed
     assert outcome.stopped_after_terminal_tool
     assert agent.interrupted
     assert not agent.generator_exit_cleanup
@@ -301,7 +316,6 @@ async def test_terminal_tool_interrupts_reply_without_generator_exit() -> None:
 async def test_ttp_no_tool_response_uses_independent_retry_budget() -> None:
     model = _ScriptedModel(
         [
-            _schema_call(),
             _response(TextBlock(text="普通文本")),
             _template_call(),
         ],
@@ -310,20 +324,107 @@ async def test_ttp_no_tool_response_uses_independent_retry_budget() -> None:
         max_schema_no_tool_retries=0,
         max_ttp_no_tool_retries=1,
     )
-    agent = _agent(model, session)
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
 
-    await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "ttp",
     )
 
+    assert outcome.phase_completed
     assert session.succeeded
     assert session.schema_no_tool_responses == 0
     assert session.schema_no_tool_retries == 0
     assert session.ttp_no_tool_responses == 1
     assert session.ttp_no_tool_retries == 1
-    assert TTP_NO_TOOL_RETRY_PROMPT in _message_text(model.calls[2]["messages"])
+    assert session.schema_agent_rounds == 0
+    assert session.ttp_agent_rounds == 2
+    assert TTP_NO_TOOL_RETRY_PROMPT in _message_text(model.calls[1]["messages"])
+
+
+async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
+    rejected_template = "rejected: {{ value }}"
+    corrected_template = "value: {{ value }}"
+    issue = {
+        "code": "ttp.test_rejected",
+        "stage": "template",
+        "message": "Use the captured value to correct the template.",
+    }
+    captured_record = {"value": "captured-one"}
+    submitted_templates: list[str] = []
+
+    def validate_template(candidate: Any) -> ValidatorOutcome:
+        submitted_templates.append(candidate.ttp_template)
+        if len(submitted_templates) == 1:
+            return ValidatorOutcome(
+                valid=False,
+                issues=(issue,),
+                records=(captured_record,),
+            )
+        return ValidatorOutcome(
+            valid=True,
+            records=({"value": "one"},),
+        )
+
+    model = _ScriptedModel(
+        [
+            _template_call("template-rejected", rejected_template),
+            _template_call("template-accepted", corrected_template),
+        ],
+    )
+    session = _session(max_agent_rounds=4)
+    session.template_validator = validate_template
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    assert len(model.calls) == 2
+    second_request_messages = model.calls[1]["messages"]
+    tool_results = [
+        block
+        for message in second_request_messages
+        for block in message.content
+        if isinstance(block, ToolResultBlock)
+    ]
+    assert len(tool_results) == 1
+    assert tool_results[0].id == "template-rejected"
+    assert len(tool_results[0].output) == 1
+    payload = json.loads(tool_results[0].output[0].text)
+    assert payload["accepted"] is False
+    assert payload["issues"] == [issue]
+    assert payload["capture"] == {
+        "available": True,
+        "complete": True,
+        "serialized_bytes": len(
+            json.dumps(
+                [captured_record],
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ).encode("utf-8"),
+        ),
+        "records": [captured_record],
+        "previews": [],
+    }
+    assert payload["next_action"] == "correct_and_resubmit_template"
+
+    assert outcome.phase_completed
+    assert outcome.stopped_after_terminal_tool
+    assert session.succeeded
+    assert session.first_ttp_valid is False
+    assert session.ttp_submissions == 2
+    assert session.ttp_agent_rounds == 2
+    assert submitted_templates == [rejected_template, corrected_template]
+    assert session.validated_ttp_template == corrected_template
+    assert session.records == ({"value": "one"},)
 
 
 async def test_fourth_consecutive_no_tool_response_exhausts_default_limit() -> None:
@@ -331,12 +432,13 @@ async def test_fourth_consecutive_no_tool_response_exhausts_default_limit() -> N
         [_response(TextBlock(text=f"reply-{index}")) for index in range(4)],
     )
     session = _session(max_agent_rounds=8)
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    outcome = await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
     assert not session.succeeded
@@ -350,12 +452,13 @@ async def test_fourth_consecutive_no_tool_response_exhausts_default_limit() -> N
 async def test_zero_disables_no_tool_retry() -> None:
     model = _ScriptedModel([_response(TextBlock(text="reply"))])
     session = _session(max_schema_no_tool_retries=0)
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    outcome = await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
     assert outcome.model_no_tool_retry_limit
@@ -384,7 +487,6 @@ async def test_expected_tool_call_resets_consecutive_no_tool_count() -> None:
             _schema_call("schema-rejected"),
             _response(TextBlock(text="second")),
             _schema_call("schema-accepted"),
-            _template_call(),
         ],
     )
     session = _session(
@@ -392,15 +494,18 @@ async def test_expected_tool_call_resets_consecutive_no_tool_count() -> None:
         max_agent_rounds=8,
         max_schema_no_tool_retries=1,
     )
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
-    assert session.succeeded
+    assert outcome.phase_completed
+    assert session.schema_is_frozen
+    assert not session.succeeded
     assert session.schema_no_tool_responses == 2
     assert session.schema_no_tool_retries == 2
     assert session.schema_submissions == 2
@@ -412,12 +517,13 @@ async def test_no_tool_retry_cannot_exceed_global_round_budget() -> None:
         max_agent_rounds=1,
         max_schema_no_tool_retries=3,
     )
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    outcome = await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
     assert outcome.exceeded_max_iters
@@ -437,12 +543,13 @@ async def test_malformed_submission_tool_call_is_counted_separately() -> None:
     )
     model = _ScriptedModel([malformed])
     session = _session(max_agent_rounds=1)
-    agent = _agent(model, session)
+    agent = _agent(model, session, "schema")
 
-    outcome = await run_generation_agent(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
+        "schema",
     )
 
     assert outcome.exceeded_max_iters
@@ -467,10 +574,11 @@ async def test_cancellation_propagates_without_becoming_no_tool_retry() -> None:
 
     session = _session(max_agent_rounds=2)
     task = asyncio.create_task(
-        run_generation_agent(
+        run_generation_phase(
             _CancelledAgent(),
             UserMsg(name="user", content="value: one"),
             session,
+            "schema",
         ),
     )
     await entered.wait()

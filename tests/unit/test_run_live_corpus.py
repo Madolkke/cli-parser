@@ -47,6 +47,12 @@ def _generation_result(prompt_version: str) -> dict[str, object]:
             "model_name": "test-model",
             "prompt_version": prompt_version,
             "command_output_count": 1,
+            "input_char_count": 10,
+            "schema_sampled_char_count": 10,
+            "ttp_sampled_char_count": 10,
+            "agent_rounds": 2,
+            "schema_agent_rounds": 1,
+            "ttp_agent_rounds": 1,
         },
         "last_attempt": None,
     }

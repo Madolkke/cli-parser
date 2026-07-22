@@ -156,9 +156,12 @@ class GenerationMetadata(ContractModel):
     prompt_version: str = Field(default="v1", min_length=1)
     command_output_count: int = Field(ge=1, le=MAX_COMMAND_OUTPUTS)
     input_char_count: int = Field(default=0, ge=0)
-    sampled_char_count: int = Field(default=0, ge=0)
+    schema_sampled_char_count: int = Field(default=0, ge=0)
+    ttp_sampled_char_count: int = Field(default=0, ge=0)
     elapsed_seconds: float = Field(default=0.0, ge=0.0)
     agent_rounds: int = Field(default=0, ge=0)
+    schema_agent_rounds: int = Field(default=0, ge=0)
+    ttp_agent_rounds: int = Field(default=0, ge=0)
     tool_call_starts: int = Field(default=0, ge=0)
     tool_result_errors: int = Field(default=0, ge=0)
     schema_submissions: int = Field(default=0, ge=0)
@@ -176,9 +179,19 @@ class GenerationMetadata(ContractModel):
     )
 
     @model_validator(mode="after")
-    def sampled_count_does_not_exceed_input(self) -> Self:
-        if self.sampled_char_count > self.input_char_count:
-            raise ValueError("sampled_char_count cannot exceed input_char_count")
+    def phase_counts_are_consistent(self) -> Self:
+        if self.schema_sampled_char_count > self.input_char_count:
+            raise ValueError(
+                "schema_sampled_char_count cannot exceed input_char_count",
+            )
+        if self.ttp_sampled_char_count > self.input_char_count:
+            raise ValueError(
+                "ttp_sampled_char_count cannot exceed input_char_count",
+            )
+        if self.agent_rounds != self.schema_agent_rounds + self.ttp_agent_rounds:
+            raise ValueError(
+                "agent_rounds must equal schema_agent_rounds plus ttp_agent_rounds",
+            )
         return self
 
 

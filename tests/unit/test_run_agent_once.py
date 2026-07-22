@@ -62,6 +62,10 @@ def test_result_summary_prints_laminar_trace_id(
         termination_reason="success",
         elapsed_seconds=1.25,
         agent_rounds=2,
+        schema_agent_rounds=1,
+        ttp_agent_rounds=1,
+        schema_sampled_char_count=120,
+        ttp_sampled_char_count=100,
         tool_call_starts=2,
         tool_result_errors=0,
         schema_submissions=1,
@@ -76,10 +80,13 @@ def test_result_summary_prints_laminar_trace_id(
 
     script._print_result_summary(result, tmp_path / "result.json")
 
-    assert (
-        "laminar_trace_id: 01234567-89ab-cdef-0123-456789abcdef"
-        in capsys.readouterr().out
-    )
+    output = capsys.readouterr().out
+    assert "laminar_trace_id: 01234567-89ab-cdef-0123-456789abcdef" in output
+    assert "agent_rounds: 2" in output
+    assert "schema_agent_rounds: 1" in output
+    assert "ttp_agent_rounds: 1" in output
+    assert "schema_sampled_char_count: 120" in output
+    assert "ttp_sampled_char_count: 100" in output
 
 
 @pytest.mark.parametrize("initialized", [False, True])
