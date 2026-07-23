@@ -51,6 +51,24 @@ def test_api_key_prefers_environment(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert script._resolve_api_key() == "test-key"
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (None, None),
+        ("https://model.invalid/v1", "https://model.invalid/v1"),
+        (
+            "https://user:password@model.invalid:8443/v1?api_key=secret#debug",
+            "https://model.invalid:8443/v1",
+        ),
+        ("https://[::1]:8000/v1?token=secret", "https://[::1]:8000/v1"),
+        ("https://model.invalid:invalid/v1", "[REDACTED]"),
+    ],
+)
+def test_base_url_sanitization(value: str | None, expected: str | None) -> None:
+    script = _load_script()
+
+    assert script._run_support.sanitize_base_url(value) == expected
+
 
 def test_result_summary_prints_laminar_trace_id(
     capsys: pytest.CaptureFixture[str],

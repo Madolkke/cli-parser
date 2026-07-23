@@ -13,6 +13,7 @@ from agentscope.model import OpenAIChatModel
 from agentscope.state import AgentState
 from agentscope.tool import Toolkit
 
+from ..progress import ProgressEmitter
 from .middleware import LosslessContextMiddleware
 from .prompt import (
     SCHEMA_SYSTEM_PROMPT,
@@ -106,6 +107,7 @@ def build_agent(
     policy: PolicyLike,
     session: GenerationSession,
     phase: GenerationPhase,
+    progress: ProgressEmitter | None = None,
 ) -> Agent:
     """Build a fresh model, agent state, and phase-specific toolkit."""
 
@@ -137,7 +139,13 @@ def build_agent(
         name=_PHASE_AGENT_NAMES[phase],
         system_prompt=_PHASE_SYSTEM_PROMPTS[phase],
         model=model,
-        toolkit=Toolkit(tools=build_submission_tools(session, phase)),
+        toolkit=Toolkit(
+            tools=build_submission_tools(
+                session,
+                phase,
+                progress=progress,
+            ),
+        ),
         middlewares=[LosslessContextMiddleware()],
         state=AgentState(),
         react_config=ReActConfig(

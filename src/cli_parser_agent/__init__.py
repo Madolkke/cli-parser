@@ -11,6 +11,7 @@ from .ttp_generation.contracts import (
     ValidationIssue,
 )
 from .ttp_generation.generator import TtpGenerator
+from .ttp_generation.progress import ProgressObserver
 
 __all__ = [
     "ArtifactBundle",
@@ -19,6 +20,7 @@ __all__ = [
     "GenerationRequest",
     "GenerationResult",
     "LastAttempt",
+    "ProgressObserver",
     "TtpGeneratorSettings",
     "TtpGenerator",
     "ValidationIssue",

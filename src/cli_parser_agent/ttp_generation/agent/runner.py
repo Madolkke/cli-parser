@@ -8,21 +8,50 @@ from dataclasses import dataclass
 from typing import Any
 
 from agentscope.event import (
+    DataBlockEndEvent,
+    DataBlockStartEvent,
     ExceedMaxItersEvent,
     ModelCallEndEvent,
     ModelCallStartEvent,
+    ReplyEndEvent,
+    ReplyStartEvent,
+    TextBlockEndEvent,
+    TextBlockStartEvent,
+    ThinkingBlockEndEvent,
+    ThinkingBlockStartEvent,
+    ToolCallEndEvent,
     ToolCallStartEvent,
     ToolResultEndEvent,
+    ToolResultStartEvent,
 )
 from agentscope.message import ToolResultState, UserMsg
 from agentscope.model import FinishedReason
 
+from ..progress import ProgressEmitter
 from .prompt import SCHEMA_NO_TOOL_RETRY_PROMPT, TTP_NO_TOOL_RETRY_PROMPT
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+)
+
+_NON_SENSITIVE_EVENT_TYPES = (
+    ReplyStartEvent,
+    ReplyEndEvent,
+    ModelCallStartEvent,
+    ModelCallEndEvent,
+    TextBlockStartEvent,
+    TextBlockEndEvent,
+    ThinkingBlockStartEvent,
+    ThinkingBlockEndEvent,
+    DataBlockStartEvent,
+    DataBlockEndEvent,
+    ToolCallStartEvent,
+    ToolCallEndEvent,
+    ToolResultStartEvent,
+    ToolResultEndEvent,
+    ExceedMaxItersEvent,
 )
 
 
@@ -116,11 +145,80 @@ def _terminal_tool_observed(
     )
 
 
+def _jsonable(value: Any) -> Any:
+    """Serialize known AgentScope state without falling back to object repr."""
+
+    model_dump = getattr(value, "model_dump", None)
+    if callable(model_dump):
+        return model_dump(mode="json")
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return {"type": type(value).__name__}
+
+
+def _safe_model_config(agent: Any) -> dict[str, Any]:
+    """Return only non-credential model settings used by this request."""
+
+    model = agent.model
+    output: dict[str, Any] = {
+        "model_name": str(getattr(model, "model", "")),
+    }
+    for name in ("stream", "max_retries", "context_size"):
+        value = getattr(model, name, None)
+        if value is not None:
+            output[name] = _jsonable(value)
+    parameters = getattr(model, "parameters", None)
+    if parameters is not None:
+        output["parameters"] = _jsonable(parameters)
+    return output
+
+
+async def _emit_context_snapshot(
+    progress: ProgressEmitter,
+    agent: Any,
+    event: ModelCallStartEvent,
+    phase: GenerationPhase,
+) -> None:
+    """Capture formatter-preparation inputs without exposing credentials."""
+
+    if not progress.enabled:
+        return
+    try:
+        tool_schemas = await agent.toolkit.get_tool_schemas()
+        value = {
+            "reply_id": event.reply_id,
+            "model_call_event_id": event.id,
+            "system_prompt": _jsonable(getattr(agent, "_system_prompt", "")),
+            "context": _jsonable(agent.state.context),
+            "tool_schemas": _jsonable(tool_schemas),
+            "model": _safe_model_config(agent),
+        }
+    except Exception as error:
+        value = {
+            "reply_id": event.reply_id,
+            "model_call_event_id": event.id,
+            "available": False,
+            "exception_type": type(error).__name__,
+        }
+    progress.custom(
+        "cli_parser.model.context_snapshot",
+        value,
+        phase=phase,
+        sensitive=True,
+    )
+
+
 async def run_generation_phase(
     agent: Any,
     message: Any,
     session: GenerationSession,
     phase: GenerationPhase,
+    *,
+    progress: ProgressEmitter | None = None,
 ) -> AgentRunOutcome:
     """Run one isolated phase, retrying only sanitized no-tool completions."""
 
@@ -129,6 +227,8 @@ async def run_generation_phase(
     stopped_after_terminal_tool = False
     model_no_tool_retry_limit = False
     last_model_call_invalid = False
+    last_model_call_event_id: str | None = None
+    last_model_call_reply_id: str | None = None
     next_message = message
 
     if _phase_completed(session, phase):
@@ -165,8 +265,27 @@ async def run_generation_phase(
                         break
                     continue
 
+                if progress is not None:
+                    progress.emit(
+                        event,
+                        phase=phase,
+                        sensitive=not isinstance(
+                            event,
+                            _NON_SENSITIVE_EVENT_TYPES,
+                        ),
+                    )
+
                 if isinstance(event, ModelCallStartEvent):
                     session.record_agent_round(phase)
+                    last_model_call_event_id = event.id
+                    last_model_call_reply_id = event.reply_id
+                    if progress is not None:
+                        await _emit_context_snapshot(
+                            progress,
+                            agent,
+                            event,
+                            phase,
+                        )
                     last_checkpoint = _checkpoint_context(agent)
                     last_expected_tools = expected_tools
                     last_call_had_tool = False
@@ -296,6 +415,17 @@ async def run_generation_phase(
             break
 
         _restore_context(agent, last_checkpoint)
+        if progress is not None:
+            progress.custom(
+                "cli_parser.model.output_discarded",
+                {
+                    "reply_id": last_model_call_reply_id,
+                    "model_call_event_id": last_model_call_event_id,
+                    "reason": "submission_tool_not_called",
+                },
+                phase=phase,
+                sensitive=False,
+            )
         retry_allowed = session.record_no_tool_response(phase)
         if not retry_allowed:
             session.terminal_reason = "model_no_tool_retry_limit"
@@ -306,6 +436,26 @@ async def run_generation_phase(
             break
 
         session.record_no_tool_retry(phase)
+        if progress is not None:
+            retry_number = (
+                session.schema_no_tool_retries
+                if phase == "schema"
+                else session.ttp_no_tool_retries
+            )
+            max_retries = (
+                session.max_schema_no_tool_retries
+                if phase == "schema"
+                else session.max_ttp_no_tool_retries
+            )
+            progress.custom(
+                "cli_parser.no_tool.retry",
+                {
+                    "retry_number": retry_number,
+                    "max_retries": max_retries,
+                },
+                phase=phase,
+                sensitive=False,
+            )
         next_message = _retry_message(phase)
 
     phase_completed = _phase_completed(session, phase)

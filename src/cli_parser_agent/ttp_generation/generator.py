@@ -14,6 +14,7 @@ from ..observability import (
 )
 from .agent import PROMPT_VERSION
 from .contracts import GenerationRequest, GenerationResult
+from .progress import ProgressEmitter, ProgressObserver
 from .workflow import _GenerationWorkflow
 
 
@@ -54,17 +55,34 @@ class TtpGenerator:
             _laminar_environ=environ,
         )
 
-    async def generate(self, request: GenerationRequest) -> GenerationResult:
+    async def generate(
+        self,
+        request: GenerationRequest,
+        *,
+        observer: ProgressObserver | None = None,
+    ) -> GenerationResult:
         """Trace one request and preserve the framework-neutral public API."""
 
         request = GenerationRequest.model_validate(request)
         request_id = str(uuid4())
+        progress = ProgressEmitter(request_id=request_id, observer=observer)
         base_attributes = {
             "request_id": request_id,
             "model_name": self.settings.model_name,
             "prompt_version": PROMPT_VERSION,
             "command_output_count": len(request.command_outputs),
         }
+        if progress.enabled:
+            progress.custom(
+                "cli_parser.generation.started",
+                {
+                    "request": request.model_dump(mode="json"),
+                    "model_name": self.settings.model_name,
+                    "prompt_version": PROMPT_VERSION,
+                },
+                phase="generation",
+                sensitive=True,
+            )
 
         with start_laminar_span(
             "ttp.generate",
@@ -73,8 +91,25 @@ class TtpGenerator:
             attributes=base_attributes,
         ) as span_scope:
             try:
-                result = await self._generate(request, request_id=request_id)
+                if observer is None:
+                    result = await self._generate(
+                        request,
+                        request_id=request_id,
+                    )
+                else:
+                    result = await self._generate(
+                        request,
+                        request_id=request_id,
+                        progress=progress,
+                    )
             except asyncio.CancelledError as error:
+                if progress.enabled:
+                    progress.custom(
+                        "cli_parser.generation.cancelled",
+                        {"status": "cancelled"},
+                        phase="generation",
+                        sensitive=False,
+                    )
                 trace_metadata = (
                     {
                         **base_attributes,
@@ -99,6 +134,16 @@ class TtpGenerator:
                 )
                 raise
             except BaseException as error:
+                if progress.enabled:
+                    progress.custom(
+                        "cli_parser.generation.exception",
+                        {
+                            "status": "failed",
+                            "exception_type": type(error).__name__,
+                        },
+                        phase="generation",
+                        sensitive=False,
+                    )
                 trace_metadata = (
                     {
                         **base_attributes,
@@ -123,6 +168,13 @@ class TtpGenerator:
                 )
                 raise
 
+            if progress.enabled:
+                progress.custom(
+                    "cli_parser.generation.completed",
+                    {"result": result.model_dump(mode="json")},
+                    phase="generation",
+                    sensitive=True,
+                )
             result_metadata = result.metadata
             final_attributes = {
                 "request_id": result_metadata.request_id,
@@ -154,6 +206,7 @@ class TtpGenerator:
         request: GenerationRequest,
         *,
         request_id: str,
+        progress: ProgressEmitter | None = None,
     ) -> GenerationResult:
         """Delegate one validated request to its private workflow."""
 
@@ -162,6 +215,11 @@ class TtpGenerator:
             policy=self.policy,
             request=request,
             request_id=request_id,
+            progress=(
+                progress
+                if progress is not None
+                else ProgressEmitter(request_id=request_id)
+            ),
         ).run()
 
 

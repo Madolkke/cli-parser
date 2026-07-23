@@ -51,6 +51,13 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+`generate()` also accepts an optional keyword-only `observer` that synchronously
+receives AgentScope events and project progress events for the current request. This
+is a complete-debugging interface rather than a stable business-result contract;
+normal callers should omit it. The observer must remain fast and non-blocking. Its
+recommended implementation is `queue.put_nowait(event)`, with rendering and artifact
+writing handled by a separate consumer.
+
 ## Zero-argument development run
 
 Edit the configuration constants at the top of `scripts/run_agent_once.py`, then run:
@@ -60,6 +67,43 @@ uv run python scripts/run_agent_once.py
 ```
 
 The script loads the configured command-output files and writes the complete result under `.artifacts/agent-once/`. It prints the Laminar trace ID when tracing is enabled and flushes pending spans before exit.
+
+## Read-only Textual TUI
+
+Edit the configuration constants at the top of `scripts/run_agent_tui.py`, then run it
+from an interactive terminal:
+
+```powershell
+uv run python scripts/run_agent_tui.py
+```
+
+The TUI observes one `generate()` call without changing its prompts, tools, decisions,
+configured policy, or result. It enables streaming only for this development run and
+shows the phase timeline, model Thinking/text, tool calls and results, Schema, TTP,
+capture, issues, and final validation status.
+
+Keyboard controls:
+
+- `Up` / `Down`: select the previous or next timeline block.
+- `Space`: collapse or expand the selected Thinking block.
+- `PageUp` / `PageDown`: scroll the selected block's details.
+- `End`: resume following the newest event after navigating upward.
+- `Ctrl+C`: cancel an in-progress generation and wait for cleanup.
+- `Enter`: exit only after generation, artifact writing, and Laminar flush finish.
+
+The complete UTF-8 event transcript is written to
+`.artifacts/agent-tui/<run-id>/events.jsonl`; the run status and optional
+`GenerationResult` are written to `result.json`, together with the script version,
+timestamps, model, input-file metadata, transcript path, and bounded failure type.
+These ignored local artifacts may
+contain complete command outputs, model Thinking/text, tool arguments, templates,
+capture, and validation feedback. Model and Laminar API keys are always excluded.
+The script refuses to start without interactive stdin and stdout. It is a read-only
+development tool, not a product CLI.
+
+Exit codes are `0` for a successful generation, `1` for generation/TUI/artifact
+failure, `2` for configuration or non-interactive-terminal errors, and `130` when
+the user cancels an in-progress run.
 
 ## Documentation
 

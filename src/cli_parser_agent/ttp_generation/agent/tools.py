@@ -20,6 +20,7 @@ from agentscope.tool import ParamsBase, ToolBase, ToolChunk
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ...observability import finish_laminar_span, start_laminar_span
+from ..progress import ProgressEmitter
 from ..validation import ParseCapture, build_parse_capture
 from .session import (
     GenerationPhase,
@@ -167,6 +168,8 @@ async def _run_traced_tool_call(
     name: str,
     input: Mapping[str, Any],
     operation: Callable[[], Awaitable[ToolChunk]],
+    progress: ProgressEmitter | None,
+    phase: GenerationPhase,
 ) -> ToolChunk:
     """Run one submission tool while closing its span before re-raising."""
 
@@ -178,6 +181,17 @@ async def _run_traced_tool_call(
         try:
             result = await operation()
         except asyncio.CancelledError as error:
+            if progress is not None and progress.enabled:
+                progress.custom(
+                    "cli_parser.tool.result",
+                    {
+                        "tool_name": name,
+                        "input": _jsonable(input),
+                        "output": {"status": "cancelled"},
+                    },
+                    phase=phase,
+                    sensitive=True,
+                )
             finish_laminar_span(
                 output={
                     "status": "cancelled",
@@ -188,6 +202,20 @@ async def _run_traced_tool_call(
             )
             raise
         except BaseException as error:
+            if progress is not None and progress.enabled:
+                progress.custom(
+                    "cli_parser.tool.result",
+                    {
+                        "tool_name": name,
+                        "input": _jsonable(input),
+                        "output": {
+                            "status": "failed",
+                            "exception_type": type(error).__name__,
+                        },
+                    },
+                    phase=phase,
+                    sensitive=True,
+                )
             finish_laminar_span(
                 output={
                     "status": "failed",
@@ -199,6 +227,17 @@ async def _run_traced_tool_call(
             raise
         else:
             payload = _tool_chunk_payload(result)
+            if progress is not None and progress.enabled:
+                progress.custom(
+                    "cli_parser.tool.result",
+                    {
+                        "tool_name": name,
+                        "input": _jsonable(input),
+                        "output": payload,
+                    },
+                    phase=phase,
+                    sensitive=True,
+                )
             attributes: dict[str, Any] = {
                 "phase": str(payload.get("phase", "")),
                 "accepted": payload.get("accepted") is True,
@@ -256,9 +295,14 @@ class _SubmissionToolBase(ToolBase):
     is_concurrency_safe = False
     is_read_only = True
 
-    def __init__(self, session: GenerationSession) -> None:
+    def __init__(
+        self,
+        session: GenerationSession,
+        progress: ProgressEmitter | None = None,
+    ) -> None:
         super().__init__()
         self.session = session
+        self.progress = progress
 
     async def check_permissions(
         self,
@@ -304,6 +348,8 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
                 evidence=evidence,
                 assumptions=assumptions,
             ),
+            progress=self.progress,
+            phase="schema",
         )
 
     async def _call(
@@ -406,6 +452,8 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             name=self.name,
             input={"ttp_template": ttp_template},
             operation=lambda: self._call(ttp_template),
+            progress=self.progress,
+            phase="ttp",
         )
 
     async def _call(self, ttp_template: str) -> ToolChunk:
@@ -651,6 +699,8 @@ class FinishGenerationTool(_SubmissionToolBase):
             name=self.name,
             input={},
             operation=self._call,
+            progress=self.progress,
+            phase="ttp",
         )
 
     async def _call(self) -> ToolChunk:
@@ -741,13 +791,18 @@ class FinishGenerationTool(_SubmissionToolBase):
 def build_submission_tools(
     session: GenerationSession,
     phase: GenerationPhase,
+    *,
+    progress: ProgressEmitter | None = None,
 ) -> list[ToolBase]:
     """Build the fixed tools available to an isolated generation phase."""
 
     if phase == "schema":
-        return [SubmitResultSchemaTool(session)]
+        return [SubmitResultSchemaTool(session, progress)]
     if phase == "ttp":
-        return [SubmitTtpTemplateTool(session), FinishGenerationTool(session)]
+        return [
+            SubmitTtpTemplateTool(session, progress),
+            FinishGenerationTool(session, progress),
+        ]
     raise ValueError(f"unsupported generation phase: {phase!r}")
 
 

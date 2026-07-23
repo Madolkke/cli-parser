@@ -12,6 +12,7 @@ from .contracts import (
     ValidationIssue,
 )
 from .generator import TtpGenerator
+from .progress import ProgressObserver
 
 __all__ = [
     "ArtifactBundle",
@@ -21,6 +22,7 @@ __all__ = [
     "GenerationResult",
     "LastAttempt",
     "Metadata",
+    "ProgressObserver",
     "SchemaSubmission",
     "TtpGenerator",
     "ValidationIssue",

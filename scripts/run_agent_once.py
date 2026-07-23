@@ -8,21 +8,28 @@ source control: it is read from ``OPENAI_API_KEY`` or requested with hidden inpu
 from __future__ import annotations
 
 import asyncio
-import getpass
-import hashlib
-import json
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from cli_parser_agent import (
+SCRIPT_DIRECTORY = Path(__file__).resolve().parent
+if str(SCRIPT_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIRECTORY))
+
+import _agent_run_support as _run_support  # noqa: E402
+
+from cli_parser_agent import (  # noqa: E402
     GenerationPolicy,
     GenerationRequest,
     TtpGenerator,
     TtpGeneratorSettings,
 )
+
+API_KEY_ENVIRONMENT_VARIABLE = _run_support.API_KEY_ENVIRONMENT_VARIABLE
+MAX_COMMAND_OUTPUT_BYTES = _run_support.MAX_COMMAND_OUTPUT_BYTES
+MAX_COMMAND_OUTPUTS = _run_support.MAX_COMMAND_OUTPUTS
+ScriptConfigurationError = _run_support.ScriptConfigurationError
 
 # Configuration: edit these values, then run this file without arguments.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -55,107 +62,26 @@ CONTEXT_SIZE = 128_000
 MODEL_MAX_RETRIES = 2
 MODEL_TIMEOUT_SECONDS = 120.0
 
-MAX_COMMAND_OUTPUTS = 5
-MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024
-API_KEY_ENVIRONMENT_VARIABLE = "OPENAI_API_KEY"
-
-
-class ScriptConfigurationError(ValueError):
-    """A local script setting or command-output file is invalid."""
-
-
 def _display_path(path: Path) -> str:
-    try:
-        return str(path.relative_to(PROJECT_ROOT))
-    except ValueError:
-        return str(path)
+    return _run_support.display_path(path, project_root=PROJECT_ROOT)
 
 
 def _resolve_api_key() -> str:
-    value = os.getenv(API_KEY_ENVIRONMENT_VARIABLE, "").strip()
-    if value:
-        return value
-
-    try:
-        value = getpass.getpass(
-            f"{API_KEY_ENVIRONMENT_VARIABLE} (input hidden): ",
-        ).strip()
-    except (EOFError, KeyboardInterrupt) as error:
-        raise ScriptConfigurationError("API key input was cancelled.") from error
-    if not value:
-        raise ScriptConfigurationError("API key must not be empty.")
-    return value
+    return _run_support.resolve_api_key()
 
 
 def _load_command_outputs(
     paths: tuple[Path, ...] = COMMAND_OUTPUT_FILES,
 ) -> tuple[list[str], list[dict[str, Any]]]:
-    if not 1 <= len(paths) <= MAX_COMMAND_OUTPUTS:
-        raise ScriptConfigurationError(
-            f"Configure between 1 and {MAX_COMMAND_OUTPUTS} command-output files.",
-        )
-
-    resolved_paths = [path.expanduser().resolve() for path in paths]
-    if len(set(resolved_paths)) != len(resolved_paths):
-        raise ScriptConfigurationError("Command-output file paths must be unique.")
-
-    outputs: list[str] = []
-    file_metadata: list[dict[str, Any]] = []
-    for path in resolved_paths:
-        if not path.is_file():
-            raise ScriptConfigurationError(
-                f"Command-output file does not exist: {_display_path(path)}",
-            )
-
-        payload = path.read_bytes()
-        if not payload:
-            raise ScriptConfigurationError(
-                f"Command-output file is empty: {_display_path(path)}",
-            )
-        if len(payload) > MAX_COMMAND_OUTPUT_BYTES:
-            raise ScriptConfigurationError(
-                "Command-output file exceeds 1 MiB: " + _display_path(path),
-            )
-        try:
-            text = payload.decode("utf-8")
-        except UnicodeDecodeError as error:
-            raise ScriptConfigurationError(
-                "Command-output file is not strict UTF-8: " + _display_path(path),
-            ) from error
-        if text.startswith("\ufeff"):
-            raise ScriptConfigurationError(
-                "Command-output file contains a UTF-8 BOM: " + _display_path(path),
-            )
-        if not text.strip():
-            raise ScriptConfigurationError(
-                "Command-output file contains only whitespace: " + _display_path(path),
-            )
-
-        outputs.append(text)
-        file_metadata.append(
-            {
-                "path": _display_path(path),
-                "bytes": len(payload),
-                "sha256": hashlib.sha256(payload).hexdigest(),
-            },
-        )
-
-    return outputs, file_metadata
+    return _run_support.load_command_outputs(paths, project_root=PROJECT_ROOT)
 
 
 def _new_run_directory() -> Path:
-    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    path = ARTIFACT_ROOT / run_id
-    path.mkdir(parents=True, exist_ok=False)
-    return path
+    return _run_support.new_run_directory(ARTIFACT_ROOT)
 
 
 def _write_json(path: Path, value: Any) -> None:
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    _run_support.write_json(path, value)
 
 
 def _print_result_summary(result: Any, result_path: Path) -> None:
@@ -218,7 +144,7 @@ async def _run() -> int:
     )
 
     print(f"model: {MODEL_NAME}")
-    print(f"base_url: {BASE_URL}")
+    print(f"base_url: {_run_support.sanitize_base_url(BASE_URL)}")
     print(f"command_outputs: {len(command_outputs)}")
     for index, item in enumerate(input_metadata):
         print(f"  [{index}] {item['path']} ({item['bytes']} bytes)")
@@ -240,7 +166,7 @@ async def _run() -> int:
             "finished_at": finished_at,
             "model": {
                 "name": MODEL_NAME,
-                "base_url": BASE_URL,
+                "base_url": _run_support.sanitize_base_url(BASE_URL),
             },
             "input_files": input_metadata,
             "generation_result": result.model_dump(mode="json"),
@@ -251,20 +177,7 @@ async def _run() -> int:
 
 
 def _flush_laminar() -> None:
-    from lmnr import Laminar
-
-    if not Laminar.is_initialized():
-        return
-    try:
-        flushed = Laminar.flush()
-    except Exception as error:
-        print(
-            f"warning: Laminar flush failed ({type(error).__name__})",
-            file=sys.stderr,
-        )
-        return
-    if not flushed:
-        print("warning: Laminar flush did not complete", file=sys.stderr)
+    _run_support.flush_laminar()
 
 
 def main() -> int:

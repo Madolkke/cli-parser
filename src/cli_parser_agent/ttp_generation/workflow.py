@@ -6,7 +6,7 @@ import asyncio
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any, TypeVar
 
 from pydantic import ValidationError
@@ -42,6 +42,7 @@ from .contracts import (
     LastAttempt,
     ValidationIssue,
 )
+from .progress import ProgressEmitter
 from .sampling import (
     TRUNCATION_MARKER,
     SampledCommandOutput,
@@ -122,6 +123,7 @@ async def _run_traced_generation_phase(
     phase: GenerationPhase,
     span_input: Mapping[str, Any],
     request_id: str,
+    progress: ProgressEmitter,
 ) -> _PhaseExecution:
     """Run all construction, fitting, and model work inside a phase span."""
 
@@ -131,6 +133,13 @@ async def _run_traced_generation_phase(
         "request_id": request_id,
         "phase": phase,
     }
+    if progress.enabled:
+        progress.custom(
+            "cli_parser.phase.started",
+            dict(span_input),
+            phase=phase,
+            sensitive=(phase == "ttp"),
+        )
     with start_laminar_span(
         span_name,
         input=dict(span_input),
@@ -140,6 +149,18 @@ async def _run_traced_generation_phase(
         try:
             execution = await operation()
         except asyncio.CancelledError as error:
+            if progress.enabled:
+                progress.custom(
+                    "cli_parser.phase.completed",
+                    {
+                        "status": "cancelled",
+                        "phase_completed": False,
+                        "agent_rounds": session.agent_rounds - rounds_before,
+                        "termination_reason": "cancelled",
+                    },
+                    phase=phase,
+                    sensitive=False,
+                )
             finish_laminar_span(
                 output={
                     "status": "cancelled",
@@ -155,6 +176,19 @@ async def _run_traced_generation_phase(
             )
             raise
         except BaseException as error:
+            if progress.enabled:
+                progress.custom(
+                    "cli_parser.phase.completed",
+                    {
+                        "status": "failed",
+                        "phase_completed": False,
+                        "agent_rounds": session.agent_rounds - rounds_before,
+                        "termination_reason": "exception",
+                        "exception_type": type(error).__name__,
+                    },
+                    phase=phase,
+                    sensitive=False,
+                )
             finish_laminar_span(
                 output={
                     "status": "failed",
@@ -187,15 +221,23 @@ async def _run_traced_generation_phase(
                 termination_reason = "agent_round_limit"
             else:
                 termination_reason = "agent_stopped"
+        phase_output = {
+            "status": status,
+            "phase": phase,
+            "phase_completed": phase_completed,
+            "deadline_completed": execution.deadline_completed,
+            "agent_rounds": session.agent_rounds - rounds_before,
+            "termination_reason": termination_reason,
+        }
+        if progress.enabled:
+            progress.custom(
+                "cli_parser.phase.completed",
+                phase_output,
+                phase=phase,
+                sensitive=False,
+            )
         finish_laminar_span(
-            output={
-                "status": status,
-                "phase": phase,
-                "phase_completed": phase_completed,
-                "deadline_completed": execution.deadline_completed,
-                "agent_rounds": session.agent_rounds - rounds_before,
-                "termination_reason": termination_reason,
-            },
+            output=phase_output,
             outcome=status,
             attributes={
                 **base_attributes,
@@ -369,11 +411,13 @@ class _GenerationWorkflow:
         policy: GenerationPolicy,
         request: GenerationRequest,
         request_id: str,
+        progress: ProgressEmitter,
     ) -> None:
         self.settings = settings
         self.policy = policy
         self.request = request
         self.request_id = request_id
+        self.progress = progress
         self.started = time.monotonic()
         self.deadline = self.started + policy.total_timeout_seconds
         self.schema_sampled: list[SampledCommandOutput] = []
@@ -668,12 +712,15 @@ class _GenerationWorkflow:
                     terminal_result=self._failure("model_context_budget", [issue]),
                 )
 
-            agent = build_agent(
-                settings=self.settings,
-                policy=self.policy,
-                session=self.session,
-                phase=phase,
-            )
+            agent_kwargs: dict[str, Any] = {
+                "settings": self.settings,
+                "policy": self.policy,
+                "session": self.session,
+                "phase": phase,
+            }
+            if self.progress.enabled:
+                agent_kwargs["progress"] = self.progress
+            agent = build_agent(**agent_kwargs)
 
             async def estimate_tokens(texts: Sequence[str]) -> int:
                 return await estimate_initial_model_tokens(
@@ -709,6 +756,21 @@ class _GenerationWorkflow:
                 )
 
             candidate_sample, input_fits = fit_result
+            if self.progress.enabled:
+                self.progress.custom(
+                    "cli_parser.phase.sampling_completed",
+                    {
+                        "sampled_outputs": [
+                            asdict(item) for item in candidate_sample
+                        ],
+                        "input_fits": input_fits,
+                        "sampled_char_count": sum(
+                            item.sampled_char_count for item in candidate_sample
+                        ),
+                    },
+                    phase=phase,
+                    sensitive=True,
+                )
             if not input_fits:
                 issue = _issue(
                     "model.context_budget_exceeded",
@@ -727,13 +789,32 @@ class _GenerationWorkflow:
                 self.ttp_sampled = candidate_sample
             texts = [item.text for item in candidate_sample]
             message = build_message(texts)
-            completed, outcome = await _run_before_deadline(
-                lambda: run_generation_phase(
+            if self.progress.enabled:
+                self.progress.custom(
+                    "cli_parser.phase.input_prepared",
+                    {"message": message.model_dump(mode="json")},
+                    phase=phase,
+                    sensitive=True,
+                )
+
+            async def run_phase() -> AgentRunOutcome:
+                if self.progress.enabled:
+                    return await run_generation_phase(
+                        agent,
+                        message,
+                        self.session,
+                        phase,
+                        progress=self.progress,
+                    )
+                return await run_generation_phase(
                     agent,
                     message,
                     self.session,
                     phase,
-                ),
+                )
+
+            completed, outcome = await _run_before_deadline(
+                run_phase,
                 deadline_monotonic=self.deadline,
             )
             return _PhaseExecution(
@@ -748,6 +829,7 @@ class _GenerationWorkflow:
                 phase=phase,
                 span_input=span_input,
                 request_id=self.request_id,
+                progress=self.progress,
             )
         except asyncio.CancelledError:
             raise
@@ -843,7 +925,7 @@ class _GenerationWorkflow:
             max_schema_properties=self.policy.max_schema_properties,
         )
 
-    async def _accept_artifact(self) -> GenerationResult:
+    async def _accept_artifact_impl(self) -> GenerationResult:
         try:
             schema_completed, schema_issues = await _run_before_deadline(
                 lambda: asyncio.to_thread(self._validate_frozen_schema),
@@ -962,6 +1044,59 @@ class _GenerationWorkflow:
             artifact=artifact,
             metadata=self._metadata("success"),
         )
+
+    async def _accept_artifact(self) -> GenerationResult:
+        """Emit the final acceptance lifecycle around deterministic checks."""
+
+        if self.progress.enabled:
+            self.progress.custom(
+                "cli_parser.final_validation.started",
+                {},
+                phase="acceptance",
+                sensitive=False,
+            )
+        try:
+            result = await self._accept_artifact_impl()
+        except asyncio.CancelledError:
+            if self.progress.enabled:
+                self.progress.custom(
+                    "cli_parser.final_validation.completed",
+                    {"status": "cancelled", "valid": False},
+                    phase="acceptance",
+                    sensitive=False,
+                )
+            raise
+        except BaseException as error:
+            if self.progress.enabled:
+                self.progress.custom(
+                    "cli_parser.final_validation.completed",
+                    {
+                        "status": "failed",
+                        "valid": False,
+                        "exception_type": type(error).__name__,
+                    },
+                    phase="acceptance",
+                    sensitive=False,
+                )
+            raise
+
+        if self.progress.enabled:
+            value: dict[str, Any] = {
+                "status": result.status,
+                "valid": result.status == "success",
+                "issues": [
+                    item.model_dump(mode="json") for item in result.issues
+                ],
+            }
+            if result.artifact is not None:
+                value["records"] = deepcopy(result.artifact.records)
+            self.progress.custom(
+                "cli_parser.final_validation.completed",
+                value,
+                phase="acceptance",
+                sensitive=(result.artifact is not None),
+            )
+        return result
 
     async def run(self) -> GenerationResult:
         """Run Schema, TTP, and final full-input acceptance in order."""
