@@ -74,8 +74,8 @@ class GenerationSession:
     command_outputs: tuple[str, ...] | Sequence[str]
     schema_validator: SchemaValidator
     template_validator: TemplateValidator
-    max_ttp_submissions: int = 8
-    max_agent_rounds: int = 12
+    max_ttp_submissions: int = 9
+    max_agent_rounds: int = 13
     max_schema_no_tool_retries: int = 3
     max_ttp_no_tool_retries: int = 3
     deadline_monotonic: float | None = None
@@ -102,6 +102,7 @@ class GenerationSession:
     last_ttp_template: str | None = None
     validated_ttp_template: str | None = None
     records: tuple[dict[str, Any], ...] = ()
+    generation_finished: bool = False
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None
 
@@ -125,8 +126,8 @@ class GenerationSession:
         command_outputs: Sequence[str],
         schema_validator: SchemaValidator,
         template_validator: TemplateValidator,
-        total_timeout_seconds: float = 300,
-        max_ttp_submissions: int = 8,
+        total_timeout_seconds: float = 360,
+        max_ttp_submissions: int = 9,
     ) -> GenerationSession:
         """Create a session and start its wall-clock budget."""
 
@@ -147,10 +148,16 @@ class GenerationSession:
         return self.frozen_schema is not None
 
     @property
-    def succeeded(self) -> bool:
-        """Whether a template and its records passed tool validation."""
+    def has_validated_ttp_candidate(self) -> bool:
+        """Whether at least one validated TTP candidate is stored."""
 
         return self.validated_ttp_template is not None
+
+    @property
+    def succeeded(self) -> bool:
+        """Whether the model explicitly finished with a validated candidate."""
+
+        return self.generation_finished and self.has_validated_ttp_candidate
 
     def reset_no_tool_sequence(self, phase: GenerationPhase) -> None:
         """Reset the phase's consecutive no-tool response count."""

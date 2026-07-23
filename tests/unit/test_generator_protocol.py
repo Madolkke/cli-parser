@@ -332,6 +332,8 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
         session.records = ({"value": "one"},)
         session.first_ttp_valid = True
         session.last_issues = ()
+        session.record_agent_round("ttp")
+        session.generation_finished = True
         session.terminal_reason = "success"
         return AgentRunOutcome(phase_completed=True)
 
@@ -390,8 +392,8 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     assert result.metadata.schema_sampled_char_count == len("value: one")
     assert result.metadata.ttp_sampled_char_count == len("one")
     assert result.metadata.schema_agent_rounds == 1
-    assert result.metadata.ttp_agent_rounds == 1
-    assert result.metadata.agent_rounds == 2
+    assert result.metadata.ttp_agent_rounds == 2
+    assert result.metadata.agent_rounds == 3
     assert [(item["name"], item["parent"]) for item in span_starts] == [
         ("ttp.generate", None),
         ("schema.phase", "ttp.generate"),
@@ -404,6 +406,127 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     ]
     assert span_finishes[0]["outcome"] == "success"
     assert span_finishes[1]["outcome"] == "success"
+
+
+async def test_valid_ttp_candidate_without_finish_does_not_build_artifact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            session.schema_submissions = 1
+            session.frozen_schema = _result_schema()
+            return AgentRunOutcome(phase_completed=True)
+
+        session.ttp_submissions = 1
+        session.last_ttp_template = "value: {{ value }}"
+        session.validated_ttp_template = session.last_ttp_template
+        session.records = ({"value": "one"},)
+        return AgentRunOutcome(phase_completed=False)
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.artifact is None
+    assert result.metadata.schema_agent_rounds == 1
+    assert result.metadata.ttp_agent_rounds == 1
+    assert result.metadata.termination_reason == "agent_stopped"
+    assert [issue.code for issue in result.issues] == [
+        "generation.agent_stopped",
+    ]
+
+
+async def test_malformed_finish_after_candidate_keeps_invalid_tool_classification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            session.schema_submissions = 1
+            session.frozen_schema = _result_schema()
+            return AgentRunOutcome(phase_completed=True)
+
+        session.record_agent_round("ttp")
+        session.ttp_submissions = 1
+        session.last_ttp_template = "value: {{ value }}"
+        session.validated_ttp_template = session.last_ttp_template
+        session.records = ({"value": "one"},)
+        session.submission_tool_call_invalids += 1
+        return AgentRunOutcome(
+            exceeded_max_iters=True,
+            ended_after_invalid_tool_call=True,
+            submission_tool_call_invalids=(
+                session.submission_tool_call_invalids
+            ),
+        )
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator(max_agent_rounds=3).generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == (
+        "model_submission_tool_call_invalid"
+    )
+    assert [issue.code for issue in result.issues] == [
+        "model.submission_tool_call_invalid",
+    ]
+
+
+async def test_valid_candidate_at_submission_limit_still_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            session.schema_submissions = 1
+            session.frozen_schema = _result_schema()
+            return AgentRunOutcome(phase_completed=True)
+
+        session.ttp_submissions = session.max_ttp_submissions
+        session.last_ttp_template = "value: {{ value }}"
+        session.validated_ttp_template = session.last_ttp_template
+        session.records = ({"value": "one"},)
+        session.terminal_reason = "ttp_submission_limit"
+        return AgentRunOutcome(
+            phase_completed=False,
+            stopped_after_terminal_tool=True,
+        )
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.artifact is None
+    assert result.metadata.ttp_submissions == 9
+    assert result.metadata.termination_reason == "ttp_submission_limit"
+    assert [issue.code for issue in result.issues] == [
+        "generation.ttp_submission_limit",
+    ]
 
 
 async def test_schema_acceptance_on_last_round_does_not_build_ttp_agent(

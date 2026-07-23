@@ -18,6 +18,7 @@ from cli_parser_agent import (
 )
 from cli_parser_agent.ttp_generation import workflow as workflow_module
 from cli_parser_agent.ttp_generation.agent import (
+    FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
     TTP_SYSTEM_PROMPT,
@@ -167,15 +168,24 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
                 )
             raise AssertionError("Schema agent made an unexpected extra model call")
 
-        if tool_names == [SUBMIT_TEMPLATE_TOOL_NAME]:
+        if tool_names == [
+            SUBMIT_TEMPLATE_TOOL_NAME,
+            FINISH_GENERATION_TOOL_NAME,
+        ]:
             ttp_requests.append(request)
-            if len(ttp_requests) != 1:
-                raise AssertionError("TTP agent made an unexpected extra model call")
-            return _completion(
-                tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
-                tool_arguments={"ttp_template": "value: {{ value | ORPHRASE }}"},
-                tool_call_id="call-ttp-accepted",
-            )
+            if len(ttp_requests) == 1:
+                return _completion(
+                    tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    tool_arguments={"ttp_template": "value: {{ value | ORPHRASE }}"},
+                    tool_call_id="call-ttp-accepted",
+                )
+            if len(ttp_requests) == 2:
+                return _completion(
+                    tool_name=FINISH_GENERATION_TOOL_NAME,
+                    tool_arguments={},
+                    tool_call_id="call-ttp-finish",
+                )
+            raise AssertionError("TTP agent made an unexpected extra model call")
 
         raise AssertionError(f"unexpected wire tool set: {tool_names!r}")
 
@@ -244,7 +254,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
 
     assert result.status == "success"
     assert len(schema_requests) == 3
-    assert len(ttp_requests) == 1
+    assert len(ttp_requests) == 2
     assert schema_validation_calls == 3
 
     assert _SCHEMA_RETRY_MARKER in _request_text(schema_requests[1])
@@ -279,10 +289,20 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         },
     ]
     assert [item["function"]["name"] for item in first_ttp_request["tools"]] == [
-        SUBMIT_TEMPLATE_TOOL_NAME
+        SUBMIT_TEMPLATE_TOOL_NAME,
+        FINISH_GENERATION_TOOL_NAME,
     ]
     assert first_ttp_request["parallel_tool_calls"] is False
     assert "tool_choice" not in first_ttp_request
+
+    second_ttp_request = ttp_requests[1]
+    assert [item["function"]["name"] for item in second_ttp_request["tools"]] == [
+        SUBMIT_TEMPLATE_TOOL_NAME,
+        FINISH_GENERATION_TOOL_NAME,
+    ]
+    assert second_ttp_request["parallel_tool_calls"] is False
+    assert "tool_choice" not in second_ttp_request
+    assert "call-ttp-accepted" in _request_text(second_ttp_request)
 
     ttp_wire_text = _request_text(first_ttp_request)
     for marker in (
@@ -297,3 +317,17 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         assert marker not in ttp_wire_text
     for usage_number in _SCHEMA_USAGE_NUMBERS:
         assert str(usage_number) not in ttp_wire_text
+
+    second_ttp_wire_text = _request_text(second_ttp_request)
+    for marker in (
+        _SCHEMA_FREE_TEXT_MARKER,
+        _SCHEMA_THINKING_MARKER,
+        _SCHEMA_RETRY_MARKER,
+        _REJECTED_SCHEMA_MARKER,
+        _REJECTED_EVIDENCE_MARKER,
+        _REJECTED_ASSUMPTION_MARKER,
+        _REJECTION_ISSUE_MARKER,
+    ):
+        assert marker not in second_ttp_wire_text
+    for usage_number in _SCHEMA_USAGE_NUMBERS:
+        assert str(usage_number) not in second_ttp_wire_text

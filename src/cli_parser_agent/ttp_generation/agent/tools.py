@@ -36,6 +36,7 @@ from .session import (
 
 SUBMIT_SCHEMA_TOOL_NAME = "submit_result_schema"
 SUBMIT_TEMPLATE_TOOL_NAME = "submit_ttp_template"
+FINISH_GENERATION_TOOL_NAME = "finish_generation"
 
 
 class FieldEvidenceInput(ParamsBase):
@@ -95,6 +96,12 @@ class TemplateSubmissionInput(ParamsBase):
         max_length=65_536,
         description="需要针对全部命令输出验证的完整共享 TTP 模板。",
     )
+
+
+class FinishGenerationInput(ParamsBase):
+    """finish_generation 接受的空参数对象。"""
+
+    model_config = ConfigDict(extra="forbid")
 
 
 def _jsonable(value: Any) -> Any:
@@ -232,6 +239,16 @@ def _safe_boundary_issue(*, phase: str, failure: str) -> dict[str, str]:
         "code": f"{code_prefix}.validator_failed",
         "stage": phase,
         "message": f"{subject} validation could not be completed.",
+    }
+
+
+def _already_terminated_issue() -> dict[str, str]:
+    """Return fixed feedback without exposing the terminal failure details."""
+
+    return {
+        "code": "generation_already_terminated",
+        "stage": "template",
+        "message": "Generation cannot continue after a terminal failure.",
     }
 
 
@@ -404,6 +421,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
                         "message": "A valid result schema must be frozen first.",
                     },
                 ),
+                validated_candidate_available=False,
             )
         if self.session.succeeded:
             return _result_chunk(
@@ -414,8 +432,24 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
                     {
                         "code": "generation_already_succeeded",
                         "stage": "template",
-                        "message": "A validated template is already stored.",
+                        "message": "Generation has already been explicitly finished.",
                     },
+                ),
+                validated_candidate_available=True,
+            )
+        if (
+            self.session.terminal_reason is not None
+            and self.session.terminal_reason != "ttp_submission_limit"
+        ):
+            issues = (_already_terminated_issue(),)
+            self.session.last_issues = issues
+            return _result_chunk(
+                phase="template",
+                accepted=False,
+                capture=_unavailable_capture(),
+                issues=issues,
+                validated_candidate_available=(
+                    self.session.has_validated_ttp_candidate
                 ),
             )
         if self.session.ttp_submissions >= self.session.max_ttp_submissions:
@@ -431,6 +465,9 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
                         "message": "The template submission limit is exhausted.",
                     },
                 ),
+                validated_candidate_available=(
+                    self.session.has_validated_ttp_candidate
+                ),
             )
 
         try:
@@ -438,44 +475,65 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         except ValidationError:
             issues = (_safe_boundary_issue(phase="template", failure="input"),)
             self.session.last_issues = issues
+            candidate_available = self.session.has_validated_ttp_candidate
             return _result_chunk(
                 phase="template",
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
+                validated_candidate_available=candidate_available,
                 ttp_submission=self.session.ttp_submissions,
                 remaining_submissions=max(
                     0,
                     self.session.max_ttp_submissions - self.session.ttp_submissions,
                 ),
-                next_action="correct_and_resubmit_template",
+                next_action=(
+                    "finish_or_correct_and_resubmit_template"
+                    if candidate_available
+                    else "correct_and_resubmit_template"
+                ),
             )
 
         if submission.ttp_template == self.session.last_ttp_template:
             self.session.ttp_submissions += 1
+            candidate_available = self.session.has_validated_ttp_candidate
             issues = (
                 {
                     "code": "ttp.unchanged_submission",
                     "stage": "template",
                     "message": (
-                        "The template is identical to the previous rejected "
-                        "submission and must be changed before resubmission."
+                        "The template is identical to the previous submission. "
+                        "Finish the stored validated candidate when available, "
+                        "or modify the template before resubmission."
                     ),
-                    "details": {"required_action": "modify_template"},
+                    "details": {
+                        "required_action": (
+                            "finish_or_modify_template"
+                            if candidate_available
+                            else "modify_template"
+                        ),
+                    },
                 },
             )
             self.session.last_issues = issues
+            if self.session.ttp_submissions >= self.session.max_ttp_submissions:
+                self.session.terminal_reason = "ttp_submission_limit"
             return _result_chunk(
                 phase="template",
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
+                validated_candidate_available=candidate_available,
                 ttp_submission=self.session.ttp_submissions,
                 remaining_submissions=max(
                     0,
                     self.session.max_ttp_submissions - self.session.ttp_submissions,
                 ),
-                next_action="correct_and_resubmit_template",
+                next_action=(
+                    "finish_or_correct_and_resubmit_template"
+                    if candidate_available
+                    else "correct_and_resubmit_template"
+                ),
             )
 
         self.session.ttp_submissions += 1
@@ -546,19 +604,137 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         if accepted:
             self.session.validated_ttp_template = submission.ttp_template
             self.session.records = records
-            self.session.terminal_reason = "success"
+
+        if (
+            self.session.ttp_submissions >= self.session.max_ttp_submissions
+            and self.session.terminal_reason is None
+        ):
+            self.session.terminal_reason = "ttp_submission_limit"
+
+        candidate_available = self.session.has_validated_ttp_candidate
 
         return _result_chunk(
             phase="template",
             accepted=accepted,
             capture=capture,
             issues=issues,
+            validated_candidate_available=candidate_available,
             ttp_submission=self.session.ttp_submissions,
             remaining_submissions=max(
                 0,
                 self.session.max_ttp_submissions - self.session.ttp_submissions,
             ),
-            next_action=("finish" if accepted else "correct_and_resubmit_template"),
+            next_action=(
+                "review_capture_then_finish_or_resubmit"
+                if accepted
+                else (
+                    "finish_or_correct_and_resubmit_template"
+                    if candidate_available
+                    else "correct_and_resubmit_template"
+                )
+            ),
+        )
+
+
+class FinishGenerationTool(_SubmissionToolBase):
+    """Explicitly finish generation with the latest validated candidate."""
+
+    name = FINISH_GENERATION_TOOL_NAME
+    description = (
+        "确认最近一次通过验证的 TTP 模板及其 capture 已满足要求，并结束生成。"
+        "只有在 submit_ttp_template 已保存有效候选后才能调用；本工具不接收参数。"
+    )
+    input_schema = FinishGenerationInput.model_json_schema()
+
+    async def call(self) -> ToolChunk:
+        return await _run_traced_tool_call(
+            name=self.name,
+            input={},
+            operation=self._call,
+        )
+
+    async def _call(self) -> ToolChunk:
+        candidate_available = self.session.has_validated_ttp_candidate
+
+        if self.session.succeeded:
+            return _result_chunk(
+                phase="template",
+                accepted=False,
+                issues=(
+                    {
+                        "code": "generation_already_succeeded",
+                        "stage": "template",
+                        "message": "Generation has already been explicitly finished.",
+                    },
+                ),
+                generation_finished=True,
+                validated_candidate_available=True,
+            )
+
+        if (
+            self.session.terminal_reason is not None
+            and self.session.terminal_reason != "ttp_submission_limit"
+        ):
+            issues = (_already_terminated_issue(),)
+            self.session.last_issues = issues
+            return _result_chunk(
+                phase="template",
+                accepted=False,
+                issues=issues,
+                generation_finished=False,
+                validated_candidate_available=candidate_available,
+            )
+
+        if (
+            self.session.terminal_reason == "ttp_submission_limit"
+            or self.session.ttp_submissions >= self.session.max_ttp_submissions
+        ):
+            self.session.terminal_reason = "ttp_submission_limit"
+            issues = (
+                {
+                    "code": "ttp_submission_limit",
+                    "stage": "template",
+                    "message": "The template submission limit is exhausted.",
+                },
+            )
+            self.session.last_issues = issues
+            return _result_chunk(
+                phase="template",
+                accepted=False,
+                issues=issues,
+                generation_finished=False,
+                validated_candidate_available=candidate_available,
+            )
+
+        if not candidate_available:
+            issues = (
+                {
+                    "code": "generation.finish_without_valid_candidate",
+                    "stage": "template",
+                    "message": (
+                        "A validated TTP template must be stored before "
+                        "generation can finish."
+                    ),
+                },
+            )
+            self.session.last_issues = issues
+            return _result_chunk(
+                phase="template",
+                accepted=False,
+                issues=issues,
+                generation_finished=False,
+                validated_candidate_available=False,
+                next_action="correct_and_resubmit_template",
+            )
+
+        self.session.generation_finished = True
+        self.session.last_issues = ()
+        self.session.terminal_reason = "success"
+        return _result_chunk(
+            phase="template",
+            accepted=True,
+            generation_finished=True,
+            validated_candidate_available=True,
         )
 
 
@@ -566,12 +742,12 @@ def build_submission_tools(
     session: GenerationSession,
     phase: GenerationPhase,
 ) -> list[ToolBase]:
-    """Build the one submission tool available to an isolated phase."""
+    """Build the fixed tools available to an isolated generation phase."""
 
     if phase == "schema":
         return [SubmitResultSchemaTool(session)]
     if phase == "ttp":
-        return [SubmitTtpTemplateTool(session)]
+        return [SubmitTtpTemplateTool(session), FinishGenerationTool(session)]
     raise ValueError(f"unsupported generation phase: {phase!r}")
 
 
@@ -579,6 +755,7 @@ __all__ = [
     "FieldEvidenceInput",
     "GenerationPhase",
     "GenerationSession",
+    "FinishGenerationTool",
     "SchemaCandidate",
     "SchemaValidator",
     "SubmitResultSchemaTool",
@@ -590,5 +767,6 @@ __all__ = [
     "ValidatorOutcomeLike",
     "SUBMIT_SCHEMA_TOOL_NAME",
     "SUBMIT_TEMPLATE_TOOL_NAME",
+    "FINISH_GENERATION_TOOL_NAME",
     "build_submission_tools",
 ]

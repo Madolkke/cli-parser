@@ -232,9 +232,9 @@ def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> Non
 
 def test_generation_policy_has_bounded_defaults() -> None:
     policy = GenerationPolicy()
-    assert policy.total_timeout_seconds == 300
-    assert policy.max_agent_rounds == 12
-    assert policy.max_ttp_submissions == 8
+    assert policy.total_timeout_seconds == 360
+    assert policy.max_agent_rounds == 13
+    assert policy.max_ttp_submissions == 9
     assert policy.model_input_char_budget == 240_000
     assert policy.ttp_validation_timeout_seconds == 20
 

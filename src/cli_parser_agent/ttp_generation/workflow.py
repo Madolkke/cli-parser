@@ -596,8 +596,8 @@ class _GenerationWorkflow:
         elif self.session.terminal_reason == "model_no_tool_retry_limit":
             issue = _issue(
                 "model.submission_tool_not_called",
-                "The model did not call the current submission tool before "
-                "the no-tool retry limit was exhausted.",
+                "The model did not call an allowed tool for the current phase "
+                "before the no-tool retry limit was exhausted.",
                 stage="model",
             )
             reason = "model_no_tool_retry_limit"
@@ -609,14 +609,20 @@ class _GenerationWorkflow:
                 if phase == "schema"
                 else self.session.ttp_submissions
             )
-            if (
-                phase_submissions == 0
-                and self.session.submission_tool_call_invalids > invalid_calls_before
+            invalid_tool_call_observed = (
+                self.session.submission_tool_call_invalids > invalid_calls_before
+            )
+            ended_after_invalid_tool_call = bool(
+                run_outcome is not None
+                and run_outcome.ended_after_invalid_tool_call
+            )
+            if invalid_tool_call_observed and (
+                phase_submissions == 0 or ended_after_invalid_tool_call
             ):
                 issue = _issue(
                     "model.submission_tool_call_invalid",
-                    "The model repeatedly produced invalid arguments for "
-                    "the current submission tool.",
+                    "The model produced invalid arguments for an allowed tool "
+                    "in the current phase.",
                     stage="model",
                 )
                 reason = "model_submission_tool_call_invalid"
@@ -630,7 +636,8 @@ class _GenerationWorkflow:
         else:
             issue = _issue(
                 "generation.agent_stopped",
-                "The AgentScope loop ended before a validated submission was produced.",
+                "The AgentScope loop ended before the current generation phase "
+                "was explicitly completed.",
                 stage="generation",
             )
             reason = "agent_stopped"

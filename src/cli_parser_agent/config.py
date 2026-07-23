@@ -22,9 +22,9 @@ class GenerationPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    total_timeout_seconds: float = Field(default=300.0, gt=0)
-    max_agent_rounds: int = Field(default=12, ge=1)
-    max_ttp_submissions: int = Field(default=8, ge=1)
+    total_timeout_seconds: float = Field(default=360.0, gt=0)
+    max_agent_rounds: int = Field(default=13, ge=1)
+    max_ttp_submissions: int = Field(default=9, ge=1)
     max_schema_no_tool_retries: int = Field(default=3, ge=0)
     max_ttp_no_tool_retries: int = Field(default=3, ge=0)
     ttp_validation_timeout_seconds: float = Field(default=20.0, gt=0)

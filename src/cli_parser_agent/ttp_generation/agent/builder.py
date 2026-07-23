@@ -22,6 +22,7 @@ from .prompt import (
 )
 from .session import GenerationPhase, GenerationSession
 from .tools import (
+    FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
     build_submission_tools,
@@ -35,9 +36,12 @@ _PHASE_SYSTEM_PROMPTS: dict[GenerationPhase, str] = {
     "schema": SCHEMA_SYSTEM_PROMPT,
     "ttp": TTP_SYSTEM_PROMPT,
 }
-_PHASE_TOOL_NAMES: dict[GenerationPhase, str] = {
-    "schema": SUBMIT_SCHEMA_TOOL_NAME,
-    "ttp": SUBMIT_TEMPLATE_TOOL_NAME,
+_PHASE_TOOL_NAMES: dict[GenerationPhase, tuple[str, ...]] = {
+    "schema": (SUBMIT_SCHEMA_TOOL_NAME,),
+    "ttp": (
+        SUBMIT_TEMPLATE_TOOL_NAME,
+        FINISH_GENERATION_TOOL_NAME,
+    ),
 }
 
 
@@ -103,7 +107,7 @@ def build_agent(
     session: GenerationSession,
     phase: GenerationPhase,
 ) -> Agent:
-    """Build a fresh model, agent state, and one-tool toolkit for a phase."""
+    """Build a fresh model, agent state, and phase-specific toolkit."""
 
     phase = _validate_phase(phase)
     if policy.max_agent_rounds < 1:
@@ -169,20 +173,19 @@ async def estimate_initial_model_tokens(
     message: UserMsg,
     phase: GenerationPhase,
 ) -> int:
-    """Count one isolated phase's system, task, and sole tool schema."""
+    """Count one isolated phase's system, task, and ordered tool schemas."""
 
     phase = _validate_phase(phase)
     tools = await agent.toolkit.get_tool_schemas(
         agent.state.tool_context.activated_groups,
     )
-    if len(tools) != 1:
+    tool_names = tuple(
+        tool.get("function", {}).get("name") for tool in tools
+    )
+    expected_tool_names = _PHASE_TOOL_NAMES[phase]
+    if tool_names != expected_tool_names:
         raise RuntimeError(
-            "Exactly one submission tool schema is required for token estimation.",
-        )
-    tool_name = tools[0].get("function", {}).get("name")
-    if tool_name != _PHASE_TOOL_NAMES[phase]:
-        raise RuntimeError(
-            "The submission tool schema does not match the requested phase.",
+            "The ordered tool schemas do not match the requested phase.",
         )
     return await agent.model.count_tokens(
         [

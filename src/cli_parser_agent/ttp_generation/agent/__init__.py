@@ -29,8 +29,10 @@ from .session import (
     ValidatorOutcomeLike,
 )
 from .tools import (
+    FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    FinishGenerationTool,
     SubmitResultSchemaTool,
     SubmitTtpTemplateTool,
     build_submission_tools,
@@ -39,6 +41,8 @@ from .tools import (
 __all__ = [
     "GenerationPhase",
     "GenerationSession",
+    "FinishGenerationTool",
+    "FINISH_GENERATION_TOOL_NAME",
     "LosslessContextMiddleware",
     "AgentRunOutcome",
     "PROMPT_VERSION",

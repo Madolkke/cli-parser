@@ -20,6 +20,7 @@ from agentscope.model import FinishedReason
 from .prompt import SCHEMA_NO_TOOL_RETRY_PROMPT, TTP_NO_TOOL_RETRY_PROMPT
 from .session import GenerationPhase, GenerationSession
 from .tools import (
+    FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
 )
@@ -33,6 +34,7 @@ class AgentRunOutcome:
     exceeded_max_iters: bool = False
     stopped_after_terminal_tool: bool = False
     model_no_tool_retry_limit: bool = False
+    ended_after_invalid_tool_call: bool = False
     tool_call_starts: int = 0
     tool_result_errors: int = 0
     submission_tool_call_invalids: int = 0
@@ -73,21 +75,24 @@ def _submission_count(session: GenerationSession, tool_name: str) -> int:
     return 0
 
 
-def _retry_message(tool_name: str) -> UserMsg:
-    if tool_name == SUBMIT_SCHEMA_TOOL_NAME:
+def _retry_message(phase: GenerationPhase) -> UserMsg:
+    if phase == "schema":
         content = SCHEMA_NO_TOOL_RETRY_PROMPT
-    elif tool_name == SUBMIT_TEMPLATE_TOOL_NAME:
+    elif phase == "ttp":
         content = TTP_NO_TOOL_RETRY_PROMPT
     else:
         raise RuntimeError("No retry prompt exists for the current phase.")
     return UserMsg(name="user", content=content)
 
 
-def _expected_tool_name(phase: GenerationPhase) -> str:
+def _expected_tool_names(phase: GenerationPhase) -> tuple[str, ...]:
     if phase == "schema":
-        return SUBMIT_SCHEMA_TOOL_NAME
+        return (SUBMIT_SCHEMA_TOOL_NAME,)
     if phase == "ttp":
-        return SUBMIT_TEMPLATE_TOOL_NAME
+        return (
+            SUBMIT_TEMPLATE_TOOL_NAME,
+            FINISH_GENERATION_TOOL_NAME,
+        )
     raise ValueError(f"Unsupported generation phase: {phase!r}")
 
 
@@ -119,10 +124,11 @@ async def run_generation_phase(
 ) -> AgentRunOutcome:
     """Run one isolated phase, retrying only sanitized no-tool completions."""
 
-    expected_tool = _expected_tool_name(phase)
+    expected_tools = _expected_tool_names(phase)
     exceeded_max_iters = False
     stopped_after_terminal_tool = False
     model_no_tool_retry_limit = False
+    last_model_call_invalid = False
     next_message = message
 
     if _phase_completed(session, phase):
@@ -138,7 +144,7 @@ async def run_generation_phase(
         agent.react_config.max_iters = remaining_rounds
 
         last_checkpoint: _ContextCheckpoint | None = None
-        last_expected_tool: str | None = None
+        last_expected_tools: tuple[str, ...] | None = None
         last_call_had_tool = False
         last_call_interrupted = False
         pending_tool_calls: dict[str, tuple[str, int]] = {}
@@ -162,8 +168,9 @@ async def run_generation_phase(
                 if isinstance(event, ModelCallStartEvent):
                     session.record_agent_round(phase)
                     last_checkpoint = _checkpoint_context(agent)
-                    last_expected_tool = expected_tool
+                    last_expected_tools = expected_tools
                     last_call_had_tool = False
+                    last_model_call_invalid = False
                     last_call_interrupted = False
 
                 elif isinstance(event, ModelCallEndEvent):
@@ -173,13 +180,13 @@ async def run_generation_phase(
 
                 elif isinstance(event, ToolCallStartEvent):
                     session.tool_call_starts += 1
-                    last_call_had_tool = True
                     tool_name = event.tool_call_name
                     pending_tool_calls[event.tool_call_id] = (
                         tool_name,
                         _submission_count(session, tool_name),
                     )
-                    if tool_name == last_expected_tool:
+                    if last_expected_tools and tool_name in last_expected_tools:
+                        last_call_had_tool = True
                         session.reset_no_tool_sequence(phase)
 
                 elif isinstance(event, ExceedMaxItersEvent):
@@ -187,6 +194,9 @@ async def run_generation_phase(
 
                 if isinstance(event, ToolResultEndEvent):
                     pending = pending_tool_calls.pop(event.tool_call_id, None)
+                    pending_expected = (
+                        pending is not None and pending[0] in expected_tools
+                    )
                     if event.state == ToolResultState.ERROR:
                         session.tool_result_errors += 1
                         if pending is not None:
@@ -196,11 +206,15 @@ async def run_generation_phase(
                                 in {
                                     SUBMIT_SCHEMA_TOOL_NAME,
                                     SUBMIT_TEMPLATE_TOOL_NAME,
+                                    FINISH_GENERATION_TOOL_NAME,
                                 }
                                 and _submission_count(session, tool_name)
                                 == submissions_before
                             ):
                                 session.submission_tool_call_invalids += 1
+                                last_model_call_invalid = True
+                    elif pending_expected:
+                        last_model_call_invalid = False
 
                     if (
                         _terminal_tool_observed(
@@ -275,7 +289,7 @@ async def run_generation_phase(
 
         no_tool_response = (
             last_checkpoint is not None
-            and last_expected_tool is not None
+            and last_expected_tools is not None
             and not last_call_had_tool
         )
         if not no_tool_response:
@@ -292,7 +306,7 @@ async def run_generation_phase(
             break
 
         session.record_no_tool_retry(phase)
-        next_message = _retry_message(last_expected_tool)
+        next_message = _retry_message(phase)
 
     phase_completed = _phase_completed(session, phase)
     if (
@@ -307,6 +321,7 @@ async def run_generation_phase(
         exceeded_max_iters=exceeded_max_iters,
         stopped_after_terminal_tool=stopped_after_terminal_tool,
         model_no_tool_retry_limit=model_no_tool_retry_limit,
+        ended_after_invalid_tool_call=last_model_call_invalid,
         tool_call_starts=session.tool_call_starts,
         tool_result_errors=session.tool_result_errors,
         submission_tool_call_invalids=session.submission_tool_call_invalids,

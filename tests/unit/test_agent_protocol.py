@@ -13,11 +13,13 @@ from agentscope.message import TextBlock, ToolCallBlock, ToolResultState
 from agentscope.tool import ToolChunk, Toolkit, ToolResponse
 
 from cli_parser_agent.ttp_generation.agent import (
+    FINISH_GENERATION_TOOL_NAME,
     PROMPT_VERSION,
     SCHEMA_SYSTEM_PROMPT,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
     TTP_SYSTEM_PROMPT,
+    FinishGenerationTool,
     GenerationPhase,
     GenerationSession,
     LosslessContextMiddleware,
@@ -113,7 +115,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v9-phase-isolated-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v10-explicit-finish-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -129,6 +131,11 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "{{" not in SCHEMA_SYSTEM_PROMPT
 
     assert "submit_ttp_template" in TTP_SYSTEM_PROMPT
+    assert "finish_generation" in TTP_SYSTEM_PROMPT
+    assert "空对象或关键数组为空" in TTP_SYSTEM_PROMPT
+    assert "跨样例" in TTP_SYSTEM_PROMPT
+    assert "每次模型回复最多调用一个工具" in TTP_SYSTEM_PROMPT
+    assert "ToolResult 已进入" in TTP_SYSTEM_PROMPT
     assert "语义字段" in TTP_SYSTEM_PROMPT
     assert "未建模列" in TTP_SYSTEM_PROMPT
     assert "表格" in TTP_SYSTEM_PROMPT
@@ -170,10 +177,12 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
 def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert SubmitResultSchemaTool.name == SUBMIT_SCHEMA_TOOL_NAME
     assert SubmitTtpTemplateTool.name == SUBMIT_TEMPLATE_TOOL_NAME
+    assert FinishGenerationTool.name == FINISH_GENERATION_TOOL_NAME
     assert not hasattr(SubmitResultSchemaTool.call, "__wrapped__")
     assert not hasattr(SubmitTtpTemplateTool.call, "__wrapped__")
     assert _contains_chinese(SubmitResultSchemaTool.description)
     assert _contains_chinese(SubmitTtpTemplateTool.description)
+    assert _contains_chinese(FinishGenerationTool.description)
 
     schema_contract = SubmitResultSchemaTool.input_schema
     schema_protocol = SubmitResultSchemaTool.description + json.dumps(
@@ -216,6 +225,11 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert _contains_chinese(
         template_contract["properties"]["ttp_template"]["description"],
     )
+
+    finish_contract = FinishGenerationTool.input_schema
+    assert finish_contract["properties"] == {}
+    assert finish_contract["additionalProperties"] is False
+    assert _contains_chinese(FinishGenerationTool.description)
 
 
 def test_phase_task_prompts_round_trip_only_their_inputs() -> None:
@@ -680,6 +694,56 @@ async def test_template_tool_span_records_the_same_bounded_capture(
 
 
 @pytest.mark.asyncio
+async def test_finish_generation_tool_records_a_tool_span(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    starts: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        starts.append({"name": name, **kwargs})
+        yield object()
+
+    monkeypatch.setattr(tools_module, "start_laminar_span", start)
+    monkeypatch.setattr(
+        tools_module,
+        "finish_laminar_span",
+        lambda **kwargs: finishes.append(kwargs),
+    )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+    )
+    session.frozen_schema = _schema()
+    session.validated_ttp_template = "value: {{ value }}"
+    session.records = ({"value": "one"},)
+
+    result = await FinishGenerationTool(session).call()
+    payload = _payload(result)
+
+    assert starts == [
+        {
+            "name": FINISH_GENERATION_TOOL_NAME,
+            "input": {},
+            "span_type": "TOOL",
+        },
+    ]
+    assert finishes == [
+        {
+            "output": payload,
+            "outcome": "success",
+            "attributes": {
+                "phase": "template",
+                "accepted": True,
+            },
+        },
+    ]
+
+
+@pytest.mark.asyncio
 async def test_template_validator_cancellation_propagates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -736,7 +800,7 @@ async def test_template_validator_cancellation_propagates(
 
 
 @pytest.mark.asyncio
-async def test_async_template_validator_preserves_record_index_mapping() -> None:
+async def test_valid_template_remains_a_candidate_until_explicit_finish() -> None:
     returned_records = [
         {"value": "one", "nested": {"index": 0}},
         {"value": "two", "nested": {"index": 1}},
@@ -756,7 +820,10 @@ async def test_async_template_validator_preserves_record_index_mapping() -> None
 
     result = await SubmitTtpTemplateTool(session).call("value: {{ value }}")
 
-    assert _payload(result)["accepted"] is True
+    payload = _payload(result)
+    assert payload["accepted"] is True
+    assert payload["validated_candidate_available"] is True
+    assert payload["next_action"] == "review_capture_then_finish_or_resubmit"
     assert seen == [
         TemplateCandidate(
             ttp_template="value: {{ value }}",
@@ -769,10 +836,220 @@ async def test_async_template_validator_preserves_record_index_mapping() -> None
         {"value": "two", "nested": {"index": 1}},
     )
     assert session.validated_ttp_template == "value: {{ value }}"
+    assert session.has_validated_ttp_candidate
+    assert session.generation_finished is False
+    assert not session.succeeded
     assert session.first_ttp_valid is True
-    assert session.terminal_reason == "success"
+    assert session.terminal_reason is None
     returned_records[0]["nested"]["index"] = 99
     assert session.records[0]["nested"]["index"] == 0
+
+    finished = await FinishGenerationTool(session).call()
+
+    finish_payload = _payload(finished)
+    assert finish_payload == {
+        "phase": "template",
+        "accepted": True,
+        "issues": [],
+        "generation_finished": True,
+        "validated_candidate_available": True,
+    }
+    assert session.generation_finished
+    assert session.succeeded
+    assert session.terminal_reason == "success"
+    assert session.ttp_submissions == 1
+
+
+@pytest.mark.asyncio
+async def test_finish_generation_rejects_without_a_validated_candidate() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+    )
+    session.frozen_schema = _schema()
+
+    result = await FinishGenerationTool(session).call()
+
+    payload = _payload(result)
+    assert payload["accepted"] is False
+    assert payload["issues"][0]["code"] == (
+        "generation.finish_without_valid_candidate"
+    )
+    assert payload["generation_finished"] is False
+    assert payload["validated_candidate_available"] is False
+    assert payload["next_action"] == "correct_and_resubmit_template"
+    assert not session.has_validated_ttp_candidate
+    assert not session.generation_finished
+    assert not session.succeeded
+    assert session.ttp_submissions == 0
+
+
+@pytest.mark.asyncio
+async def test_finish_generation_locks_the_selected_candidate() -> None:
+    submissions = 0
+
+    async def validate_template(candidate: TemplateCandidate) -> ValidatorOutcome:
+        nonlocal submissions
+        submissions += 1
+        return ValidatorOutcome(
+            valid=True,
+            records=({"value": f"candidate-{submissions}"},),
+        )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=validate_template,
+    )
+    session.frozen_schema = _schema()
+    submit_tool = SubmitTtpTemplateTool(session)
+    finish_tool = FinishGenerationTool(session)
+
+    await submit_tool.call("first: {{ value }}")
+    await submit_tool.call("second: {{ value }}")
+
+    assert session.validated_ttp_template == "second: {{ value }}"
+    assert session.records == ({"value": "candidate-2"},)
+    assert not session.succeeded
+
+    assert _payload(await finish_tool.call())["accepted"] is True
+
+    repeated_finish = _payload(await finish_tool.call())
+    rejected_submit = _payload(await submit_tool.call("third: {{ value }}"))
+    assert repeated_finish["accepted"] is False
+    assert repeated_finish["issues"][0]["code"] == "generation_already_succeeded"
+    assert rejected_submit["accepted"] is False
+    assert rejected_submit["issues"][0]["code"] == "generation_already_succeeded"
+    assert session.validated_ttp_template == "second: {{ value }}"
+    assert session.records == ({"value": "candidate-2"},)
+    assert session.ttp_submissions == 2
+
+
+@pytest.mark.asyncio
+async def test_rejected_revision_preserves_the_previous_valid_candidate() -> None:
+    templates: list[str] = []
+
+    def validate_template(candidate: TemplateCandidate) -> ValidatorOutcome:
+        templates.append(candidate.ttp_template)
+        if len(templates) == 1:
+            return ValidatorOutcome(valid=True, records=({"value": "one"},))
+        return ValidatorOutcome(
+            valid=False,
+            issues=(
+                {
+                    "code": "ttp.test_rejected",
+                    "stage": "template",
+                    "message": "The revision is invalid.",
+                },
+            ),
+            records=({},),
+        )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=validate_template,
+    )
+    session.frozen_schema = _schema()
+    tool = SubmitTtpTemplateTool(session)
+
+    await tool.call("value: {{ value }}")
+    rejected = await tool.call("changed: {{ value }}")
+
+    payload = _payload(rejected)
+    assert payload["accepted"] is False
+    assert payload["validated_candidate_available"] is True
+    assert payload["next_action"] == "finish_or_correct_and_resubmit_template"
+    assert session.validated_ttp_template == "value: {{ value }}"
+    assert session.records == ({"value": "one"},)
+    assert session.has_validated_ttp_candidate
+    assert not session.succeeded
+
+
+@pytest.mark.asyncio
+async def test_finish_generation_cannot_bypass_the_submission_limit() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=lambda candidate: ValidatorOutcome(
+            valid=True,
+            records=({"value": "one"},),
+        ),
+        max_ttp_submissions=1,
+    )
+    session.frozen_schema = _schema()
+
+    submitted = await SubmitTtpTemplateTool(session).call("value: {{ value }}")
+    finished = await FinishGenerationTool(session).call()
+
+    assert _payload(submitted)["accepted"] is True
+    finish_payload = _payload(finished)
+    assert finish_payload["accepted"] is False
+    assert finish_payload["issues"][0]["code"] == "ttp_submission_limit"
+    assert finish_payload["validated_candidate_available"] is True
+    assert finish_payload["generation_finished"] is False
+    assert session.has_validated_ttp_candidate
+    assert not session.generation_finished
+    assert not session.succeeded
+    assert session.terminal_reason == "ttp_submission_limit"
+
+
+@pytest.mark.asyncio
+async def test_finish_generation_cannot_overwrite_a_terminal_failure() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+    )
+    session.frozen_schema = _schema()
+    session.validated_ttp_template = "value: {{ value }}"
+    session.records = ({"value": "one"},)
+    session.terminal_reason = "ttp_worker_unavailable"
+
+    payload = _payload(await FinishGenerationTool(session).call())
+
+    assert payload["accepted"] is False
+    assert payload["issues"][0]["code"] == "generation_already_terminated"
+    assert payload["validated_candidate_available"] is True
+    assert session.terminal_reason == "ttp_worker_unavailable"
+    assert not session.generation_finished
+    assert not session.succeeded
+
+
+@pytest.mark.asyncio
+async def test_submission_limit_does_not_overwrite_a_worker_failure() -> None:
+    session: GenerationSession
+
+    def validate_template(candidate: TemplateCandidate) -> ValidatorOutcome:
+        del candidate
+        session.terminal_reason = "ttp_worker_unavailable"
+        return ValidatorOutcome(
+            valid=False,
+            issues=(
+                {
+                    "code": "ttp.worker_start_failed",
+                    "stage": "template",
+                    "message": "The worker could not start.",
+                },
+            ),
+        )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=validate_template,
+        max_ttp_submissions=1,
+    )
+    session.frozen_schema = _schema()
+
+    payload = _payload(
+        await SubmitTtpTemplateTool(session).call("value: {{ value }}"),
+    )
+
+    assert payload["accepted"] is False
+    assert session.ttp_submissions == 1
+    assert session.terminal_reason == "ttp_worker_unavailable"
 
 
 @pytest.mark.asyncio
@@ -893,8 +1170,9 @@ async def test_unchanged_template_is_rejected_without_revalidating() -> None:
             "code": "ttp.unchanged_submission",
             "stage": "template",
             "message": (
-                "The template is identical to the previous rejected submission "
-                "and must be changed before resubmission."
+                "The template is identical to the previous submission. "
+                "Finish the stored validated candidate when available, "
+                "or modify the template before resubmission."
             ),
             "details": {"required_action": "modify_template"},
         },
@@ -906,15 +1184,15 @@ async def test_unchanged_template_is_rejected_without_revalidating() -> None:
 
 
 @pytest.mark.parametrize(
-    ("phase", "tool_type"),
+    ("phase", "tool_types"),
     [
-        ("schema", SubmitResultSchemaTool),
-        ("ttp", SubmitTtpTemplateTool),
+        ("schema", [SubmitResultSchemaTool]),
+        ("ttp", [SubmitTtpTemplateTool, FinishGenerationTool]),
     ],
 )
-def test_phase_toolkit_builder_returns_exactly_one_tool(
+def test_phase_toolkit_builder_returns_fixed_phase_tools(
     phase: GenerationPhase,
-    tool_type: type[Any],
+    tool_types: list[type[Any]],
 ) -> None:
     session = GenerationSession(
         command_outputs=["value: one"],
@@ -924,8 +1202,7 @@ def test_phase_toolkit_builder_returns_exactly_one_tool(
 
     tools = build_submission_tools(session, phase)
 
-    assert len(tools) == 1
-    assert isinstance(tools[0], tool_type)
+    assert [type(tool) for tool in tools] == tool_types
 
 
 @pytest.mark.asyncio
