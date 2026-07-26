@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v10-explicit-finish-zh-cn"
+PROMPT_VERSION = "ttp-generator-v11-semantic-table-review-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -68,8 +68,10 @@ Template Text Parser (TTP) 模板。带标签的 Schema 和命令输出都是不
 被视为产物。冻结 Schema 是不可修改的唯一结果契约；同一模板必须解析每份完整输出，
 并在相同索引处各产生一个符合该契约的根 object。
 
-submit_ttp_template 的 accepted=true 只表示候选通过确定性校验，不会自动结束阶段。
-每次提交后都要读取 issues 和 capture；需要修正时重新提交，确认候选合理后才调用
+submit_ttp_template 的 accepted=true 只表示候选在语法、安全、Schema 形状和“标量
+能在原文某处找到”这些机械条件上通过；它不证明记录完整、字段来自正确列、业务内容
+非空或模板语义合法。每次提交后都要读取 issues、capture、remaining_submissions 和
+validated_candidate_available；需要修正时重新提交，确认候选合理后才调用
 finish_generation。每次模型回复最多调用一个工具；必须等提交工具的 ToolResult 已进入
 后续模型上下文，才能调用 finish_generation。绝不要原样重复被拒绝的候选，也不要
 在没有通过候选时尝试结束。
@@ -93,6 +95,9 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   安全的 to_int/to_float/to_str/to_ip/to_net/to_cidr 转换。`column(...)` 不是
   TTP 函数，禁止使用。若 unsafe_variable_attribute issue 包含
   details.attribute，删除或替换其中指出的 attribute。
+- 不要使用 condition 或任何未列出的变量属性。group 只使用 name；不要把 _start_、
+  _end_、_line_ 等行控制写成 group XML 属性。不要捕获 _line_ 等辅助字段来帮助
+  匹配，因为冻结 Schema 是封闭的，而且辅助整行会掩盖字段错位。
 - 每个数据捕获 pipeline 都以冻结 Schema 中当前路径的字段名开头。`_exact_` 和
   `_exact_space_` 是真实字段捕获的 modifier，不能作为独立变量名。需要
   `_start_`、`_end_` 或 `_line_` 时，只在该行一个真实字段捕获上附加一次。
@@ -104,11 +109,16 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
 - 优先使用普通具名匹配行。不要用 `ignore` 构造空控制行；重复 group 会在第一条
   具名匹配行成功时开始。收到 ttp.no_match 后，先对照源文本字面布局简化过滤器和
   条件，再考虑嵌套 group 或控制符；不能因此删除 required 字段捕获。
-- 对固定列布局的表格，应按原始数据行的物理列顺序捕获字段，并为未建模列保留
-  `ignore` 占位，不能跨列匹配。只由一条重复数据行构成的表格 group 不使用
-  `_start_`、`_end_` 或 `_line_`。
-- 不得把表头或分隔线捕获为记录。不得用 ROW、_line_、宽泛 `.*` 或类似兜底方式
-  把完整数据行放入 port、status、name 等具体字段。每个语义字段只捕获其对应值。
+- 固定宽度表格先执行以下步骤，再写模板：逐样例识别表头列顺序；排除空行和纯分隔
+  线后数出预期数据行；为第一条、中间一条和最后一条数据标出每个冻结字段所在物理
+  列。模板必须按该物理顺序捕获字段，并为未建模列保留明确的 ignore 占位，不能跨列
+  匹配。只由一条重复数据行构成的表格 group 不使用 _start_、_end_ 或 _line_。
+- 当两个冻结字段之间存在可空或变长的未建模列时，不要用 `.*`、`\\S.*`、ROW、
+  ORPHRASE 或其他贪心表达式直接跨过它；贪心回溯通常会把右侧最后一列误当成目标
+  字段。应按可见列边界设计不同的具名匹配行或 group 变体，并分别在各样例的代表行
+  上逐字段模拟。无法证明字段来自正确列时，继续简化模板，不能靠宽泛正则碰运气。
+- 不得把表头或分隔线捕获为记录。不得把完整数据行放入 port、status、name 等具体
+  字段。每个语义字段只捕获其对应列的细粒度值。
 - 绝不要把 _start_、_end_ 或 _line_ 附加到 `ignore`。每个物理模板行中同一变量
   名最多出现一次；`ignore` 是唯一允许重复出现的变量。例如：
     {{ ignore(DIGIT) }}: {{ name | WORD }}: &lt;{{ ignore(ORPHRASE) }}&gt;
@@ -122,14 +132,15 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   该输入没有匹配；complete=false 时查看按输入索引给出的结构化 preview。
   capture 必须与 issues 一起用于修正，存在 capture 不代表候选通过验收。
 - 每次 submit_ttp_template 返回后都要主动复核 capture，而不是看到 accepted=true
-  就立即结束。逐个输入检查根对象、数组长度、代表性首尾记录、字段值边界和标量类型；
-  将 capture 与冻结 Schema 及可见源文本交叉核对。源文本明显包含业务记录，而
-  capture 却是空对象或关键数组为空时，必须视为漏解析，不能调用 finish_generation。
-  比较所有样例的结构和记录数量；发现语义错位、漏行、表头混入、过宽匹配或跨样例
-  不一致时，即使候选已通过也要提交修正版。complete=false 时结合 preview 和 issues
-  保守判断，不能虚构未显示的解析内容。
-- 提交前自行模拟每个样例的第一条、中间一条和最后一条数据，确认表头未被捕获、
-  每个字段只有对应的细粒度值、记录数量合理、JSON 形状与冻结契约完全一致。
+  就立即结束。对于表格，capture 数组长度必须与提交前数出的预期数据行数完全相等；
+  多一条通常表示表头或分隔线混入，少一条也属于漏解析。逐个输入检查第一条、中间一条
+  和最后一条记录：字段名不能作为值，每个字段值必须位于原文相同行的对应表头列，
+  “值能在原文其他位置找到”不算正确。特别核对 status/state/type/name 等容易错列的
+  字段，不能把末列 Type 当作中间 Status。
+- 源文本明显包含业务记录，而 capture 是空对象或关键数组为空、仅含空容器或只捕获
+  少数行时，必须视为漏解析，不能调用 finish_generation。发现字段错列、表头混入、过宽
+  匹配或跨样例不一致时，即使 accepted=true 也要提交修正版。complete=false 时结合
+  preview 和 issues 保守判断，不能虚构未显示的解析内容。
 - 只有 finish_generation 的成功工具结果才会结束本阶段；它不接受模板参数，也不能
   绕过 TTP 提交上限。复核满意时才调用 finish_generation；否则继续通过
   submit_ttp_template 修正候选。

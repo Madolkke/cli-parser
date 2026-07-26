@@ -10,7 +10,7 @@
 
 项目提供一个可组合的异步 Python Agent：调用方提交 `1-5` 份同一命令的纯输出，Agent 在一次外部请求内生成一份可解析所有完整输入的安全 TTP 模板，以及描述每份解析结果的 JSON Schema。
 
-首版只实现这一条生成用例。它不提供产品 CLI、HTTP 服务、通用多 Agent/Agent Team 编排、持久化、`evals/` 或 `examples/`；两个顺序阶段 Agent 只是该垂直用例的内部实现。仓库中的零参数脚本和只读 Textual TUI 都是开发工具。公共 API 不假定调用方是人、CLI 或 Agent，因此未来上下游 Agent 可以直接复用同一契约。
+首版只实现这一条生成用例。它不提供产品 CLI、HTTP 服务、通用多 Agent/Agent Team 编排、持久化或 `examples/`；两个顺序阶段 Agent 只是该垂直用例的内部实现。仓库中的脚本、只读 Textual TUI 和 `evals/ttp_generation/` 黑盒评测都是开发工具。公共 API 不假定调用方是人、CLI 或 Agent，因此未来上下游 Agent 可以直接复用同一契约。
 
 确定的业务语义如下：
 
@@ -57,7 +57,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v10-explicit-finish-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求模型结合 capture 主动复核有效候选，并在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v11-semantic-table-review-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示明确区分机械 accepted 与业务语义合法性，并要求固定宽度表格在提交前建立列映射和预期数据行数、在 capture 后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -100,11 +100,22 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 ├── .env.example
 ├── docs/
 │   ├── agent-architecture-and-runtime.md
+│   ├── agent-evaluation.md
 │   ├── architecture.md
-│   └── live-corpus-test-plan.md
+│   ├── live-corpus-test-plan.md
+│   └── skills/
+│       └── generate-cli-parser-eval-cases/
+│           ├── SKILL.md
+│           ├── agents/openai.yaml
+│           └── references/
+├── evals/
+│   └── ttp_generation/
+│       ├── manifest.json
+│       └── targets/
 ├── scripts/
 │   ├── __init__.py
 │   ├── _agent_run_support.py
+│   ├── run_agent_evaluation.py
 │   ├── run_agent_once.py
 │   ├── run_agent_tui.py
 │   └── run_live_corpus.py
@@ -112,6 +123,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 │   └── cli_parser_agent/
 │       ├── __init__.py
 │       ├── config.py
+│       ├── evaluation.py
 │       ├── observability.py
 │       └── ttp_generation/
 │           ├── __init__.py
@@ -149,6 +161,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | --- | --- | --- |
 | `config.py` | OpenAI 兼容配置与独立的执行/安全策略 | 否 |
 | `observability.py` | 可选 Laminar 幂等初始化与 trace 边界辅助函数 | 否 |
+| `evaluation.py` | 开发期评测 manifest/target 安全加载、独立验收、严格 records/Schema 评分和脱敏 trial 投影 | 否 |
 | `contracts.py` | 请求、成功/失败结果、artifact、issue、metadata 和 Schema evidence | 否 |
 | `progress.py` | `ProgressObserver` 调试类型、请求级事件序列化与异常隔离 | 是；只复制和派发事件，不参与 Agent 决策 |
 | `sampling.py` | 确定性模型上下文采样，不改变全文验收输入；workflow 另做阶段序列化/token fitting | 否 |
@@ -167,6 +180,9 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `scripts/run_agent_once.py` | 使用源码常量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
 | `scripts/run_live_corpus.py` | 开发期公开语料 preflight、真实模型运行、独立终验与 resume；仅 `run` 路径在退出前 flush | 否；只调用公共 API 和确定性 validation |
+| `scripts/run_agent_evaluation.py` | 物化仓库 Datapoint，通过 Laminar `evaluate(...)` 黑盒调用公共 API，查询遥测并写脱敏摘要 | 否；executor 不传 observer，每 trial 只调用一次 `generate()` |
+| `evals/ttp_generation/` | 版本化 case manifest、expected records 和封闭 Schema 结构断言；不保存模板或模型输出 | 不适用；不进入 wheel |
+| `docs/skills/generate-cli-parser-eval-cases/` | 可手动安装的 golden 制作 Skill 源码，仅允许从 raw capture 标注并运行离线 preflight | 不适用 |
 | `testdata/real_command_outputs/` | 固定版本的第三方 raw CLI 输出、manifest、来源和许可证 | 不适用；不进入公共包，只有两个确定性 parser 回归由 pytest 直接读取 |
 
 所有领域逻辑留在 `ttp_generation` 垂直切片中。即使 `validation/` 不依赖 AgentScope，也不提升到项目顶层；只有第二个真实用例需要复用时才提取共享模块。
@@ -261,6 +277,7 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - pytest 中的稳定测试不隐式访问网络或模型；仅 Linux `ip address show` 与 Cisco IOS `show inventory` 两组测试直接读取固定 raw 语料，用真实 TTP 0.10.1 回归 `ignore(...)` 子语言，其余 corpus 仍由独立 runner 管理。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、候选保留、无候选 finish 拒绝、第 `9` 次提交严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
+- 黑盒评测单测覆盖 manifest 严格解析、路径逃逸与 SHA-256、target 非空和 Schema 断言闭合、records/数组/类型的严格比较、漏行/表头/空数组诊断、遥测延迟及 Key 排除。`list`/`preflight` 在 Key 仍为占位符时也必须完全离线成功。
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
@@ -268,11 +285,13 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 
 `scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
+`scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
+
 真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `13/13`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 
 ## 7. 暂缓事项
 
-长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、生产级监控与告警、Laminar CLI/Debugger/replay、`evals/` 和 `examples/` 均不属于首版。`scripts/run_live_corpus.py` 与 `scripts/run_agent_tui.py` 都是独立开发工具，不扩大产品边界；TUI 只读观察单次生成，语料 runner 和 TUI 的记录只写入忽略版本控制的 `.artifacts/`，不写入源码目录。只有出现明确消费者、第二个用例或统计质量目标后，才新增相应边界。
+长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、生产级监控与告警、Laminar CLI/Debugger/replay、LLM judge、HumanEvaluator、Laminar Dataset 和 `examples/` 均不属于首版。`scripts/run_live_corpus.py`、`scripts/run_agent_tui.py` 与 `scripts/run_agent_evaluation.py` 都是独立开发工具，不扩大产品边界；本地记录只写入忽略版本控制的 `.artifacts/`。`evals/` 仅保存人工真值，不是新的产品用例或运行时依赖。
 
 ## 8. 官方依据
 

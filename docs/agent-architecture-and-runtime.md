@@ -116,7 +116,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每�
 
 进入 TTP 阶段时，workflow 只从 session 读取冻结 Schema，并重新从完整输出执行 TTP 阶段采样和 token fitting。冻结 Schema 会计入该阶段的上下文预算。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v10-explicit-finish-zh-cn`。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v11-semantic-table-review-zh-cn`。
 
 ### 5. 生成和修正 TTP
 
@@ -166,6 +166,10 @@ ttp.generate
 重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，提交与完成工具使用手动 TOOL span；TTP capture 位于 `submit_ttp_template` 输出中，`finish_generation` 只记录空输入和接受/拒绝反馈。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
 
 Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observability.py`](../src/cli_parser_agent/observability.py)，精确的采集范围和生命周期规则见 [首版架构](architecture.md#24-可选-laminar-调试-trace)。
+
+### Evaluation 外层
+
+人工运行 `scripts/run_agent_evaluation.py` 时，Laminar 在上述树外再增加 `evaluation` 与 `executor` 两层。每个 repository `Datapoint` 对应一个 case 的一个 trial；executor 只把完整 raw outputs 传给一次公共 `generate()`，不传 observer，也看不到 expected target。生成结束后确定性 evaluator 才读取 target，执行严格 records/Schema 评分；随后只读 SQL 从同一 Trace 汇总 LLM/TOOL 调用、tokens、cost 和阶段时延。这个外层不改变 session、模型上下文、工具或 finish 协议。详细定义、安全边界和运行方式见 [Agent 黑盒评测](agent-evaluation.md)。
 
 ## 只读 Textual TUI
 

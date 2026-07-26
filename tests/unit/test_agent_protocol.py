@@ -115,7 +115,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v10-explicit-finish-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v11-semantic-table-review-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -144,6 +144,11 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert '`{{ ignore("PID:.*SN:") }}`' in TTP_SYSTEM_PROMPT
     assert "ignore |" not in TTP_SYSTEM_PROMPT
     assert "capture 必须与 issues 一起用于修正" in TTP_SYSTEM_PROMPT
+    assert "不证明记录完整" in TTP_SYSTEM_PROMPT
+    assert "预期数据行数完全相等" in TTP_SYSTEM_PROMPT
+    assert "不能把末列 Type 当作中间 Status" in TTP_SYSTEM_PROMPT
+    assert "不要使用 condition" in TTP_SYSTEM_PROMPT
+    assert "不要用 `.*`、`\\S.*`" in TTP_SYSTEM_PROMPT
     assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
     assert "evidence" not in TTP_SYSTEM_PROMPT
     assert "assumptions" not in TTP_SYSTEM_PROMPT

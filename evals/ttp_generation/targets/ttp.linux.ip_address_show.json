@@ -1,0 +1,40 @@
+{
+  "records": [
+    {
+      "interfaces": [
+        {"interface_index": "1", "name": "lo", "flags": "LOOPBACK,UP,LOWER_UP", "mtu": "65536", "qdisc": "noqueue", "state": "UNKNOWN"},
+        {"interface_index": "2", "name": "ens32", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "fq_codel", "state": "UP"},
+        {"interface_index": "3", "name": "gpd0", "flags": "POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP", "mtu": "1400", "qdisc": "fq_codel", "state": "UNKNOWN"},
+        {"interface_index": "4", "name": "br-218f5e637867", "flags": "NO-CARRIER,BROADCAST,MULTICAST,UP", "mtu": "1500", "qdisc": "noqueue", "state": "DOWN"},
+        {"interface_index": "5", "name": "vrf-blue", "flags": "NOARP,MASTER,UP,LOWER_UP", "mtu": "65575", "qdisc": "noqueue", "state": "UP"},
+        {"interface_index": "6", "name": "brblue", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "noqueue", "state": "UNKNOWN"}
+      ]
+    },
+    {
+      "interfaces": [
+        {"interface_index": "1", "name": "lo", "flags": "LOOPBACK,UP,LOWER_UP", "mtu": "65536", "qdisc": "noqueue", "state": "UNKNOWN"},
+        {"interface_index": "2", "name": "eth0", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "fq_codel", "state": "UP"},
+        {"interface_index": "3", "name": "ens33", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "fq_codel", "state": "UP"},
+        {"interface_index": "4", "name": "ens37", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "fq_codel", "state": "UP"},
+        {"interface_index": "5", "name": "ens38", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "0", "qdisc": "fq_codel", "state": "UP"}
+      ]
+    },
+    {
+      "interfaces": [
+        {"interface_index": "1", "name": "lo", "flags": "LOOPBACK,UP,LOWER_UP", "mtu": "65536", "qdisc": "noqueue", "state": "UNKNOWN"},
+        {"interface_index": "2", "name": "eth0", "flags": "BROADCAST,MULTICAST,UP,LOWER_UP", "mtu": "1500", "qdisc": "noqueue", "state": "UP"}
+      ]
+    }
+  ],
+  "schema_contract": [
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/interface_index", "type": "string", "required": true},
+    {"path": "/interfaces/*/name", "type": "string", "required": true},
+    {"path": "/interfaces/*/flags", "type": "string", "required": true},
+    {"path": "/interfaces/*/mtu", "type": "string", "required": true},
+    {"path": "/interfaces/*/qdisc", "type": "string", "required": true},
+    {"path": "/interfaces/*/state", "type": "string", "required": true}
+  ]
+}

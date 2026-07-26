@@ -1,0 +1,46 @@
+{
+  "records": [
+    {
+      "interfaces": [
+        {"name": "Loopback1"},
+        {"name": "Tunnel1"},
+        {"name": "Embedded-Service-Engine0/0"},
+        {"name": "GigabitEthernet0/0"},
+        {"name": "GigabitEthernet0/1"},
+        {"name": "GigabitEthernet0/2"},
+        {"name": "GigabitEthernet0/2.301"},
+        {"name": "GigabitEthernet0/2.302"},
+        {"name": "GigabitEthernet0/0/0"},
+        {"name": "GigabitEthernet0/0/1"},
+        {"name": "GigabitEthernet0/0/2"},
+        {"name": "GigabitEthernet0/0/3"},
+        {"name": "GigabitEthernet1/0"},
+        {"name": "GigabitEthernet1/1"},
+        {"name": "Cellular0/1/0"},
+        {"name": "Cellular0/1/1"},
+        {"name": "Vlan1"},
+        {"name": "Vlan201"},
+        {"name": "Vlan204"},
+        {"name": "Vlan205"},
+        {"name": "Vlan206"},
+        {"name": "Vlan209"}
+      ]
+    },
+    {
+      "interfaces": [
+        {"name": "GigabitEthernet2/0/4.223415"},
+        {"name": "GigabitEthernet2/0/4.223427"},
+        {"name": "GigabitEthernet2/0/4.223436"},
+        {"name": "GigabitEthernet2/0/4.223449"},
+        {"name": "GigabitEthernet2/0/4.22341011"},
+        {"name": "GigabitEthernet2/0/4.22341020"}
+      ]
+    }
+  ],
+  "schema_contract": [
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/name", "type": "string", "required": true}
+  ]
+}

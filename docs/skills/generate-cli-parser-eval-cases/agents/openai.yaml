@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate CLI Parser Eval Cases"
+  short_description: "Author validated CLI parser golden cases"
+  default_prompt: "Use $generate-cli-parser-eval-cases to create or revise a validated golden evaluation case from raw CLI outputs."
