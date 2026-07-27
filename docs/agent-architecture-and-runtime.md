@@ -173,7 +173,7 @@ Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observabili
 
 ## 只读 Textual TUI
 
-`scripts/run_agent_tui.py` 是单次真实运行的零参数开发入口。编辑脚本顶部的输入路径与运行配置后，在交互式终端中执行：
+`scripts/run_agent_tui.py` 是单次真实运行的零参数开发入口。通过环境变量设置输入路径与运行配置后，在交互式终端中执行：
 
 ```powershell
 uv run python scripts/run_agent_tui.py

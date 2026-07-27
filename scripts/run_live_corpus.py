@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -28,9 +29,7 @@ EXPECTED_SMOKE_SAMPLE_COUNT = 12
 MAX_SAMPLE_BYTES = 1024 * 1024
 CORPUS_ROOT = Path(__file__).resolve().parents[1] / "testdata" / "real_command_outputs"
 MANIFEST_PATH = CORPUS_ROOT / "corpus.json"
-DEFAULT_ARTIFACT_ROOT = (
-    Path(__file__).resolve().parents[1] / ".artifacts" / ("live-corpus")
-)
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 _ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -621,12 +620,22 @@ def _json_dump(path: Path, value: Any) -> None:
     os.replace(temporary, path)
 
 
-def _allocate_default_output_dir() -> Path:
-    DEFAULT_ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+def _default_artifact_root(
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Read the optional live-corpus artifact location from the environment."""
+
+    source = os.environ if environ is None else environ
+    value = source.get("CLI_PARSER_LIVE_CORPUS_ARTIFACT_ROOT", "").strip()
+    return PROJECT_ROOT / ".artifacts" / "live-corpus" if not value else Path(value)
+
+
+def _allocate_default_output_dir(artifact_root: Path) -> Path:
+    artifact_root.mkdir(parents=True, exist_ok=True)
     stem = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     for suffix in range(1000):
         name = stem if suffix == 0 else f"{stem}-{suffix:02d}"
-        candidate = DEFAULT_ARTIFACT_ROOT / name
+        candidate = artifact_root / name
         try:
             candidate.mkdir()
         except FileExistsError:
@@ -638,6 +647,8 @@ def _allocate_default_output_dir() -> Path:
 def _prepare_output_dir(
     output_dir: Path | None,
     resume: Path | None,
+    *,
+    artifact_root: Path,
 ) -> tuple[Path, bool]:
     if resume is not None:
         resolved = resume.expanduser().resolve()
@@ -654,7 +665,7 @@ def _prepare_output_dir(
             raise CorpusError("resume directory has incompatible run metadata")
         return resolved, True
     if output_dir is None:
-        return _allocate_default_output_dir(), False
+        return _allocate_default_output_dir(artifact_root), False
     resolved = output_dir.expanduser().resolve()
     if resolved.exists() and not resolved.is_dir():
         raise CorpusError("--output-dir must identify a directory")
@@ -1044,7 +1055,11 @@ def _command_run(args: argparse.Namespace) -> int:
                 "live model configuration is missing or invalid "
                 f"({type(error).__name__})",
             ) from None
-        output_dir, is_resume = _prepare_output_dir(args.output_dir, args.resume)
+        output_dir, is_resume = _prepare_output_dir(
+            args.output_dir,
+            args.resume,
+            artifact_root=_default_artifact_root(),
+        )
         print(
             f"selected cases={len(selected)} samples="
             f"{sum(len(case.samples) for case in selected)} "

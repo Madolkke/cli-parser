@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import getpass
 import hashlib
 import json
 import os
@@ -15,7 +14,6 @@ from urllib.parse import urlsplit, urlunsplit
 
 MAX_COMMAND_OUTPUTS = 5
 MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024
-API_KEY_ENVIRONMENT_VARIABLE = "OPENAI_API_KEY"
 
 
 class ScriptConfigurationError(ValueError):
@@ -51,28 +49,43 @@ def sanitize_base_url(base_url: str | None) -> str | None:
         return "[REDACTED]"
 
 
-def resolve_api_key(
+def required_path_list(
+    name: str,
     *,
     environ: Mapping[str, str] | None = None,
-    input_stream: TextIO | None = None,
-) -> str:
-    """Resolve the model API key without ever echoing its value."""
+) -> tuple[Path, ...]:
+    """Read one to five path entries separated by the platform path separator."""
 
     source = os.environ if environ is None else environ
-    value = source.get(API_KEY_ENVIRONMENT_VARIABLE, "").strip()
-    if value:
-        return value
+    raw_value = source.get(name, "")
+    values = tuple(
+        Path(value.strip())
+        for value in raw_value.split(os.pathsep)
+        if value.strip()
+    )
+    if not values:
+        raise ScriptConfigurationError(
+            f"{name} must contain 1 to {MAX_COMMAND_OUTPUTS} file paths "
+            f"separated by {os.pathsep!r}.",
+        )
+    if len(values) > MAX_COMMAND_OUTPUTS:
+        raise ScriptConfigurationError(
+            f"{name} must contain at most {MAX_COMMAND_OUTPUTS} file paths.",
+        )
+    return values
 
-    try:
-        value = getpass.getpass(
-            f"{API_KEY_ENVIRONMENT_VARIABLE} (input hidden): ",
-            stream=input_stream,
-        ).strip()
-    except (EOFError, KeyboardInterrupt) as error:
-        raise ScriptConfigurationError("API key input was cancelled.") from error
-    if not value:
-        raise ScriptConfigurationError("API key must not be empty.")
-    return value
+
+def environment_path(
+    name: str,
+    default: Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Read an optional filesystem path, retaining a documented default."""
+
+    source = os.environ if environ is None else environ
+    value = source.get(name, "").strip()
+    return default if not value else Path(value)
 
 
 def load_command_outputs(
@@ -178,15 +191,15 @@ def flush_laminar(*, error_stream: TextIO | None = None) -> bool:
 
 
 __all__ = [
-    "API_KEY_ENVIRONMENT_VARIABLE",
     "MAX_COMMAND_OUTPUT_BYTES",
     "MAX_COMMAND_OUTPUTS",
     "ScriptConfigurationError",
     "display_path",
+    "environment_path",
     "flush_laminar",
     "load_command_outputs",
     "new_run_directory",
-    "resolve_api_key",
+    "required_path_list",
     "sanitize_base_url",
     "write_json",
 ]

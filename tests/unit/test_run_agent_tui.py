@@ -108,10 +108,22 @@ def _text_events() -> list[object]:
 
 
 def test_tui_streams_without_changing_the_existing_runner() -> None:
-    once_path = PROJECT_ROOT / "scripts" / "run_agent_once.py"
+    fixture = (
+        PROJECT_ROOT
+        / "testdata/real_command_outputs/ntc_templates/cisco_ios/"
+        "show_interfaces_status/cisco_ios_show_interfaces_status.raw"
+    )
+    settings, _, paths, _ = SCRIPT._configuration(
+        {
+            "OPENAI_API_KEY": "test-key",
+            "OPENAI_MODEL": "test-model",
+            "CLI_PARSER_MODEL_STREAM": "false",
+            "CLI_PARSER_TUI_INPUT_FILES": str(fixture),
+        },
+    )
 
-    assert SCRIPT.STREAM is True
-    assert "STREAM = False" in once_path.read_text(encoding="utf-8")
+    assert settings.stream is True
+    assert paths == (fixture,)
 
 
 def test_event_record_preserves_unicode_and_redacts_secret_keys() -> None:

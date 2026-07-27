@@ -76,6 +76,35 @@ def test_builder_constructs_openai_model_without_extra_body() -> None:
     assert agent.model.extra_body is None
 
 
+def test_builder_injects_an_unverified_http_client_only_when_opted_in(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cli_parser_agent.ttp_generation.agent import builder as builder_module
+
+    captured: dict[str, object] = {}
+    http_client = object()
+
+    def build_http_client(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return http_client
+
+    monkeypatch.setattr(builder_module.httpx, "AsyncClient", build_http_client)
+    settings = TtpGeneratorSettings(
+        api_key="test-key",
+        model_name="test-model",
+        verify_tls=False,
+    )
+    agent = build_agent(
+        settings=settings,
+        policy=GenerationPolicy(),
+        session=_build_session(),
+        phase="schema",
+    )
+
+    assert captured == {"verify": False, "timeout": 60.0}
+    assert agent.model.client_kwargs["http_client"] is http_client
+
+
 def test_builder_does_not_reconfigure_request_session_policy() -> None:
     session = GenerationSession(
         command_outputs=["value: one"],

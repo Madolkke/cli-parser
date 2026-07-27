@@ -47,7 +47,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 ### 2.3 模型与预算
 
-首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。
+首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
 
 TTP 提示要求每个模型回复最多调用一个工具，并等待提交 ToolResult/capture 出现在后续模型上下文后再调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮 submit/finish 拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
 
@@ -61,7 +61,7 @@ Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预�
 
 ### 2.4 可选 Laminar 调试 Trace
 
-`LMNR_PROJECT_API_KEY` 非空时，`TtpGenerator` 自动初始化 Laminar，并且只启用 OpenAI instrumentation；`LMNR_BASE_URL` 可选用于自托管实例，自托管 HTTP/gRPC 端口分别通过 `LMNR_HTTP_PORT` / `LMNR_GRPC_PORT` 显式传给 SDK。端口必须是 `1..65535` 的 ASCII 十进制整数。未配置 Key 时 tracing 完全禁用，初始化错误作为配置错误直接传播，已由调用方初始化的 Laminar 不会被覆盖。
+`LMNR_PROJECT_API_KEY` 非空时，`TtpGenerator` 自动初始化 Laminar，并且只启用 OpenAI instrumentation；`LMNR_BASE_URL` 可选用于自托管实例，自托管 HTTP/gRPC 端口分别通过 `LMNR_HTTP_PORT` / `LMNR_GRPC_PORT` 显式传给 SDK。端口必须是 `1..65535` 的 ASCII 十进制整数。未配置 Key 时 tracing 完全禁用，初始化错误作为配置错误直接传播，已由调用方初始化的 Laminar 不会被覆盖。启用 `CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 时，Laminar exporter 强制使用 HTTP OTLP；自托管 Laminar 必须相应使用 `http://` URL，SDK 的 gRPC transport 没有安全的“跳过证书校验”选项。
 
 独立调用 `generate` 时，`ttp.generate` 创建 Trace 根；若调用方已有上游 Agent span，则 `ttp.generate` 继承当前上下文并加入同一 Trace，不覆盖上游 Trace metadata。Schema 运行位于 `schema.phase` 子 span；只有完成受控交接并实际进入 TTP 阶段时才创建 `ttp.phase`。各阶段的 OpenAI 兼容请求、提交 TOOL span 与 `finish_generation` TOOL span 继承对应 phase 上下文。由本生成器创建的 Trace 记录请求 ID、模型、prompt 版本、输入数量、分阶段采样量、分阶段轮次、提交次数、终止原因和状态；`GenerationMetadata.laminar_trace_id` 允许调用方定位同一次运行。Trace 只是只读调试记录，不参与 `GenerationSession` 交接，也不会回灌模型上下文。
 
@@ -177,7 +177,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
 | `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema/来源终验 | 否 |
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
-| `scripts/run_agent_once.py` | 使用源码常量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
+| `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
 | `scripts/run_live_corpus.py` | 开发期公开语料 preflight、真实模型运行、独立终验与 resume；仅 `run` 路径在退出前 flush | 否；只调用公共 API 和确定性 validation |
 | `scripts/run_agent_evaluation.py` | 物化仓库 Datapoint，通过 Laminar `evaluate(...)` 黑盒调用公共 API，查询遥测并写脱敏摘要 | 否；executor 不传 observer，每 trial 只调用一次 `generate()` |
@@ -285,7 +285,7 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 
 `scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
-`scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
+`scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。模型、预算、Laminar 连接和本地产物目录均由环境变量注入；target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
 
 真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `13/13`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 

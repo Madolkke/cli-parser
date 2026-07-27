@@ -111,6 +111,17 @@ def test_resume_rejects_success_from_a_different_prompt_version(
     )
 
 
+def test_live_corpus_artifact_root_is_environment_configurable(tmp_path: Path) -> None:
+    script = _load_script()
+
+    assert script._default_artifact_root({}) == (
+        script.PROJECT_ROOT / ".artifacts" / "live-corpus"
+    )
+    assert script._default_artifact_root(
+        {"CLI_PARSER_LIVE_CORPUS_ARTIFACT_ROOT": str(tmp_path)},
+    ) == tmp_path
+
+
 @pytest.mark.parametrize(
     "argv",
     [

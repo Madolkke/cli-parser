@@ -24,6 +24,7 @@
 - 每个请求顺序创建 `ttp_schema_generator` 和 `ttp_template_generator` 两个独立 Agent；两者分别拥有新的 `OpenAIChatModel`、`AgentState` 和 Toolkit，模型对话上下文绝不跨阶段复用。首版不使用长期记忆。
 - 两阶段只共享请求级 `GenerationSession`。Schema Agent 的 Toolkit 只注册 `submit_result_schema`；Schema 冻结后结束该 reply，再以冻结 Schema 和重新从全文采样的命令输出启动 TTP Agent，其 Toolkit 固定注册 `submit_ttp_template` 与无参数的 `finish_generation`。rejected Schema、evidence、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 均不进入 TTP 模型上下文。
 - 两个阶段发送给 OpenAI 兼容 HTTP API 的请求都完全省略 `tool_choice`。工具自身仍执行阶段、冻结和预算校验，不从普通 assistant 文本提取产物；middleware 只禁止有损 context compression，不承担阶段工具过滤。
+- OpenAI 兼容 HTTP 客户端默认严格校验 TLS 证书；只有显式设置 `CLI_PARSER_INSECURE_SKIP_TLS_VERIFY=1`（也接受 `true`、`yes`、`on`）时，才为受信任内网端点禁用验证。该开关同样用于评测 SQL HTTP 请求；Laminar exporter 改用 HTTP OTLP，Laminar 自托管实例必须使用 `http://` 或安装内部 CA，不能绕过 gRPC TLS 校验。
 - TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_template` 的 ToolResult/capture 已进入后续模型上下文后才能调用 `finish_generation`。首版不新增候选轮次 ID 或同轮工具调用拦截，依赖兼容供应商遵守 `parallel_tool_calls=False`。
 - 模型完成一轮但没有产生工具调用时，runner 只追加固定的中文提醒并在同一阶段重试；提醒不得引用、摘要或记录模型自由文本。Schema 和 TTP 阶段分别最多重试 `3` 次，允许配置为 `0`；耗尽后返回结构化模型失败。项目不根据供应商异常文本推断工具能力，也不发送 `thinking.type=disabled` 等供应商专用覆盖。
 - 默认预算为总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次 TTP 提交、Schema/TTP 阶段各最多 `3` 次零工具重试；单次隔离解析默认 `20` 秒。限制均通过 `GenerationPolicy` 配置，所有零工具回复和语义重试都计入总轮次与总时长，任一预算先耗尽即终止。达到第 `9` 次 TTP 提交时，该候选仍会校验并返回反馈，但请求随后必须以 `ttp_submission_limit` 失败，即使候选有效；最晚可在第 `8` 次提交后调用 `finish_generation` 成功结束。
@@ -35,7 +36,7 @@
 - Laminar 既可作为可选的完整调试通道，也可由显式评测入口用 `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` Trace；不引入 `lmnr-cli`、Debugger session、replay、LLM judge 或 Laminar Dataset。会运行真实模型的短进程开发脚本在结束前 flush，所有 `list` 和 `preflight` 操作不初始化 Laminar 或产生网络请求。
 - `testdata/real_command_outputs/` 是固定版本的公开 raw CLI 开发测试语料，不属于产品包、`evals/` 或 `examples/`；除 Linux `ip address show` 与 Cisco IOS `show inventory` 的确定性 TTP 语法回归外，不把完整语料套件接入 pytest。不得把上游解析模板、参考 YAML、mock 数据或 JSON 命令结果一并复制进来。
 - `scripts/run_live_corpus.py` 只用于语料 preflight 和人工触发的真实模型闭环，不是产品 CLI，不得改变或绕过公共 `TtpGenerator` API。
-- `scripts/run_agent_evaluation.py` 是人工触发的 Laminar 黑盒评测入口：仓库 manifest 物化为内存 `Datapoint`，executor 对每个 trial 只调用一次公共 `generate()` 且不传 observer，evaluator 仅在生成后读取 target。入口允许本机把模型 Key 与 Laminar Key 直接填入两个全局占位符，但真实值不得暂存、提交、写入指纹、metadata、span、本地摘要、异常或测试快照。Evaluation/datapoint 创建失败不得调用 Agent；遥测入库不完整不重跑模型。
+- `scripts/run_agent_evaluation.py` 是人工触发的 Laminar 黑盒评测入口：仓库 manifest 物化为内存 `Datapoint`，executor 对每个 trial 只调用一次公共 `generate()` 且不传 observer，evaluator 仅在生成后读取 target。模型、Laminar、预算和产物位置均通过环境变量注入，真实 Key 不得暂存、提交、写入指纹、metadata、span、本地摘要、异常或测试快照。Evaluation/datapoint 创建失败不得调用 Agent；遥测入库不完整不重跑模型。
 - `src/cli_parser_agent/evaluation.py` 只实现测试定义的安全加载、Agent 外终验、严格评分和脱敏投影；`evals/ttp_generation/` 保存版本化 manifest、expected records 和 Schema 结构断言。Golden 只能从 raw capture 人工生成，不能读取被测产物、Trace、历史 artifact、上游模板、参考 YAML/JSON 或使用被测模型生成答案。
 - `docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只指导离线 golden 制作和 preflight，不得读取或修改评测入口脚本，也不得运行 live evaluation。
 - `scripts/run_agent_tui.py` 是零参数、只读的 Textual 开发调试脚本：只观察一次公共 `generate()` 调用，键盘操作只能导航、滚动、折叠 Thinking、退出或取消整个请求，不得编辑产物、重试阶段、调用工具或改变生成协议。它可以为本次运行单独启用 `stream=True`；库默认值、普通 API 和其他脚本仍保持 `stream=False`。该脚本要求交互式 stdin/stdout，并把完整事件转录写入忽略版本控制的 `.artifacts/agent-tui/`，不属于产品 CLI。

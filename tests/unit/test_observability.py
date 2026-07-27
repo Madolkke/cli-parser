@@ -121,6 +121,26 @@ def test_self_hosted_ports_are_forwarded_to_laminar(
     ]
 
 
+def test_insecure_tls_opt_in_forces_laminar_http_exporter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _force_uninitialized(monkeypatch)
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(Laminar, "initialize", lambda **kwargs: calls.append(kwargs))
+
+    assert (
+        initialize_laminar_from_env(
+            {
+                "LMNR_PROJECT_API_KEY": "project-key",
+                "CLI_PARSER_INSECURE_SKIP_TLS_VERIFY": "1",
+            },
+        )
+        is True
+    )
+
+    assert calls[0]["force_http"] is True
+
+
 @pytest.mark.parametrize(
     ("name", "value"),
     [

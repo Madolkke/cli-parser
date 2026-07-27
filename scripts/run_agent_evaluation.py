@@ -1,9 +1,4 @@
-"""Run repository-backed black-box Agent evaluations through Laminar.
-
-Edit the configuration constants below before a live run. The two key values are
-deliberately kept as unusable placeholders in version control. A local operator may
-replace them in this file, but must never stage or commit the populated file.
-"""
+"""Run repository-backed black-box Agent evaluations through Laminar."""
 
 from __future__ import annotations
 
@@ -12,6 +7,7 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 import socket
 import subprocess
 import sys
@@ -19,14 +15,20 @@ import threading
 import time
 import urllib.request
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from cli_parser_agent.config import (  # noqa: E402
+    tls_ssl_context,
+    tls_verification_enabled,
+)
 from cli_parser_agent.evaluation import (  # noqa: E402
     EvaluationCase,
     HarnessError,
@@ -37,76 +39,104 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     select_cases,
 )
 
-# Local-only secrets. Replace these placeholders locally and never stage the file.
-OPENAI_API_KEY = "REPLACE_WITH_LOCAL_KEY"
-LMNR_PROJECT_API_KEY = "REPLACE_WITH_LOCAL_KEY"
-
-# Model configuration.
-MODEL_NAME = "deepseek-v4-pro"
-MODEL_BASE_URL = "https://api.deepseek.com"
-STREAM = False
-TEMPERATURE = 0.0
-PARALLEL_TOOL_CALLS = False
-MAX_TOKENS = 8_192
-CONTEXT_SIZE = 128_000
-MODEL_MAX_RETRIES = 2
-MODEL_TIMEOUT_SECONDS = 120.0
-
-# Accuracy-first generation policy. Audited safety ceilings retain library defaults.
-TOTAL_TIMEOUT_SECONDS = 1_800.0
-MAX_AGENT_ROUNDS = 24
-MAX_TTP_SUBMISSIONS = 16
-MAX_SCHEMA_NO_TOOL_RETRIES = 3
-MAX_TTP_NO_TOOL_RETRIES = 3
-TTP_VALIDATION_TIMEOUT_SECONDS = 20.0
-
-# Self-hosted Laminar configuration.
-LMNR_BASE_URL = "http://127.0.0.1"
-LMNR_HTTP_PORT = 8000
-LMNR_GRPC_PORT = 8001
-LMNR_FRONTEND_PORT = 5667
-
 RUNNER_VERSION = 1
 MANIFEST_PATH = PROJECT_ROOT / "evals" / "ttp_generation" / "manifest.json"
-ARTIFACT_ROOT = PROJECT_ROOT / ".artifacts" / "agent-evals"
-TELEMETRY_WAIT_SECONDS = 60.0
-_PLACEHOLDER = "REPLACE_WITH_LOCAL_KEY"
 
 
 class RunnerError(RuntimeError):
     """A bounded evaluation runner error that is safe to display."""
 
 
+@dataclass(frozen=True)
+class EvaluationRuntimeConfig:
+    """Environment-derived settings unique to the Laminar evaluation runner."""
+
+    laminar_project_api_key: str
+    laminar_base_url: str
+    laminar_http_port: int
+    laminar_grpc_port: int
+    laminar_frontend_port: int
+    artifact_root: Path
+    telemetry_wait_seconds: float
+
+
 def _validate_local_key(value: str, name: str) -> str:
-    if value == _PLACEHOLDER or not value.strip():
-        raise RunnerError(f"{name} still contains the version-control placeholder")
+    if not value.strip():
+        raise RunnerError(f"{name} must not be empty")
     if len(value) < 8 or any(character.isspace() for character in value):
-        raise RunnerError(f"{name} is not a valid local key literal")
+        raise RunnerError(f"{name} is not a valid local key value")
     return value
 
 
-def _configuration() -> tuple[Any, Any, dict[str, Any]]:
+def _required_environment_value(source: Mapping[str, str], name: str) -> str:
+    value = source.get(name, "").strip()
+    if not value:
+        raise RunnerError(f"{name} must be set for a live evaluation")
+    return value
+
+
+def _environment_port(source: Mapping[str, str], name: str) -> int:
+    value = _required_environment_value(source, name)
+    if not value.isascii() or not value.isdecimal():
+        raise RunnerError(f"{name} must be a decimal integer from 1 to 65535")
+    port = int(value, 10)
+    if not 1 <= port <= 65_535:
+        raise RunnerError(f"{name} must be a decimal integer from 1 to 65535")
+    return port
+
+
+def _environment_positive_float(
+    source: Mapping[str, str],
+    name: str,
+    *,
+    default: float,
+) -> float:
+    value = source.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise RunnerError(f"{name} must be a positive number") from error
+    if not math.isfinite(parsed) or parsed <= 0:
+        raise RunnerError(f"{name} must be a positive number")
+    return parsed
+
+
+def _configuration(
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Any, Any, EvaluationRuntimeConfig, dict[str, Any]]:
     from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings
 
-    settings = TtpGeneratorSettings(
-        api_key=_validate_local_key(OPENAI_API_KEY, "OPENAI_API_KEY"),
-        model_name=MODEL_NAME,
-        base_url=MODEL_BASE_URL,
-        stream=STREAM,
-        temperature=TEMPERATURE,
-        parallel_tool_calls=PARALLEL_TOOL_CALLS,
-        max_tokens=MAX_TOKENS,
-        context_size=CONTEXT_SIZE,
-        model_max_retries=MODEL_MAX_RETRIES,
-        model_timeout_seconds=MODEL_TIMEOUT_SECONDS,
-    )
-    policy = GenerationPolicy(
-        total_timeout_seconds=TOTAL_TIMEOUT_SECONDS,
-        max_agent_rounds=MAX_AGENT_ROUNDS,
-        max_ttp_submissions=MAX_TTP_SUBMISSIONS,
-        max_schema_no_tool_retries=MAX_SCHEMA_NO_TOOL_RETRIES,
-        max_ttp_no_tool_retries=MAX_TTP_NO_TOOL_RETRIES,
-        ttp_validation_timeout_seconds=TTP_VALIDATION_TIMEOUT_SECONDS,
+    source = os.environ if environ is None else environ
+    try:
+        settings = TtpGeneratorSettings.from_env(source)
+        policy = GenerationPolicy.from_env(source)
+    except (TypeError, ValueError) as error:
+        raise RunnerError(
+            "model or generation configuration is invalid "
+            f"({type(error).__name__})"
+        ) from None
+    runtime = EvaluationRuntimeConfig(
+        laminar_project_api_key=_validate_local_key(
+            _required_environment_value(source, "LMNR_PROJECT_API_KEY"),
+            "LMNR_PROJECT_API_KEY",
+        ),
+        laminar_base_url=_required_environment_value(source, "LMNR_BASE_URL"),
+        laminar_http_port=_environment_port(source, "LMNR_HTTP_PORT"),
+        laminar_grpc_port=_environment_port(source, "LMNR_GRPC_PORT"),
+        laminar_frontend_port=_environment_port(source, "LMNR_FRONTEND_PORT"),
+        artifact_root=Path(
+            source.get(
+                "CLI_PARSER_EVAL_ARTIFACT_ROOT",
+                str(PROJECT_ROOT / ".artifacts" / "agent-evals"),
+            ),
+        ),
+        telemetry_wait_seconds=_environment_positive_float(
+            source,
+            "CLI_PARSER_EVAL_TELEMETRY_WAIT_SECONDS",
+            default=60.0,
+        ),
     )
     snapshot = {
         "model": {
@@ -122,13 +152,13 @@ def _configuration() -> tuple[Any, Any, dict[str, Any]]:
         },
         "policy": policy.model_dump(mode="json"),
         "laminar": {
-            "base_url": LMNR_BASE_URL,
-            "http_port": LMNR_HTTP_PORT,
-            "grpc_port": LMNR_GRPC_PORT,
-            "frontend_port": LMNR_FRONTEND_PORT,
+            "base_url": runtime.laminar_base_url,
+            "http_port": runtime.laminar_http_port,
+            "grpc_port": runtime.laminar_grpc_port,
+            "frontend_port": runtime.laminar_frontend_port,
         },
     }
-    return settings, policy, snapshot
+    return settings, policy, runtime, snapshot
 
 
 def _fingerprint(value: Any) -> str:
@@ -209,28 +239,38 @@ def _command_preflight() -> int:
     return 0
 
 
-def _sql_endpoint() -> str:
-    return f"{LMNR_BASE_URL.rstrip('/')}:{LMNR_HTTP_PORT}/v1/sql/query"
+def _sql_endpoint(runtime: EvaluationRuntimeConfig) -> str:
+    return (
+        f"{runtime.laminar_base_url.rstrip('/')}:{runtime.laminar_http_port}"
+        "/v1/sql/query"
+    )
 
 
-def _sql_query(query: str, parameters: Mapping[str, Any]) -> list[dict[str, Any]]:
-    key = _validate_local_key(LMNR_PROJECT_API_KEY, "LMNR_PROJECT_API_KEY")
+def _sql_query(
+    runtime: EvaluationRuntimeConfig,
+    query: str,
+    parameters: Mapping[str, Any],
+) -> list[dict[str, Any]]:
     payload = json.dumps(
         {"query": query, "parameters": dict(parameters)},
         separators=(",", ":"),
     ).encode("utf-8")
     request = urllib.request.Request(
-        _sql_endpoint(),
+        _sql_endpoint(runtime),
         data=payload,
         method="POST",
         headers={
-            "Authorization": f"Bearer {key}",
+            "Authorization": f"Bearer {runtime.laminar_project_api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         },
     )
     try:
-        with urllib.request.urlopen(request, timeout=20.0) as response:
+        with urllib.request.urlopen(
+            request,
+            timeout=20.0,
+            context=tls_ssl_context(verify_tls=tls_verification_enabled()),
+        ) as response:
             value = json.loads(response.read().decode("utf-8", errors="strict"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RunnerError(
@@ -242,11 +282,13 @@ def _sql_query(query: str, parameters: Mapping[str, Any]) -> list[dict[str, Any]
     return rows
 
 
-def _preflight_laminar() -> None:
-    _validate_local_key(LMNR_PROJECT_API_KEY, "LMNR_PROJECT_API_KEY")
+def _preflight_laminar(runtime: EvaluationRuntimeConfig) -> None:
+    hostname = urlsplit(runtime.laminar_base_url).hostname
+    if hostname is None:
+        raise RunnerError("LMNR_BASE_URL must be an absolute HTTP(S) URL")
     try:
         with socket.create_connection(
-            ("127.0.0.1", LMNR_GRPC_PORT),
+            (hostname, runtime.laminar_grpc_port),
             timeout=5.0,
         ):
             pass
@@ -254,7 +296,7 @@ def _preflight_laminar() -> None:
         raise RunnerError(
             f"Laminar gRPC endpoint is unavailable ({type(error).__name__})",
         ) from None
-    rows = _sql_query("SELECT 1 AS ok", {})
+    rows = _sql_query(runtime, "SELECT 1 AS ok", {})
     if rows != [{"ok": 1}]:
         raise RunnerError("Laminar SQL preflight did not return the expected result")
 
@@ -281,11 +323,11 @@ def _git_facts() -> dict[str, Any]:
     }
 
 
-def _new_run_directory() -> Path:
-    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+def _new_run_directory(artifact_root: Path) -> Path:
+    artifact_root.mkdir(parents=True, exist_ok=True)
     stem = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
     for suffix in range(1000):
-        candidate = ARTIFACT_ROOT / (stem if suffix == 0 else f"{stem}-{suffix:02d}")
+        candidate = artifact_root / (stem if suffix == 0 else f"{stem}-{suffix:02d}")
         try:
             candidate.mkdir()
         except FileExistsError:
@@ -364,8 +406,12 @@ def _parse_json_object(value: Any) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-def _telemetry_for_trace(trace_id: str) -> dict[str, Any]:
+def _telemetry_for_trace(
+    runtime: EvaluationRuntimeConfig,
+    trace_id: str,
+) -> dict[str, Any]:
     rows = _sql_query(
+        runtime,
         """
         SELECT
             countIf(name = 'evaluation') AS evaluation_span_count,
@@ -408,13 +454,15 @@ def _telemetry_complete(telemetry: Mapping[str, Any]) -> bool:
 
 
 async def _collect_telemetry(
+    runtime: EvaluationRuntimeConfig,
     evaluation_id: str,
     expected_count: int,
 ) -> tuple[dict[str, dict[str, Any]], bool]:
-    deadline = time.monotonic() + TELEMETRY_WAIT_SECONDS
+    deadline = time.monotonic() + runtime.telemetry_wait_seconds
     while True:
         rows = await asyncio.to_thread(
             _sql_query,
+            runtime,
             """
             SELECT trace_id, metadata, scores
             FROM evaluation_datapoints
@@ -439,6 +487,7 @@ async def _collect_telemetry(
             for entry in by_trial.values():
                 telemetry = await asyncio.to_thread(
                     _telemetry_for_trace,
+                    runtime,
                     entry["trace_id"],
                 )
                 entry["spans"] = telemetry
@@ -539,16 +588,16 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
         suite=args.suite,
         case_ids=args.case_ids or (),
     )
-    settings, policy, config = _configuration()
-    laminar_key = _validate_local_key(LMNR_PROJECT_API_KEY, "LMNR_PROJECT_API_KEY")
+    settings, policy, runtime, config = _configuration()
+    laminar_key = runtime.laminar_project_api_key
     config["prompt_version"] = PROMPT_VERSION
     config_fingerprint = _fingerprint(config)
-    await asyncio.to_thread(_preflight_laminar)
+    await asyncio.to_thread(_preflight_laminar, runtime)
 
-    run_directory = _new_run_directory()
+    run_directory = _new_run_directory(runtime.artifact_root)
     group_name = _selection_group(manifest.version, cases)
     evaluation_name = args.name or (
-        f"{PROMPT_VERSION} {MODEL_NAME} "
+        f"{PROMPT_VERSION} {settings.model_name} "
         f"{datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}"
     )
     datapoints = _materialize_datapoints(
@@ -634,16 +683,16 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
             "manifest_sha256": manifest.sha256,
             "config_fingerprint": config_fingerprint,
             "prompt_version": PROMPT_VERSION,
-            "model_name": MODEL_NAME,
+            "model_name": settings.model_name,
             "case_ids": [case.id for case in cases],
             "trials": args.trials,
         },
         concurrency_limit=args.concurrency,
         project_api_key=laminar_key,
-        base_url=LMNR_BASE_URL,
-        http_port=LMNR_HTTP_PORT,
-        grpc_port=LMNR_GRPC_PORT,
-        frontend_port=LMNR_FRONTEND_PORT,
+        base_url=runtime.laminar_base_url,
+        http_port=runtime.laminar_http_port,
+        grpc_port=runtime.laminar_grpc_port,
+        frontend_port=runtime.laminar_frontend_port,
         instruments={Instruments.OPENAI},
     )
     if evaluation_result is None:
@@ -651,6 +700,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
     Laminar.flush()
     evaluation_id = str(evaluation_result["evaluation_id"])
     telemetry, telemetry_complete = await _collect_telemetry(
+        runtime,
         evaluation_id,
         len(datapoints),
     )

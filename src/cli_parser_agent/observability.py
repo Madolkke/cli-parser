@@ -13,6 +13,8 @@ from opentelemetry import context as otel_context
 from opentelemetry import trace as otel_trace
 from opentelemetry.trace import Status, StatusCode
 
+from .config import tls_verification_enabled
+
 LaminarSpanType = Literal["DEFAULT", "LLM", "TOOL"]
 LaminarSpanOutcome = Literal["success", "failed", "cancelled", "exception"]
 
@@ -70,11 +72,16 @@ def initialize_laminar_from_env(
         )
         if value is not None
     }
-    Laminar.initialize(
-        project_api_key=project_api_key,
-        base_url=base_url or None,
-        instruments={Instruments.OPENAI},
+    initialize_options: dict[str, Any] = {
+        "project_api_key": project_api_key,
+        "base_url": base_url or None,
+        "instruments": {Instruments.OPENAI},
         **port_options,
+    }
+    if not tls_verification_enabled(source):
+        initialize_options["force_http"] = True
+    Laminar.initialize(
+        **initialize_options,
     )
     return True
 

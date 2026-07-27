@@ -15,7 +15,7 @@ Read these files completely before editing a case:
 - `references/annotation-policy.md`
 - `references/minimal-example.md`
 
-Also read the repository `AGENTS.md`. Do not read `scripts/run_agent_evaluation.py`: it is a local-secret boundary and its global variables may contain API keys.
+Also read the repository `AGENTS.md`. Do not read `scripts/run_agent_evaluation.py`: it is a local-secret boundary whose live configuration is injected from the environment.
 
 ## Safety boundary
 

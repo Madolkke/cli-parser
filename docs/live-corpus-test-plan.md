@@ -79,6 +79,9 @@ $env:OPENAI_MODEL = "..."
 $env:OPENAI_BASE_URL = "https://example.com/v1" # optional
 ```
 
+可选的 `CLI_PARSER_LIVE_CORPUS_ARTIFACT_ROOT` 可设置默认结果目录；未设置时为
+`.artifacts/live-corpus/`。`--output-dir` 和 `--resume` 仍优先于该环境变量。
+
 先执行 smoke，再在同一结果目录上继续完整语料：
 
 ```powershell

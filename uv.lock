@@ -546,6 +546,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "agentscope" },
+    { name = "httpx" },
     { name = "jsonschema" },
     { name = "lmnr" },
     { name = "pydantic" },
@@ -564,6 +565,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agentscope", specifier = ">=2.0.4,<2.1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "jsonschema", specifier = ">=4.26,<5" },
     { name = "lmnr", specifier = ">=0.7.56,<0.8" },
     { name = "pydantic", specifier = ">=2.13,<3" },

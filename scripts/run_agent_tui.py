@@ -1,4 +1,4 @@
-"""Run one configured TTP generation request in a read-only Textual TUI."""
+"""Run one environment-configured TTP request in a read-only Textual TUI."""
 
 from __future__ import annotations
 
@@ -18,10 +18,11 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
 
 from _agent_run_support import (  # noqa: E402
     ScriptConfigurationError,
+    environment_path,
     flush_laminar,
     load_command_outputs,
     new_run_directory,
-    resolve_api_key,
+    required_path_list,
     sanitize_base_url,
     write_json,
 )
@@ -41,32 +42,7 @@ from cli_parser_agent import (  # noqa: E402
     TtpGeneratorSettings,
 )
 
-# Configuration: edit these values, then run this file without arguments.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-MODEL_NAME = "deepseek-v4-pro"
-BASE_URL = "https://api.deepseek.com"
-COMMAND_OUTPUT_FILES = (
-    PROJECT_ROOT / "testdata/real_command_outputs/ntc_templates/cisco_ios/"
-    "show_interfaces_status/cisco_ios_show_interfaces_status.raw",
-    PROJECT_ROOT / "testdata/real_command_outputs/ntc_templates/cisco_ios/"
-    "show_interfaces_status/cisco_ios_show_interfaces_status2.raw",
-    PROJECT_ROOT / "testdata/real_command_outputs/ntc_templates/cisco_ios/"
-    "show_interfaces_status/cisco_ios_show_interfaces_status_pvlan.raw",
-)
-ARTIFACT_ROOT = PROJECT_ROOT / ".artifacts" / "agent-tui"
-TOTAL_TIMEOUT_SECONDS = 1_800.0
-MAX_AGENT_ROUNDS = 24
-MAX_TTP_SUBMISSIONS = 16
-MAX_SCHEMA_NO_TOOL_RETRIES = 3
-MAX_TTP_NO_TOOL_RETRIES = 3
-TTP_VALIDATION_TIMEOUT_SECONDS = 20.0
-STREAM = True
-TEMPERATURE = 0.0
-PARALLEL_TOOL_CALLS = False
-MAX_TOKENS = 8_192
-CONTEXT_SIZE = 128_000
-MODEL_MAX_RETRIES = 2
-MODEL_TIMEOUT_SECONDS = 120.0
 
 SCRIPT_VERSION = 1
 MAX_TIMELINE_CONTENT_CHARS = 64 * 1024
@@ -90,18 +66,35 @@ _CREDENTIAL_KEYS = {
 _STOP = object()
 
 
-def _resolve_api_key() -> str:
-    return resolve_api_key()
+def _configuration(
+    environ: Mapping[str, str] | None = None,
+) -> tuple[TtpGeneratorSettings, GenerationPolicy, tuple[Path, ...], Path]:
+    """Read all TUI-run settings from the supplied environment."""
+
+    settings = TtpGeneratorSettings.from_env(environ)
+    if not settings.stream:
+        settings = settings.model_copy(update={"stream": True})
+    policy = GenerationPolicy.from_env(environ)
+    command_output_files = required_path_list(
+        "CLI_PARSER_TUI_INPUT_FILES",
+        environ=environ,
+    )
+    artifact_root = environment_path(
+        "CLI_PARSER_TUI_ARTIFACT_ROOT",
+        PROJECT_ROOT / ".artifacts" / "agent-tui",
+        environ=environ,
+    )
+    return settings, policy, command_output_files, artifact_root
 
 
 def _load_command_outputs(
-    paths: tuple[Path, ...] = COMMAND_OUTPUT_FILES,
+    paths: tuple[Path, ...],
 ) -> tuple[list[str], list[dict[str, Any]]]:
     return load_command_outputs(paths, project_root=PROJECT_ROOT)
 
 
-def _new_run_directory() -> Path:
-    return new_run_directory(ARTIFACT_ROOT)
+def _new_run_directory(artifact_root: Path) -> Path:
+    return new_run_directory(artifact_root)
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -1072,34 +1065,14 @@ class AgentTuiApp(App[int]):
 
 
 async def _run() -> int:
-    command_outputs, input_metadata = _load_command_outputs()
-    api_key = _resolve_api_key()
+    settings, policy, command_output_files, artifact_root = _configuration()
+    command_outputs, input_metadata = _load_command_outputs(command_output_files)
     app: AgentTuiApp | None = None
     try:
-        settings = TtpGeneratorSettings(
-            api_key=api_key,
-            model_name=MODEL_NAME,
-            base_url=BASE_URL,
-            stream=STREAM,
-            temperature=TEMPERATURE,
-            parallel_tool_calls=PARALLEL_TOOL_CALLS,
-            max_tokens=MAX_TOKENS,
-            context_size=CONTEXT_SIZE,
-            model_max_retries=MODEL_MAX_RETRIES,
-            model_timeout_seconds=MODEL_TIMEOUT_SECONDS,
-        )
-        policy = GenerationPolicy(
-            total_timeout_seconds=TOTAL_TIMEOUT_SECONDS,
-            max_agent_rounds=MAX_AGENT_ROUNDS,
-            max_ttp_submissions=MAX_TTP_SUBMISSIONS,
-            max_schema_no_tool_retries=MAX_SCHEMA_NO_TOOL_RETRIES,
-            max_ttp_no_tool_retries=MAX_TTP_NO_TOOL_RETRIES,
-            ttp_validation_timeout_seconds=TTP_VALIDATION_TIMEOUT_SECONDS,
-        )
         request = GenerationRequest(command_outputs=command_outputs)
         generator = TtpGenerator(settings=settings, policy=policy)
         try:
-            run_directory = _new_run_directory()
+            run_directory = _new_run_directory(artifact_root)
         except Exception as error:
             print(
                 "artifact error: unable to create run directory "
@@ -1114,8 +1087,8 @@ async def _run() -> int:
         app = AgentTuiApp(
             run_generation=run_generation,
             run_directory=run_directory,
-            model_name=MODEL_NAME,
-            base_url=BASE_URL,
+            model_name=settings.model_name,
+            base_url=settings.base_url,
             input_metadata=input_metadata,
         )
         result = await app.run_async()

@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import ssl
+
 import pytest
 from pydantic import ValidationError
 
-from cli_parser_agent.config import GenerationPolicy, TtpGeneratorSettings
+from cli_parser_agent.config import (
+    INSECURE_SKIP_TLS_VERIFY_ENV,
+    GenerationPolicy,
+    TtpGeneratorSettings,
+    tls_ssl_context,
+    tls_verification_enabled,
+)
 from cli_parser_agent.ttp_generation.contracts import (
     ArtifactBundle,
     FieldEvidence,
@@ -225,9 +233,61 @@ def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> Non
     assert settings.context_size == 128000
     assert settings.model_max_retries == 2
     assert settings.model_timeout_seconds == 60
+    assert settings.verify_tls is True
 
     with pytest.raises(ValidationError):
         TtpGeneratorSettings.from_env({})
+
+
+def test_settings_from_env_reads_all_model_overrides() -> None:
+    settings = TtpGeneratorSettings.from_env(
+        {
+            "OPENAI_API_KEY": "secret",
+            "OPENAI_MODEL": "test-model",
+            "CLI_PARSER_MODEL_STREAM": "true",
+            "CLI_PARSER_MODEL_TEMPERATURE": "0.7",
+            "CLI_PARSER_MODEL_PARALLEL_TOOL_CALLS": "true",
+            "CLI_PARSER_MODEL_MAX_TOKENS": "4096",
+            "CLI_PARSER_MODEL_CONTEXT_SIZE": "8192",
+            "CLI_PARSER_MODEL_MAX_RETRIES": "4",
+            "CLI_PARSER_MODEL_TIMEOUT_SECONDS": "90",
+        },
+    )
+
+    assert settings.stream is True
+    assert settings.temperature == 0.7
+    assert settings.parallel_tool_calls is True
+    assert settings.max_tokens == 4096
+    assert settings.context_size == 8192
+    assert settings.model_max_retries == 4
+    assert settings.model_timeout_seconds == 90
+
+
+@pytest.mark.parametrize("value", ["1", "true", "yes", "on"])
+def test_insecure_tls_environment_opt_in_disables_verification(value: str) -> None:
+    settings = TtpGeneratorSettings.from_env(
+        {
+            "OPENAI_API_KEY": "secret",
+            "OPENAI_MODEL": "test-model",
+            INSECURE_SKIP_TLS_VERIFY_ENV: value,
+        },
+    )
+
+    assert settings.verify_tls is False
+    context = tls_ssl_context(verify_tls=settings.verify_tls)
+    assert context is not None
+    assert context.check_hostname is False
+    assert context.verify_mode is ssl.CERT_NONE
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", "off", " "])
+def test_tls_environment_keeps_verification_enabled(value: str) -> None:
+    assert tls_verification_enabled({INSECURE_SKIP_TLS_VERIFY_ENV: value}) is True
+
+
+def test_tls_environment_rejects_ambiguous_values() -> None:
+    with pytest.raises(ValueError, match=INSECURE_SKIP_TLS_VERIFY_ENV):
+        tls_verification_enabled({INSECURE_SKIP_TLS_VERIFY_ENV: "disable"})
 
 
 def test_generation_policy_has_bounded_defaults() -> None:
@@ -242,19 +302,43 @@ def test_generation_policy_has_bounded_defaults() -> None:
         GenerationPolicy(total_timeout_seconds=1, ttp_validation_timeout_seconds=2)
 
 
-def test_generation_policy_from_env_overrides_execution_budgets_only() -> None:
+def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
     policy = GenerationPolicy.from_env(
         {
             "CLI_PARSER_GENERATION_TIMEOUT_SECONDS": "600",
             "CLI_PARSER_MAX_AGENT_ITERS": "16",
             "CLI_PARSER_MAX_TEMPLATE_SUBMISSIONS": "10",
+            "CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES": "2",
+            "CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES": "1",
+            "CLI_PARSER_TTP_VALIDATION_TIMEOUT_SECONDS": "30",
+            "CLI_PARSER_MODEL_INPUT_CHAR_BUDGET": "120000",
+            "CLI_PARSER_MAX_TTP_TEMPLATE_BYTES": "32000",
+            "CLI_PARSER_MAX_TTP_GROUP_DEPTH": "8",
+            "CLI_PARSER_MAX_TTP_REGEX_CHARS": "1024",
+            "CLI_PARSER_MAX_TTP_ARGUMENT_CHARS": "2048",
+            "CLI_PARSER_MAX_PARSE_RESULT_BYTES": "4194304",
+            "CLI_PARSER_MAX_SCHEMA_BYTES": "32000",
+            "CLI_PARSER_MAX_SCHEMA_DEPTH": "8",
+            "CLI_PARSER_MAX_SCHEMA_PROPERTIES": "128",
+            "CLI_PARSER_MAX_EVIDENCE_EXCERPT_CHARS": "2048",
         },
     )
     assert policy.total_timeout_seconds == 600
     assert policy.max_agent_rounds == 16
     assert policy.max_ttp_submissions == 10
-    assert policy.model_input_char_budget == 240_000
-    assert policy.max_schema_bytes == 64 * 1024
+    assert policy.max_schema_no_tool_retries == 2
+    assert policy.max_ttp_no_tool_retries == 1
+    assert policy.ttp_validation_timeout_seconds == 30
+    assert policy.model_input_char_budget == 120_000
+    assert policy.max_ttp_template_bytes == 32_000
+    assert policy.max_ttp_group_depth == 8
+    assert policy.max_ttp_regex_chars == 1_024
+    assert policy.max_ttp_argument_chars == 2_048
+    assert policy.max_parse_result_bytes == 4_194_304
+    assert policy.max_schema_bytes == 32_000
+    assert policy.max_schema_depth == 8
+    assert policy.max_schema_properties == 128
+    assert policy.max_evidence_excerpt_chars == 2_048
 
     with pytest.raises(ValidationError):
         GenerationPolicy.from_env({"CLI_PARSER_MAX_AGENT_ITERS": "not-an-int"})

@@ -6,6 +6,7 @@ import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
+import httpx
 from agentscope.agent import Agent, ReActConfig
 from agentscope.credential import OpenAICredential
 from agentscope.message import SystemMsg, UserMsg
@@ -71,6 +72,7 @@ class SettingsLike(Protocol):
     api_key: Any
     model_name: str
     base_url: str | None
+    verify_tls: bool
     stream: bool
     temperature: float
     parallel_tool_calls: bool
@@ -125,6 +127,13 @@ def build_agent(
         temperature=settings.temperature,
         parallel_tool_calls=settings.parallel_tool_calls,
     )
+    client_kwargs: dict[str, Any] = {"timeout": settings.model_timeout_seconds}
+    if not settings.verify_tls:
+        client_kwargs["http_client"] = httpx.AsyncClient(
+            verify=False,
+            timeout=settings.model_timeout_seconds,
+        )
+
     model = OpenAIChatModel(
         credential=credential,
         model=settings.model_name,
@@ -132,7 +141,7 @@ def build_agent(
         stream=settings.stream,
         max_retries=settings.model_max_retries,
         context_size=settings.context_size,
-        client_kwargs={"timeout": settings.model_timeout_seconds},
+        client_kwargs=client_kwargs,
     )
 
     return Agent(

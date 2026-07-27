@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 
@@ -10,6 +11,7 @@ import pytest
 from lmnr import Laminar
 
 SCRIPT_PATH = Path(__file__).resolve().parents[2] / "scripts" / "run_agent_once.py"
+PROJECT_ROOT = SCRIPT_PATH.parents[1]
 
 
 def _load_script() -> ModuleType:
@@ -21,10 +23,27 @@ def _load_script() -> ModuleType:
     return module
 
 
-def test_default_command_outputs_are_valid_and_ordered() -> None:
-    script = _load_script()
+def _configuration_environment() -> dict[str, str]:
+    fixture_root = PROJECT_ROOT / "testdata" / "real_command_outputs" / "ntc_templates"
+    return {
+        "OPENAI_API_KEY": "test-key",
+        "OPENAI_MODEL": "test-model",
+        "CLI_PARSER_ONCE_INPUT_FILES": os.pathsep.join(
+            str(fixture_root / "cisco_ios/show_interfaces_status" / filename)
+            for filename in (
+                "cisco_ios_show_interfaces_status.raw",
+                "cisco_ios_show_interfaces_status2.raw",
+                "cisco_ios_show_interfaces_status_pvlan.raw",
+            )
+        ),
+    }
 
-    outputs, metadata = script._load_command_outputs()
+
+def test_environment_command_outputs_are_valid_and_ordered() -> None:
+    script = _load_script()
+    _, _, paths, _ = script._configuration(_configuration_environment())
+
+    outputs, metadata = script._load_command_outputs(paths)
 
     assert len(outputs) == 3
     assert all(output.strip() for output in outputs)
@@ -45,11 +64,12 @@ def test_command_output_loader_rejects_non_utf8(tmp_path: Path) -> None:
         script._load_command_outputs((source,))
 
 
-def test_api_key_prefers_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_configuration_reads_model_settings_from_environment() -> None:
     script = _load_script()
-    monkeypatch.setenv(script.API_KEY_ENVIRONMENT_VARIABLE, "test-key")
+    settings, _, _, _ = script._configuration(_configuration_environment())
 
-    assert script._resolve_api_key() == "test-key"
+    assert settings.api_key.get_secret_value() == "test-key"
+    assert settings.model_name == "test-model"
 
 @pytest.mark.parametrize(
     ("value", "expected"),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import ssl
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -167,12 +168,54 @@ def _target(records: list[dict[str, Any]]) -> dict[str, Any]:
     return {"records": records, "schema_contract": _contract()}
 
 
+def _evaluation_environment() -> dict[str, str]:
+    return {
+        "OPENAI_API_KEY": "local-openai-test-key",
+        "OPENAI_MODEL": "test-model",
+        "LMNR_PROJECT_API_KEY": "local-laminar-test-key",
+        "LMNR_BASE_URL": "http://127.0.0.1",
+        "LMNR_HTTP_PORT": "8000",
+        "LMNR_GRPC_PORT": "8001",
+        "LMNR_FRONTEND_PORT": "5667",
+    }
+
+
 def test_versioned_smoke_manifest_preflights_all_cases() -> None:
     manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
 
     assert len(manifest.cases) == 5
     assert sum(len(case.inputs) for case in manifest.cases) == 12
     assert all("smoke" in case.suites for case in manifest.cases)
+
+
+def test_sql_query_uses_an_unverified_context_only_when_explicitly_enabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script = _load_script()
+    _, _, runtime, _ = script._configuration(_evaluation_environment())
+    monkeypatch.setenv("CLI_PARSER_INSECURE_SKIP_TLS_VERIFY", "1")
+    captured: dict[str, Any] = {}
+
+    class Response:
+        def __enter__(self) -> Response:
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b'{"data":[{"ok":1}]}'
+
+    def open_url(*_: object, **kwargs: Any) -> Response:
+        captured.update(kwargs)
+        return Response()
+
+    monkeypatch.setattr(script.urllib.request, "urlopen", open_url)
+
+    assert script._sql_query(runtime, "SELECT 1 AS ok", {}) == [{"ok": 1}]
+    context = captured["context"]
+    assert context.check_hostname is False
+    assert context.verify_mode is ssl.CERT_NONE
 
 
 def test_manifest_rejects_path_traversal(tmp_path: Path) -> None:
@@ -358,7 +401,7 @@ def test_key_placeholders_fail_before_laminar_preflight(
     monkeypatch.setattr(
         script,
         "_preflight_laminar",
-        lambda: pytest.fail("placeholder keys must fail before networking"),
+        lambda _: pytest.fail("missing keys must fail before networking"),
     )
 
     assert script.main(["run", "--case", "ntc.cisco_ios.show_interfaces_status"]) == 2
@@ -370,10 +413,11 @@ def test_key_values_are_excluded_from_configuration_snapshot(
     script = _load_script()
     openai_key = "local-openai-test-key"
     laminar_key = "local-laminar-test-key"
-    monkeypatch.setattr(script, "OPENAI_API_KEY", openai_key)
-    monkeypatch.setattr(script, "LMNR_PROJECT_API_KEY", laminar_key)
+    environment = _evaluation_environment()
+    environment["OPENAI_API_KEY"] = openai_key
+    environment["LMNR_PROJECT_API_KEY"] = laminar_key
 
-    _, _, snapshot = script._configuration()
+    _, _, _, snapshot = script._configuration(environment)
     encoded = json.dumps(snapshot)
 
     assert openai_key not in encoded
@@ -466,8 +510,23 @@ async def test_telemetry_polling_tolerates_ingestion_delay(
     script = _load_script()
     query_count = 0
 
-    def delayed_query(query: str, parameters: dict[str, Any]) -> list[dict[str, Any]]:
+    runtime = script.EvaluationRuntimeConfig(
+        laminar_project_api_key="local-laminar-test-key",
+        laminar_base_url="http://127.0.0.1",
+        laminar_http_port=8000,
+        laminar_grpc_port=8001,
+        laminar_frontend_port=5667,
+        artifact_root=PROJECT_ROOT / ".artifacts" / "test",
+        telemetry_wait_seconds=1.0,
+    )
+
+    def delayed_query(
+        received_runtime: object,
+        query: str,
+        parameters: dict[str, Any],
+    ) -> list[dict[str, Any]]:
         nonlocal query_count
+        assert received_runtime is runtime
         del query, parameters
         query_count += 1
         if query_count == 1:
@@ -483,21 +542,29 @@ async def test_telemetry_polling_tolerates_ingestion_delay(
     async def no_wait(_: float) -> None:
         return None
 
-    monkeypatch.setattr(script, "_sql_query", delayed_query)
-    monkeypatch.setattr(script.asyncio, "sleep", no_wait)
-    monkeypatch.setattr(
-        script,
-        "_telemetry_for_trace",
-        lambda _: {
+    def complete_telemetry(
+        received_runtime: object,
+        expected_runtime: object,
+    ) -> dict[str, int]:
+        assert received_runtime is expected_runtime
+        return {
             "evaluation_span_count": 1,
             "executor_span_count": 1,
             "generation_span_count": 1,
             "schema_phase_count": 1,
             "llm_call_count": 1,
-        },
+        }
+
+    monkeypatch.setattr(script, "_sql_query", delayed_query)
+    monkeypatch.setattr(script.asyncio, "sleep", no_wait)
+    monkeypatch.setattr(
+        script,
+        "_telemetry_for_trace",
+        lambda received_runtime, _: complete_telemetry(received_runtime, runtime),
     )
 
     by_trial, complete = await script._collect_telemetry(
+        runtime,
         "00000000-0000-0000-0000-000000000002",
         1,
     )

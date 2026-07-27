@@ -25,14 +25,12 @@ Preflight 检查严格 JSON、路径逃逸、UTF-8、大小、终端噪声、凭
 
 ## Live 配置与运行
 
-入口脚本顶部集中定义 DeepSeek、预算与自托管 Laminar 配置，并在版本控制中只保留两个不可用占位符：
-
-```python
-OPENAI_API_KEY = "REPLACE_WITH_LOCAL_KEY"
-LMNR_PROJECT_API_KEY = "REPLACE_WITH_LOCAL_KEY"
-```
-
-本机操作者可以直接替换这两个全局值，但必须保证文件不被暂存或提交。占位符、空值、含空白或明显过短的值会在任何网络访问之前被拒绝。Key 不进入配置指纹、metadata、span input/output、本地摘要、异常或测试快照。
+Live run 从环境变量读取模型、预算与自托管 Laminar 配置。必须设置
+`OPENAI_API_KEY`、`OPENAI_MODEL`、`LMNR_PROJECT_API_KEY`、`LMNR_BASE_URL`、
+`LMNR_HTTP_PORT`、`LMNR_GRPC_PORT` 和 `LMNR_FRONTEND_PORT`；可选变量及其语义
+见仓库根目录的 [`.env.example`](../.env.example)。缺失、空白或明显过短的 Key 会
+在任何网络访问之前被拒绝。Key 不进入配置指纹、metadata、span input/output、
+本地摘要、异常或测试快照。
 
 Live run 必须显式选择 suite 或 case：
 

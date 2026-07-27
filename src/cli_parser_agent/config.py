@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import ssl
 from collections.abc import Mapping
 from typing import Self
 from urllib.parse import urlparse
@@ -15,6 +16,40 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+
+INSECURE_SKIP_TLS_VERIFY_ENV = "CLI_PARSER_INSECURE_SKIP_TLS_VERIFY"
+_TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
+_FALSE_ENV_VALUES = frozenset({"0", "false", "no", "off"})
+
+
+def tls_verification_enabled(environ: Mapping[str, str] | None = None) -> bool:
+    """Return whether outbound HTTPS clients must verify server certificates."""
+
+    source = os.environ if environ is None else environ
+    raw_value = source.get(INSECURE_SKIP_TLS_VERIFY_ENV)
+    if raw_value is None or not raw_value.strip():
+        return True
+
+    value = raw_value.strip().lower()
+    if value in _TRUE_ENV_VALUES:
+        return False
+    if value in _FALSE_ENV_VALUES:
+        return True
+    raise ValueError(
+        f"{INSECURE_SKIP_TLS_VERIFY_ENV} must be one of "
+        "1, true, yes, on, 0, false, no, or off",
+    )
+
+
+def tls_ssl_context(*, verify_tls: bool) -> ssl.SSLContext | None:
+    """Return an explicit unverified context only for opted-in compatibility."""
+
+    if verify_tls:
+        return None
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    return context
 
 
 class GenerationPolicy(BaseModel):
@@ -64,8 +99,21 @@ class GenerationPolicy(BaseModel):
             "total_timeout_seconds": "CLI_PARSER_GENERATION_TIMEOUT_SECONDS",
             "max_agent_rounds": "CLI_PARSER_MAX_AGENT_ITERS",
             "max_ttp_submissions": "CLI_PARSER_MAX_TEMPLATE_SUBMISSIONS",
-            "max_schema_no_tool_retries": ("CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES"),
+            "max_schema_no_tool_retries": "CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES",
             "max_ttp_no_tool_retries": "CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES",
+            "ttp_validation_timeout_seconds": (
+                "CLI_PARSER_TTP_VALIDATION_TIMEOUT_SECONDS"
+            ),
+            "model_input_char_budget": "CLI_PARSER_MODEL_INPUT_CHAR_BUDGET",
+            "max_ttp_template_bytes": "CLI_PARSER_MAX_TTP_TEMPLATE_BYTES",
+            "max_ttp_group_depth": "CLI_PARSER_MAX_TTP_GROUP_DEPTH",
+            "max_ttp_regex_chars": "CLI_PARSER_MAX_TTP_REGEX_CHARS",
+            "max_ttp_argument_chars": "CLI_PARSER_MAX_TTP_ARGUMENT_CHARS",
+            "max_parse_result_bytes": "CLI_PARSER_MAX_PARSE_RESULT_BYTES",
+            "max_schema_bytes": "CLI_PARSER_MAX_SCHEMA_BYTES",
+            "max_schema_depth": "CLI_PARSER_MAX_SCHEMA_DEPTH",
+            "max_schema_properties": "CLI_PARSER_MAX_SCHEMA_PROPERTIES",
+            "max_evidence_excerpt_chars": "CLI_PARSER_MAX_EVIDENCE_EXCERPT_CHARS",
         }
         overrides = {
             field_name: source[environment_name]
@@ -87,6 +135,7 @@ class TtpGeneratorSettings(BaseModel):
     api_key: SecretStr
     model_name: str
     base_url: str | None = None
+    verify_tls: bool = Field(default_factory=tls_verification_enabled)
 
     stream: bool = False
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
@@ -135,8 +184,24 @@ class TtpGeneratorSettings(BaseModel):
         """Load the required provider values from an environment mapping."""
 
         source = os.environ if environ is None else environ
+        names = {
+            "stream": "CLI_PARSER_MODEL_STREAM",
+            "temperature": "CLI_PARSER_MODEL_TEMPERATURE",
+            "parallel_tool_calls": "CLI_PARSER_MODEL_PARALLEL_TOOL_CALLS",
+            "max_tokens": "CLI_PARSER_MODEL_MAX_TOKENS",
+            "context_size": "CLI_PARSER_MODEL_CONTEXT_SIZE",
+            "model_max_retries": "CLI_PARSER_MODEL_MAX_RETRIES",
+            "model_timeout_seconds": "CLI_PARSER_MODEL_TIMEOUT_SECONDS",
+        }
+        overrides = {
+            field_name: source[environment_name]
+            for field_name, environment_name in names.items()
+            if environment_name in source
+        }
         return cls(
             api_key=source.get("OPENAI_API_KEY"),
             model_name=source.get("OPENAI_MODEL"),
             base_url=source.get("OPENAI_BASE_URL"),
+            verify_tls=tls_verification_enabled(source),
+            **overrides,
         )

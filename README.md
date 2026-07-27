@@ -10,17 +10,23 @@ uv sync
 
 ## Environment
 
-```powershell
-$env:OPENAI_API_KEY = "..."
-$env:OPENAI_MODEL = "..."
-$env:OPENAI_BASE_URL = "https://api.deepseek.com" # optional
+复制 [`.env.example`](.env.example) 为私有 `.env`，设置所需值后通过 `uv`
+注入：
 
-# Optional complete Laminar debug traces
-$env:LMNR_PROJECT_API_KEY = "..."
-$env:LMNR_BASE_URL = "http://127.0.0.1" # optional, for self-hosting
-$env:LMNR_HTTP_PORT = "8000"             # optional
-$env:LMNR_GRPC_PORT = "8001"             # optional
+```powershell
+uv run --env-file .env python scripts/run_agent_once.py
 ```
+
+该示例列出了全部可配置环境变量及默认值/语义，包括模型请求参数、生成
+预算、安全上限、Laminar 连接和各开发入口的输入/产物位置。普通 Python
+调用也可直接由父进程导出的环境变量读取这些设置。
+
+`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY=1` is an explicit compatibility switch for
+an OpenAI-compatible HTTPS endpoint with an untrusted internal certificate. It
+defaults to certificate validation and accepts `1`, `true`, `yes`, or `on` to
+disable it. The switch also applies to the evaluation runner's Laminar SQL HTTP
+requests; for Laminar telemetry, use an `http://` self-hosted `LMNR_BASE_URL`
+when the internal deployment does not have a trusted certificate.
 
 ## Python API
 
@@ -60,21 +66,21 @@ writing handled by a separate consumer.
 
 ## Zero-argument development run
 
-Edit the configuration constants at the top of `scripts/run_agent_once.py`, then run:
+设置 `CLI_PARSER_ONCE_INPUT_FILES`（以当前平台路径分隔符分开的 `1-5` 个
+严格 UTF-8 输出文件）和模型环境变量后运行：
 
 ```powershell
-uv run python scripts/run_agent_once.py
+uv run --env-file .env python scripts/run_agent_once.py
 ```
 
 The script loads the configured command-output files and writes the complete result under `.artifacts/agent-once/`. It prints the Laminar trace ID when tracing is enabled and flushes pending spans before exit.
 
 ## Read-only Textual TUI
 
-Edit the configuration constants at the top of `scripts/run_agent_tui.py`, then run it
-from an interactive terminal:
+设置 `CLI_PARSER_TUI_INPUT_FILES` 和模型环境变量后，从交互式终端运行：
 
 ```powershell
-uv run python scripts/run_agent_tui.py
+uv run --env-file .env python scripts/run_agent_tui.py
 ```
 
 The TUI observes one `generate()` call without changing its prompts, tools, decisions,
