@@ -139,6 +139,8 @@ def _terminal_tool_observed(
 
     if _phase_completed(session, phase):
         return True
+    if session.terminal_reason == "generation_timeout":
+        return True
     return phase == "ttp" and (
         session.terminal_reason == "ttp_worker_unavailable"
         or session.ttp_submissions >= session.max_ttp_submissions

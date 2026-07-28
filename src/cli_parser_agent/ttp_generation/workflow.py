@@ -479,6 +479,7 @@ class _GenerationWorkflow:
         candidate: SchemaCandidate,
     ) -> ValidatorOutcome:
         if time.monotonic() >= self.deadline:
+            self.session.terminal_reason = "generation_timeout"
             issue = _issue(
                 "generation.timeout",
                 "The total generation time budget was exhausted.",
@@ -493,6 +494,7 @@ class _GenerationWorkflow:
     ) -> ValidatorOutcome:
         remaining = max(0.0, self.deadline - time.monotonic())
         if remaining <= 0:
+            self.session.terminal_reason = "generation_timeout"
             issue = _issue(
                 "generation.timeout",
                 "The total generation time budget was exhausted.",
