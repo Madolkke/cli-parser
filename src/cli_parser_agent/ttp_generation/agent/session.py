@@ -105,6 +105,7 @@ class GenerationSession:
     generation_finished: bool = False
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None
+    model_retries_observed: int = 0
 
     def __post_init__(self) -> None:
         self.command_outputs = tuple(self.command_outputs)

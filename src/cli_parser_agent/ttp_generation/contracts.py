@@ -172,6 +172,8 @@ class GenerationMetadata(ContractModel):
     ttp_no_tool_retries: int = Field(default=0, ge=0)
     first_ttp_passed: bool | None = None
     termination_reason: str | None = Field(default=None, max_length=128)
+    fault_domain: Literal["agent", "model", "budget"] | None = None
+    model_retries_observed: int = Field(default=0, ge=0)
     laminar_trace_id: str | None = Field(
         default=None,
         min_length=1,

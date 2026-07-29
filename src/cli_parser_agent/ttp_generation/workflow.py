@@ -9,6 +9,7 @@ from copy import deepcopy
 from dataclasses import asdict, dataclass
 from typing import Any, TypeVar
 
+import openai
 from pydantic import ValidationError
 
 from ..config import GenerationPolicy, TtpGeneratorSettings
@@ -354,6 +355,25 @@ def _is_model_timeout(error: BaseException) -> bool:
     )
 
 
+_AGENT_FAULT_STATUS_CODES = frozenset({400, 401, 403, 404, 409, 422})
+
+
+def _is_agent_request_error(error: BaseException) -> bool:
+    """Return whether the request itself (not the provider) is at fault.
+
+    These are non-retryable ``openai.APIStatusError`` subclasses raised on
+    the *first* attempt (auth, malformed request, permissions, unknown
+    resource, conflict, unprocessable input) — the provider correctly
+    rejected a request we built incorrectly.
+    """
+
+    return any(
+        isinstance(node, openai.APIStatusError)
+        and node.status_code in _AGENT_FAULT_STATUS_CODES
+        for node in _exception_nodes(error)
+    )
+
+
 def _is_model_error(error: BaseException) -> bool:
     for node in _exception_nodes(error):
         module = type(node).__module__.lower()
@@ -363,6 +383,29 @@ def _is_model_error(error: BaseException) -> bool:
         if any(token in name for token in ("apierror", "connectionerror")):
             return True
     return False
+
+
+_FAULT_DOMAIN_BY_TERMINATION_REASON: dict[str, str] = {
+    "generation_timeout": "budget",
+    "agent_round_limit": "budget",
+    "ttp_submission_limit": "budget",
+    "model_timeout": "model",
+    "model_error": "model",
+    "model_no_tool_retry_limit": "model",
+    "model_submission_tool_call_invalid": "model",
+    "model_request_rejected": "agent",
+    "model_context_budget": "agent",
+    "ttp_worker_unavailable": "agent",
+    "internal_error": "agent",
+    "final_validation_failed": "agent",
+    "agent_stopped": "agent",
+}
+
+
+def _classify_fault_domain(termination_reason: str) -> str | None:
+    if termination_reason == "success":
+        return None
+    return _FAULT_DOMAIN_BY_TERMINATION_REASON.get(termination_reason, "agent")
 
 
 async def _cancel_and_drain(task: asyncio.Task[Any]) -> None:
@@ -555,6 +598,8 @@ class _GenerationWorkflow:
             ttp_no_tool_retries=self.session.ttp_no_tool_retries,
             first_ttp_passed=self.session.first_ttp_valid,
             termination_reason=termination_reason,
+            fault_domain=_classify_fault_domain(termination_reason),
+            model_retries_observed=self.session.model_retries_observed,
             laminar_trace_id=current_laminar_trace_id(),
         )
 
@@ -583,6 +628,18 @@ class _GenerationWorkflow:
                 details={"phase": phase},
             )
             reason = "model_timeout"
+        elif _is_agent_request_error(error):
+            issue = _issue(
+                "model.request_rejected",
+                "The provider rejected the request as malformed or "
+                "unauthorized.",
+                stage="model",
+                details={
+                    "exception_type": type(error).__name__,
+                    "phase": phase,
+                },
+            )
+            reason = "model_request_rejected"
         elif _is_model_error(error):
             issue = _issue(
                 "model.request_failed",

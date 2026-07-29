@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import httpx
+import openai
 import pytest
 
 from cli_parser_agent import (
@@ -164,12 +165,135 @@ async def test_provider_parameter_rejection_is_a_generic_model_failure(
 
     assert result.status == "failed"
     assert result.metadata.termination_reason == "model_error"
+    assert result.metadata.fault_domain == "model"
     assert [issue.code for issue in result.issues] == ["model.request_failed"]
     assert result.issues[0].details == {
         "exception_type": "ConnectError",
         "phase": "schema",
     }
     assert secret_provider_text not in result.model_dump_json()
+
+
+async def test_rate_limit_error_is_a_model_fault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_provider_text = "provider echoed secret rate limit body"
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message, session
+        assert phase == "schema"
+        raise openai.RateLimitError(
+            secret_provider_text,
+            response=httpx.Response(
+                429,
+                request=httpx.Request("POST", "https://example.test"),
+            ),
+            body=None,
+        )
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "model_error"
+    assert result.metadata.fault_domain == "model"
+    assert [issue.code for issue in result.issues] == ["model.request_failed"]
+    assert secret_provider_text not in result.model_dump_json()
+
+
+@pytest.mark.parametrize(
+    "make_error",
+    [
+        lambda text: openai.AuthenticationError(
+            text,
+            response=httpx.Response(
+                401,
+                request=httpx.Request("POST", "https://example.test"),
+            ),
+            body=None,
+        ),
+        lambda text: openai.BadRequestError(
+            text,
+            response=httpx.Response(
+                400,
+                request=httpx.Request("POST", "https://example.test"),
+            ),
+            body=None,
+        ),
+    ],
+)
+async def test_provider_rejection_of_our_request_is_an_agent_fault(
+    monkeypatch: pytest.MonkeyPatch,
+    make_error: Any,
+) -> None:
+    secret_provider_text = "provider echoed secret rejection body"
+    error = make_error(secret_provider_text)
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message, session
+        assert phase == "schema"
+        raise error
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "model_request_rejected"
+    assert result.metadata.fault_domain == "agent"
+    assert [issue.code for issue in result.issues] == ["model.request_rejected"]
+    assert result.issues[0].details == {
+        "exception_type": type(error).__name__,
+        "phase": "schema",
+    }
+    assert secret_provider_text not in result.model_dump_json()
+
+
+async def test_generation_timeout_is_a_budget_fault(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message, session, phase
+        await asyncio.sleep(10)
+        raise AssertionError("run_generation_phase should have been cancelled")
+
+    async def fit(*_: Any, **__: Any) -> tuple[list[Any], bool]:
+        return [_sample("value: one", original_char_count=len("value: one"))], True
+
+    _install_agent_stubs(monkeypatch, run)
+    monkeypatch.setattr(workflow_module, "_fit_sampled_outputs", fit)
+    generator = TtpGenerator(
+        settings=TtpGeneratorSettings(api_key="secret", model_name="test-model"),
+        policy=GenerationPolicy(
+            total_timeout_seconds=0.05,
+            ttp_validation_timeout_seconds=0.01,
+        ),
+    )
+    result = await generator.generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "generation_timeout"
+    assert result.metadata.fault_domain == "budget"
 
 
 async def test_generation_result_captures_the_active_laminar_trace(

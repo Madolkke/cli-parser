@@ -223,6 +223,8 @@ GenerationMetadata
   ttp_no_tool_responses: int          # TTP 阶段正常完成但没有工具调用的次数
   schema_no_tool_retries: int         # 实际发起的 Schema 中文提醒重试次数
   ttp_no_tool_retries: int            # 实际发起的 TTP 中文提醒重试次数
+  fault_domain: agent | model | budget | None  # 失败归因：本方代码/配置、外部模型、还是预算耗尽；成功时为 None
+  model_retries_observed: int         # AgentScope 内部对模型请求的透明重试次数（含重试后成功、否则不可见的情况）
 ```
 
 `TtpGenerator.from_env()` 从环境创建模型配置；也可使用 `TtpGeneratorSettings` 和独立的 `GenerationPolicy` 程序化构造。普通构造从进程环境初始化可选 Laminar tracing，`from_env(environ=...)` 则使用传入 mapping；公共辅助函数 `initialize_laminar_from_env(environ=None) -> bool` 可供其他入口显式初始化，缺少 Key 时返回 `False`，已初始化或成功初始化时返回 `True`。请求格式和缺失配置由 Pydantic/配置异常报告；模型请求、零工具协议、超时、预算和生成失败统一返回 `status="failed"` 的结构化结果；`asyncio.CancelledError` 原样传播。

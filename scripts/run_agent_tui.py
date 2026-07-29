@@ -28,6 +28,8 @@ from _agent_run_support import (  # noqa: E402
 )
 from agentscope.event import AgentEvent  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
+from rich.console import Group  # noqa: E402
+from rich.syntax import Syntax  # noqa: E402
 from rich.text import Text  # noqa: E402
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
@@ -209,13 +211,55 @@ class TimelineEntry:
             return "思考块已折叠。"
         return self.content.render() or "（暂无内容）"
 
+    _JSON_KINDS = frozenset({"schema", "capture", "issues", "event", "custom"})
+
+    def detail_renderable(self) -> Any:
+        if self.kind == "thinking" and self.collapsed:
+            return Text("思考块已折叠。", style="dim italic")
+        head, tail = self.content.head, self.content.tail
+        omitted = self.content.total_chars - len(head) - len(tail)
+        lexer = "json" if self.kind in self._JSON_KINDS else None
+
+        def _rendered(text: str) -> Any:
+            if not lexer:
+                return Text(text)
+            return Syntax(
+                text,
+                lexer,
+                theme="ansi_dark",
+                word_wrap=True,
+                background_color="default",
+            )
+
+        if omitted <= 0:
+            body = head + tail
+            if not body:
+                return Text("（暂无内容）", style="dim italic")
+            return _rendered(body)
+        marker = f"\n\n… 已省略 {omitted} 个字符；完整内容见 events.jsonl …\n\n"
+        return Group(
+            _rendered(head),
+            Text(marker, style="dim italic"),
+            _rendered(tail),
+        )
+
+    _KIND_STYLES = {
+        "issues": "bold red",
+        "schema": "bold cyan",
+        "ttp": "bold cyan",
+        "capture": "cyan",
+    }
+
     def list_label(self) -> Text:
         marker = "  "
         if self.kind == "thinking":
             marker = "+ " if self.collapsed else "− "
         phase = f"[{self.phase}] " if self.phase else ""
         title = self.title.replace("\n", " ")[:96]
-        return Text(f"{marker}{phase}{title}", style="dim" if self.complete else "bold")
+        style = self._KIND_STYLES.get(self.kind)
+        if style is None:
+            style = "dim" if self.complete else "bold"
+        return Text(f"{marker}{phase}{title}", style=style)
 
 
 @dataclass(slots=True)
@@ -546,6 +590,8 @@ class TuiStatus:
     state: str = "运行中"
     termination_reason: str | None = None
     elapsed_seconds: float | None = None
+    fault_domain: str | None = None
+    model_retries_observed: int = 0
 
     def observe(self, record: Mapping[str, Any]) -> None:
         metadata = record.get("metadata")
@@ -590,6 +636,17 @@ class TuiStatus:
                     termination_reason = result_metadata.get("termination_reason")
                     if termination_reason:
                         self.termination_reason = str(termination_reason)
+                    fault_domain = result_metadata.get("fault_domain")
+                    if fault_domain:
+                        self.fault_domain = str(fault_domain)
+                    model_retries_observed = result_metadata.get(
+                        "model_retries_observed",
+                    )
+                    if isinstance(
+                        model_retries_observed,
+                        int,
+                    ) and not isinstance(model_retries_observed, bool):
+                        self.model_retries_observed = model_retries_observed
                     result_elapsed = result_metadata.get("elapsed_seconds")
                     if isinstance(result_elapsed, (int, float)) and not isinstance(
                         result_elapsed,
@@ -704,6 +761,12 @@ class AgentTuiApp(App[int]):
         border-bottom: solid $accent;
     }
     .narrow #detail-scroll { width: 100%; height: 1fr; }
+    #keys {
+        height: 1;
+        padding: 0 1;
+        color: $text-muted;
+        border-top: solid $accent;
+    }
     """
 
     BINDINGS = [
@@ -759,12 +822,18 @@ class AgentTuiApp(App[int]):
         self._completion_event = asyncio.Event()
         self.laminar_flush_attempted = False
 
+    _KEY_HINTS = (
+        "↑/↓ 选择  Space 折叠思考  End 跟随最新  "
+        "PgUp/PgDn 详情翻页  Ctrl+C 取消  Enter 退出"
+    )
+
     def compose(self) -> ComposeResult:
         yield Static(id="status")
         with Horizontal(id="body"):
             yield ListView(id="timeline")
             with VerticalScroll(id="detail-scroll"):
                 yield Static("等待事件…", id="detail")
+        yield Static(self._KEY_HINTS, id="keys")
 
     async def on_mount(self) -> None:
         self.screen.set_class(self.size.width < NARROW_TERMINAL_WIDTH, "narrow")
@@ -943,6 +1012,18 @@ class AgentTuiApp(App[int]):
         self.ready_to_exit = True
         self._completion_event.set()
 
+    _STATE_STYLES = {
+        "success": "bold green",
+        "failed": "bold red",
+        "已取消": "bold yellow",
+        "异常": "bold red",
+    }
+    _FAULT_DOMAIN_STYLES = {
+        "agent": "bold red",
+        "model": "bold yellow",
+        "budget": "yellow",
+    }
+
     def _status_text(self) -> Text:
         elapsed = (
             self.status_model.elapsed_seconds
@@ -953,20 +1034,42 @@ class AgentTuiApp(App[int]):
         state = self.status_model.state
         if self.status_model.termination_reason:
             state = f"{state}/{self.status_model.termination_reason}"
-        return Text(
-            "  ".join(
-                (
-                    f"模型 {self.status_model.model_name}",
-                    f"阶段 {self.status_model.phase}",
-                    f"耗时 {elapsed:.1f}s",
-                    f"轮次 {self.status_model.model_rounds}",
-                    f"Schema {self.status_model.schema_submissions}",
-                    f"TTP {self.status_model.ttp_submissions}",
-                    f"有效候选 {candidate}",
-                    f"状态 {state}",
-                ),
-            ),
+        state_style = self._STATE_STYLES.get(self.status_model.state, "")
+        text = Text()
+        text.append(f"模型 {self.status_model.model_name}")
+        text.append("  ")
+        text.append(f"阶段 {self.status_model.phase}")
+        text.append("  ")
+        text.append(f"耗时 {elapsed:.1f}s")
+        text.append("  ")
+        text.append(f"轮次 {self.status_model.model_rounds}")
+        text.append("  ")
+        text.append(f"Schema {self.status_model.schema_submissions}")
+        text.append("  ")
+        text.append(f"TTP {self.status_model.ttp_submissions}")
+        text.append("  ")
+        text.append(f"有效候选 {candidate}")
+        text.append("  ")
+        text.append(f"状态 {state}", style=state_style)
+        if self.status_model.fault_domain:
+            fault_style = self._FAULT_DOMAIN_STYLES.get(
+                self.status_model.fault_domain,
+                "",
+            )
+            text.append("  ")
+            text.append(f"归因 {self.status_model.fault_domain}", style=fault_style)
+        if self.status_model.model_retries_observed:
+            text.append("  ")
+            text.append(
+                f"模型重试 {self.status_model.model_retries_observed}",
+                style="yellow",
+            )
+        text.append("  ")
+        text.append(
+            "跟随" if self.following else "已暂停跟随",
+            style="dim" if self.following else "bold",
         )
+        return text
 
     async def _refresh_view(self) -> None:
         try:
@@ -1003,15 +1106,16 @@ class AgentTuiApp(App[int]):
                 )
                 list_view.index = self.selected_index
                 entry = self.timeline.entries[self.selected_index]
-                detail = Text()
-                detail.append(f"{entry.title}\n", style="bold")
-                detail.append(
+                header = Text()
+                header.append(f"{entry.title}\n", style="bold")
+                header.append(
                     f"阶段: {entry.phase or '-'}  "
-                    f"时间: {entry.elapsed_seconds:.3f}s\n\n",
+                    f"时间: {entry.elapsed_seconds:.3f}s\n",
                     style="dim",
                 )
-                detail.append(entry.detail())
-                self.query_one("#detail", Static).update(detail)
+                self.query_one("#detail", Static).update(
+                    Group(header, entry.detail_renderable()),
+                )
             self._view_dirty = False
         except Exception as error:
             self._render_error_type = type(error).__name__

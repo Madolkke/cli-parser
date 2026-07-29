@@ -716,6 +716,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                     "failure_category": "runner",
                     "exception_type": "MissingEvaluatorResult",
                     "termination_reason": "missing_result",
+                    "fault_domain": None,
                     "issue_codes": [],
                     "last_attempt_present": False,
                     "metrics": {},
@@ -739,6 +740,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                         else "telemetry"
                     ),
                     "termination_reason": facts["termination_reason"],
+                    "fault_domain": facts["fault_domain"],
                     "issue_codes": facts["issue_codes"],
                     "exception_type": facts["exception_type"],
                     "last_attempt_present": facts["last_attempt_present"],

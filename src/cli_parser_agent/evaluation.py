@@ -832,6 +832,7 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "ttp_no_tool_responses",
         "schema_no_tool_retries",
         "ttp_no_tool_retries",
+        "model_retries_observed",
     ):
         value = metadata.get(name, 0)
         if isinstance(value, int | float) and not isinstance(value, bool):
@@ -853,6 +854,7 @@ def safe_trial_facts(
             "failure_category": "runner",
             "exception_type": str(exception_type or "unknown"),
             "termination_reason": "exception",
+            "fault_domain": None,
             "issue_codes": [],
             "last_attempt_present": False,
             "metrics": dict(scores),
@@ -894,6 +896,7 @@ def safe_trial_facts(
         "failure_category": category,
         "exception_type": None,
         "termination_reason": metadata.get("termination_reason"),
+        "fault_domain": metadata.get("fault_domain"),
         "issue_codes": issue_codes,
         "last_attempt_present": result.get("last_attempt") is not None,
         "metrics": dict(scores),

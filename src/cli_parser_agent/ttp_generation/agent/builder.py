@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextvars
 import logging
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
@@ -47,8 +48,20 @@ _PHASE_TOOL_NAMES: dict[GenerationPhase, tuple[str, ...]] = {
 }
 
 
+_current_session: contextvars.ContextVar[GenerationSession | None] = (
+    contextvars.ContextVar("cli_parser_current_session", default=None)
+)
+
+
 class _SafeAgentScopeLogFilter(logging.Filter):
-    """Remove provider exception text from AgentScope retry warnings."""
+    """Remove provider exception text from AgentScope retry warnings.
+
+    ``logging.getLogger("as")`` is process-global, so this filter cannot rely
+    on which ``GenerationSession`` installed it to know which request a log
+    record belongs to when requests run concurrently. Instead it reads the
+    session bound to the *emitting* task's context, so retries are always
+    counted against the request that actually triggered them.
+    """
 
     def filter(self, record: logging.LogRecord) -> bool:
         message = record.msg
@@ -57,6 +70,9 @@ class _SafeAgentScopeLogFilter(logging.Filter):
         ):
             record.msg = "Model request failed; retrying without response details."
             record.args = ()
+            session = _current_session.get()
+            if session is not None:
+                session.model_retries_observed += 1
         return True
 
 
@@ -117,6 +133,7 @@ def build_agent(
     if policy.max_agent_rounds < 1:
         raise ValueError("policy.max_agent_rounds must be positive")
     _install_safe_agentscope_log_filter()
+    _current_session.set(session)
 
     credential = OpenAICredential(
         api_key=_plain_secret(settings.api_key),
