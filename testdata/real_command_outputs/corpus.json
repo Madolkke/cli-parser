@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "expected_case_count": 13,
-  "expected_sample_count": 40,
+  "expected_case_count": 11,
+  "expected_sample_count": 31,
   "sources": {
     "ntc": {
       "repository": "https://github.com/networktocode/ntc-templates.git",
@@ -119,7 +119,7 @@
         },
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces5.raw",
-          "sha256": "c9f39dca2f17777d1c201ca1bae09d371a077272e86ecbc2a104803100e2e9bc"
+          "sha256": "a8a4993a49fbfbc6948d71487bb1a0fc55e36303428397ba425c83aa1db6c73b"
         },
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces6.raw",
@@ -151,72 +151,6 @@
         {
           "path": "ntc_templates/linux/ip_route_show/linux_ip_route_show_linkdown.raw",
           "sha256": "8e36eafb4bbc3df08930d25d7197a09180092f99e1e07eb75f683f0c015fcf7c"
-        }
-      ]
-    },
-    {
-      "id": "ntc.arista_eos.show_interfaces_status",
-      "source": "ntc",
-      "platform": "arista_eos",
-      "command": "show interfaces status",
-      "shapes": [
-        "fixed_width_table",
-        "flags"
-      ],
-      "suites": [
-        "all"
-      ],
-      "samples": [
-        {
-          "path": "ntc_templates/arista_eos/show_interfaces_status/arista_eos_show_interfaces_status.raw",
-          "sha256": "e225b14f8dc6e1970c3fda5619be25afdbebce4dee7c3a96f23072d88847dd33"
-        },
-        {
-          "path": "ntc_templates/arista_eos/show_interfaces_status/arista_eos_show_interfaces_status_encap.raw",
-          "sha256": "53fa251501571a10954471a39cea1f17dc4f5ca0483d8218f86fc1a270ed1615"
-        },
-        {
-          "path": "ntc_templates/arista_eos/show_interfaces_status/arista_eos_show_interfaces_status_flags.raw",
-          "sha256": "d4c66b5fdf529c955f3a99d214883bd7232e209f7800a05ae25648994bee7481"
-        },
-        {
-          "path": "ntc_templates/arista_eos/show_interfaces_status/arista_eos_show_interfaces_status_port_channel.raw",
-          "sha256": "aad6705fc81eb93c77cfc21c75b48ba8dedbde55ccf7c571a52c7431c3f20032"
-        }
-      ]
-    },
-    {
-      "id": "ntc.huawei_vrp.display_version",
-      "source": "ntc",
-      "platform": "huawei_vrp",
-      "command": "display version",
-      "shapes": [
-        "key_value_sections",
-        "version_variants"
-      ],
-      "suites": [
-        "all"
-      ],
-      "samples": [
-        {
-          "path": "ntc_templates/huawei_vrp/display_version/huawei_vrp_display_version.raw",
-          "sha256": "f1ba004af84aa6df621c09a43c4ac924cc459d64ed4790df3581e50456b39516"
-        },
-        {
-          "path": "ntc_templates/huawei_vrp/display_version/huawei_vrp_display_version1.raw",
-          "sha256": "eec80d464b2490cb63d83517258b849a7de0007a2e4faae51639550f4df9b3d7"
-        },
-        {
-          "path": "ntc_templates/huawei_vrp/display_version/huawei_vrp_display_version2.raw",
-          "sha256": "91e2e798847e351d121eb7e9059b500ecc952ac3a51d777540520d39f131aafd"
-        },
-        {
-          "path": "ntc_templates/huawei_vrp/display_version/huawei_vrp_display_version3.raw",
-          "sha256": "245153a14c8ee0834112396588ed1c08a41d3faec56058385790739b6511f8bb"
-        },
-        {
-          "path": "ntc_templates/huawei_vrp/display_version/huawei_vrp_display_version5.raw",
-          "sha256": "17ae8e44ecf91c4aacbc1e6972727a1be71082055505c38fbcdeeff845c450f5"
         }
       ]
     },
@@ -270,7 +204,7 @@
       "samples": [
         {
           "path": "ntc_templates/juniper_junos/show_interfaces/juniper_junos_show_interfaces.raw",
-          "sha256": "c31ba23c73d3fe10cd3650646c35fb6f41ef66f1022eac9f1a35086f8b834212"
+          "sha256": "21895f28e6eb66199676dced0fc0582bdc20773f7d79859ed5679686e27e1835"
         },
         {
           "path": "ntc_templates/juniper_junos/show_interfaces/juniper_junos_show_interfaces2.raw",
@@ -380,7 +314,7 @@
         },
         {
           "path": "ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors1.txt",
-          "sha256": "ac9cd994359ff4afc4ab268967c6430263bccc6a866a4a9e048f11364b2d1dc4"
+          "sha256": "7fbcd75cb7f10858efb2ef3381f95cd85a7450305734998616d70f6b13d3f70d"
         }
       ]
     }

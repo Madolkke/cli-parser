@@ -19,7 +19,7 @@ Bay  State  Label  Temperature
 8    ready  core-b
 ```
 
-The primary entity is a bay row. `temperature` is excluded because it is absent for bay 8 and does not exist in input 1. Headings and the separator are excluded. `bay` remains a string because it is an identifier.
+The primary entity is a bay row. `temperature` is retained as optional because it has one non-empty, unambiguous occurrence; it is omitted from the other bay records. Headings and the separator are excluded. `bay` remains a string because it is an identifier.
 
 Target:
 
@@ -34,7 +34,7 @@ Target:
     },
     {
       "bays": [
-        {"bay": "7", "state": "ready", "label": "core-a"},
+        {"bay": "7", "state": "ready", "label": "core-a", "temperature": "31C"},
         {"bay": "8", "state": "ready", "label": "core-b"}
       ]
     }
@@ -45,7 +45,8 @@ Target:
     {"path": "/bays/*", "type": "object", "required": false},
     {"path": "/bays/*/bay", "type": "string", "required": true},
     {"path": "/bays/*/state", "type": "string", "required": true},
-    {"path": "/bays/*/label", "type": "string", "required": true}
+    {"path": "/bays/*/label", "type": "string", "required": true},
+    {"path": "/bays/*/temperature", "type": "string", "required": false}
   ]
 }
 ```

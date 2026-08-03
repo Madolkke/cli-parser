@@ -92,6 +92,8 @@ class SettingsLike(Protocol):
     stream: bool
     temperature: float
     parallel_tool_calls: bool
+    thinking_enable: bool | None
+    reasoning_effort: str | None
     max_tokens: int
     context_size: int
     model_max_retries: int
@@ -139,10 +141,19 @@ def build_agent(
         api_key=_plain_secret(settings.api_key),
         base_url=settings.base_url,
     )
+    thinking_enable = settings.thinking_enable
+    reasoning_effort = settings.reasoning_effort
+    if thinking_enable is False:
+        # AgentScope emits reasoning_effort only when thinking_enable is true.
+        # Normalize an explicit disable to the OpenAI wire value ``none``.
+        thinking_enable = True
+        reasoning_effort = "none"
     parameters = OpenAIChatModel.Parameters(
         max_tokens=settings.max_tokens,
         temperature=settings.temperature,
         parallel_tool_calls=settings.parallel_tool_calls,
+        thinking_enable=bool(thinking_enable),
+        reasoning_effort=reasoning_effort,
     )
     client_kwargs: dict[str, Any] = {"timeout": settings.model_timeout_seconds}
     if not settings.verify_tls:

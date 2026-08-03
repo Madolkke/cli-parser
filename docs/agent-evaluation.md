@@ -10,9 +10,9 @@
 
 ## Golden 定义
 
-Manifest version `1` 的每个 case 包含 ID、命令说明、suite/tags、1-5 个有序输入路径及 SHA-256，以及 target 路径和 SHA-256。Target 为同序 expected records 和由 `path/type/required` 三元组构成的封闭 Schema 结构断言。当前 smoke suite 固定 `5` 个 case、`12` 份输入。
+Manifest version `1` 的每个 case 包含 ID、命令说明、suite/tags、1-5 个有序输入路径及 SHA-256，以及 target 路径和 SHA-256。Target 为同序 expected records 和由 `path/type/required` 三元组构成的封闭 Schema 结构断言。当前 smoke suite 固定 `5` 个 case、`12` 份输入；baseline suite 固定 `3` 个 case、`3` 份输入，分别覆盖固定宽表、重复详情块和层级配置。baseline 的每个 case 只有一份格式明确的输入，用于低歧义的严格正确性基准，不替代多样例 smoke 验收。
 
-Golden 采用“最大稳定语义投影”：保留每份输入中的所有主实体和源顺序，只保留所有同类实体都稳定、非空且边界明确的细粒度业务字段；排除表头、分隔线、控制文本、空值和不稳定可选字段。值默认保持字符串。禁止从被测 Agent 产物、Laminar、历史 artifact、上游模板、参考 YAML/JSON 或模型生成结果复制答案。
+Golden 采用“最大有证据语义投影”：保留每份输入中的所有主实体和源顺序，并保留至少在一个同类实体中非空出现、语义与边界明确的细粒度业务字段。只在部分父对象实例中出现的字段标记为可选并在缺失实例中省略；在每个父对象实例中都存在的字段才标记为 required。排除表头、分隔线、控制文本和空值，不使用空字符串或 `null` 占位。值默认保持字符串。禁止从被测 Agent 产物、Laminar、历史 artifact、上游模板、参考 YAML/JSON 或模型生成结果复制答案。
 
 离线操作不读取入口脚本中的 Key，也不初始化 Laminar 或联网：
 
@@ -36,6 +36,7 @@ Live run 必须显式选择 suite 或 case：
 
 ```text
 uv run python scripts/run_agent_evaluation.py run --suite smoke
+uv run python scripts/run_agent_evaluation.py run --suite baseline --trials 1 --concurrency 1
 uv run python scripts/run_agent_evaluation.py run --case ntc.cisco_ios.show_interfaces_status
 ```
 

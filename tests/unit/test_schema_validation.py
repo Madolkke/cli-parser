@@ -159,20 +159,63 @@ def test_evidence_rejects_duplicate_leaf_paths() -> None:
     assert _codes(issues) == {"schema.evidence_duplicate_path"}
 
 
-def test_required_mismatch_reports_schema_field_names_only() -> None:
+@pytest.mark.parametrize(
+    "required",
+    [None, [], ["hostname"], ["unknown"]],
+)
+def test_required_uses_draft_2020_12_semantics(required: list[str] | None) -> None:
     schema = _inventory_schema()
-    schema["required"] = ["hostname", "unknown"]
+    if required is None:
+        schema.pop("required")
+    else:
+        schema["required"] = required
 
-    issue = next(
-        item
-        for item in validate_result_schema(schema)
-        if item.code == "schema.required_mismatch"
-    )
+    assert validate_result_schema(schema) == []
 
-    assert issue.details == {
-        "missing_required": ["interfaces"],
-        "unknown_required": ["unknown"],
+
+@pytest.mark.parametrize(
+    "required",
+    ["hostname", ["hostname", "hostname"], [1]],
+)
+def test_draft_meta_schema_rejects_invalid_required(required: object) -> None:
+    schema = _inventory_schema()
+    schema["required"] = required
+
+    assert _codes(validate_result_schema(schema)) == {
+        "schema.invalid_draft_2020_12",
     }
+
+
+def test_optional_nested_properties_validate_when_absent_or_present() -> None:
+    schema = _inventory_schema()
+    schema["required"] = ["hostname"]
+    schema["properties"]["interfaces"]["items"]["required"] = ["name"]
+
+    records = [
+        {"hostname": "edge_1"},
+        {
+            "hostname": "edge_2",
+            "interfaces": [{"name": "eth0"}, {"name": "eth1", "mtu": 1500}],
+        },
+    ]
+
+    assert validate_records_against_schema(records, schema) == []
+
+
+def test_unknown_required_property_is_not_rejected_before_record_validation() -> None:
+    schema = _inventory_schema()
+    schema["required"] = ["unknown"]
+
+    assert validate_result_schema(schema) == []
+    assert _codes(
+        validate_records_against_schema(
+            [
+                {"hostname": "edge_1", "interfaces": []},
+                {"unknown": "value"},
+            ],
+            schema,
+        ),
+    ) == {"schema.record_mismatch"}
 
 
 @pytest.mark.parametrize(
@@ -186,10 +229,6 @@ def test_required_mismatch_reports_schema_field_names_only() -> None:
         (
             lambda schema: schema.update(additionalProperties=True),
             "schema.object_not_closed",
-        ),
-        (
-            lambda schema: schema.update(required=["hostname"]),
-            "schema.required_mismatch",
         ),
         (
             lambda schema: schema.update(anyOf=[{"type": "object"}]),

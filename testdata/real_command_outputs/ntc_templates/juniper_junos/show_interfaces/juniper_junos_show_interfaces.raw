@@ -79,5 +79,3 @@ Physical interface: sp-0/0/0, Enabled, Physical link is Up
   Type: Adaptive-Services, Link-level type: Adaptive-Services, MTU: 9192, Speed: 800mbps
   Device Flags   : Present Running
   Interface flags: Point-To-Point SNMP-Traps Internal: 0x4000
-
-{master:0}

@@ -18,6 +18,7 @@ from cli_parser_agent.evaluation import (
     HarnessError,
     load_evaluation_manifest,
     score_executor_output,
+    select_cases,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -180,12 +181,26 @@ def _evaluation_environment() -> dict[str, str]:
     }
 
 
-def test_versioned_smoke_manifest_preflights_all_cases() -> None:
+def test_versioned_manifest_preflights_smoke_and_baseline_suites() -> None:
     manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
+    smoke = select_cases(manifest, suite="smoke", case_ids=())
+    baseline = select_cases(manifest, suite="baseline", case_ids=())
 
-    assert len(manifest.cases) == 5
-    assert sum(len(case.inputs) for case in manifest.cases) == 12
-    assert all("smoke" in case.suites for case in manifest.cases)
+    assert len(manifest.cases) == 8
+    assert sum(len(case.inputs) for case in manifest.cases) == 15
+    assert len(smoke) == 5
+    assert sum(len(case.inputs) for case in smoke) == 12
+    assert [case.id for case in baseline] == [
+        "ntc.cisco_ios.show_ip_interface_brief",
+        "ttp.cisco_ios.show_inventory.single_basic",
+        "ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq",
+    ]
+    assert sum(len(case.inputs) for case in baseline) == 3
+    assert all(len(case.inputs) == 1 for case in baseline)
+    assert all(
+        {"baseline", "single-input"}.issubset(case.tags)
+        for case in baseline
+    )
 
 
 def test_sql_query_uses_an_unverified_context_only_when_explicitly_enabled(
@@ -266,7 +281,112 @@ def test_manifest_rejects_unclosed_schema_contract(tmp_path: Path) -> None:
         },
     )
 
-    with pytest.raises(HarnessError, match="does not match expected records"):
+    with pytest.raises(HarnessError, match="undeclared path"):
+        load_evaluation_manifest(tmp_path, manifest_path)
+
+
+def test_manifest_accepts_optional_properties_in_heterogeneous_records(
+    tmp_path: Path,
+) -> None:
+    _write_minimal_definition(tmp_path)
+    manifest_path = _replace_target(
+        tmp_path,
+        {
+            "records": [
+                {
+                    "items": [
+                        {"name": "one", "detail": "one"},
+                        {"name": "one"},
+                    ],
+                },
+            ],
+            "schema_contract": [
+                {"path": "/", "type": "object", "required": False},
+                {"path": "/items", "type": "array", "required": True},
+                {"path": "/items/*", "type": "object", "required": False},
+                {"path": "/items/*/name", "type": "string", "required": True},
+                {
+                    "path": "/items/*/detail",
+                    "type": "string",
+                    "required": False,
+                },
+            ],
+        },
+    )
+
+    manifest = load_evaluation_manifest(tmp_path, manifest_path)
+
+    assert manifest.cases[0].target.records[0]["items"][1] == {"name": "one"}
+
+
+@pytest.mark.parametrize(
+    ("records", "contract", "message"),
+    [
+        (
+            [{"items": [{"detail": "present"}]}],
+            [
+                {"path": "/", "type": "object", "required": False},
+                {"path": "/items", "type": "array", "required": True},
+                {"path": "/items/*", "type": "object", "required": False},
+                {"path": "/items/*/name", "type": "string", "required": True},
+                {
+                    "path": "/items/*/detail",
+                    "type": "string",
+                    "required": False,
+                },
+            ],
+            "missing a required path",
+        ),
+        (
+            [{"items": [{"name": "one"}]}],
+            [
+                {"path": "/", "type": "object", "required": False},
+                {"path": "/items", "type": "array", "required": True},
+                {"path": "/items/*", "type": "object", "required": False},
+                {"path": "/items/*/name", "type": "string", "required": True},
+                {
+                    "path": "/items/*/detail",
+                    "type": "string",
+                    "required": False,
+                },
+            ],
+            "paths absent from expected records",
+        ),
+        (
+            [{"items": [{"name": "one", "unknown": "value"}]}],
+            [
+                {"path": "/", "type": "object", "required": False},
+                {"path": "/items", "type": "array", "required": True},
+                {"path": "/items/*", "type": "object", "required": False},
+                {"path": "/items/*/name", "type": "string", "required": True},
+            ],
+            "undeclared path",
+        ),
+        (
+            [{"items": [{"name": 1}]}],
+            [
+                {"path": "/", "type": "object", "required": False},
+                {"path": "/items", "type": "array", "required": True},
+                {"path": "/items/*", "type": "object", "required": False},
+                {"path": "/items/*/name", "type": "string", "required": True},
+            ],
+            "type does not match",
+        ),
+    ],
+)
+def test_manifest_rejects_invalid_optional_contracts(
+    tmp_path: Path,
+    records: list[dict[str, Any]],
+    contract: list[dict[str, Any]],
+    message: str,
+) -> None:
+    _write_minimal_definition(tmp_path)
+    manifest_path = _replace_target(
+        tmp_path,
+        {"records": records, "schema_contract": contract},
+    )
+
+    with pytest.raises(HarnessError, match=message):
         load_evaluation_manifest(tmp_path, manifest_path)
 
 
@@ -363,7 +483,7 @@ def test_array_order_and_scalar_type_are_strict() -> None:
     )
 
 
-def test_schema_required_mismatch_fails_contract() -> None:
+def test_schema_optionality_mismatch_fails_contract() -> None:
     records = [
         {"interfaces": [{"port": "Gi1", "status": "connected"}]},
     ]
@@ -377,6 +497,37 @@ def test_schema_required_mismatch_fails_contract() -> None:
     assert scores["schema_contract_match"] == 0.0
     assert scores["schema_path_recall"] < 1.0
     assert scores["candidate_pass"] == 0.0
+
+
+def test_optional_property_participates_in_strict_schema_scoring() -> None:
+    records = [
+        {
+            "interfaces": [
+                {"port": "Gi1", "status": "connected"},
+                {"port": "Gi2"},
+            ],
+        },
+    ]
+    optional_schema = _schema()
+    optional_schema["properties"]["interfaces"]["items"]["required"] = ["port"]
+    optional_contract = _contract()
+    optional_contract[-1] = {
+        "path": "/interfaces/*/status",
+        "type": "string",
+        "required": False,
+    }
+    target = {"records": records, "schema_contract": optional_contract}
+
+    matching = score_executor_output(
+        _output(records, schema=optional_schema),
+        target,
+    )
+    required = score_executor_output(_output(records), target)
+
+    assert matching["schema_contract_match"] == 1.0
+    assert matching["candidate_pass"] == 1.0
+    assert required["schema_contract_match"] == 0.0
+    assert required["candidate_pass"] == 0.0
 
 
 @pytest.mark.parametrize("argv", [["list"], ["preflight"]])

@@ -19,6 +19,8 @@ The complete upstream license texts are in `licenses/`. Expected YAML results,
 TextFSM/TTP templates, mock data, and JSON command outputs are not included.
 
 These are public raw CLI test fixtures and may have been sanitized or curated by
-their upstream projects. They should not be described as unmodified production
-captures. Future private command output must be redacted before it is added or
-sent to a model provider.
+their upstream projects. Three local copies have minimal integrity corrections:
+a terminal prompt was removed, an incomplete trailing interface block was
+removed, and one BGP host value was aligned with its enclosing neighbor header.
+They should not be described as unmodified production captures. Future private
+command output must be redacted before it is added or sent to a model provider.

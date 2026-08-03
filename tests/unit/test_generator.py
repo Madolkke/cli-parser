@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import time
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
 
 from cli_parser_agent import TtpGenerator, TtpGeneratorSettings
+from cli_parser_agent.ttp_generation import workflow as workflow_module
 from cli_parser_agent.ttp_generation.agent import build_schema_task_prompt
 from cli_parser_agent.ttp_generation.workflow import (
     _fit_sampled_outputs,
@@ -154,6 +157,50 @@ async def test_deadline_watchdog_cancels_and_drains_its_child() -> None:
     assert completed is False
     assert result is None
     assert cleaned_up.is_set()
+
+
+@pytest.mark.asyncio
+async def test_deadline_cleanup_span_is_emitted_without_operation_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spans: list[dict[str, object]] = []
+    finishes: list[dict[str, object]] = []
+    stack: list[str] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: object):
+        spans.append({"name": name, "parent": stack[-1] if stack else None, **kwargs})
+        stack.append(name)
+        try:
+            yield SimpleNamespace(enabled=True, creates_trace=False)
+        finally:
+            assert stack.pop() == name
+
+    def finish(**kwargs: object) -> None:
+        finishes.append({"span": stack[-1], **kwargs})
+
+    async def operation() -> None:
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(workflow_module, "start_laminar_span", start)
+    monkeypatch.setattr(workflow_module, "finish_laminar_span", finish)
+    completed, result = await _run_before_deadline(
+        operation,
+        deadline_monotonic=time.monotonic() + 0.01,
+        cleanup_attributes={"phase": "schema", "operation": "context_fit"},
+    )
+
+    assert completed is False
+    assert result is None
+    assert spans[0]["name"] == "generation.deadline_cleanup"
+    assert spans[0]["attributes"] == {
+        "phase": "schema",
+        "operation": "context_fit",
+        "trigger": "deadline",
+        "remaining_seconds": 0.0,
+    }
+    assert finishes[0]["outcome"] == "failed"
+    assert "operation" not in str(finishes[0]["output"])
 
 
 @pytest.mark.asyncio

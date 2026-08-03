@@ -1,0 +1,43 @@
+{
+  "records": [
+    {
+      "interfaces": [
+        {"name": "GigabitEthernet2/0/4.223415", "description": "Voice service | 2048K", "bandwidth": "2048", "encapsulation": "dot1Q 2234 second-dot1q 15", "vrf_forwarding": "CLIENT_VOICE:1000", "ip_address": "192.0.2.161 255.255.255.252", "no_ip_proxy_arp": "no ip proxy-arp", "unicast_source_verification": "reachable-via rx allow-default allow-self-ping", "service_policies": [{"direction": "input", "name": "VOICE_POLICY_2048_IN"}, {"direction": "output", "name": "VOICE_POLICY_2048_OUT"}]},
+        {"name": "GigabitEthernet2/0/4.223427", "description": "Data service | 100M", "bandwidth": "100000", "encapsulation": "dot1Q 2234 second-dot1q 27", "vrf_forwarding": "CLIENT_VOICE:1000", "ip_address": "192.0.2.165 255.255.255.252", "no_ip_proxy_arp": "no ip proxy-arp", "unicast_source_verification": "reachable-via rx allow-default allow-self-ping", "service_policies": [{"direction": "input", "name": "DATA_POLICY_100M_IN"}, {"direction": "output", "name": "DATA_POLICY_100M_OUT"}]},
+        {"name": "GigabitEthernet2/0/4.223436", "description": "Branch service | 100M", "bandwidth": "2048", "encapsulation": "dot1Q 2234 second-dot1q 36", "vrf_forwarding": "CLIENT_VOICE:1000", "ip_address": "192.0.2.169 255.255.255.252", "no_ip_proxy_arp": "no ip proxy-arp", "unicast_source_verification": "reachable-via rx allow-default allow-self-ping", "access_groups": [{"name": "OUTPUT_ACL", "direction": "out"}, {"name": "INPUT_ACL", "direction": "in"}], "service_policies": [{"direction": "input", "name": "VOICE_POLICY_2048_IN"}, {"direction": "output", "name": "VOICE_POLICY_2048_OUT"}]},
+        {"name": "GigabitEthernet2/0/4.223449", "description": "Remote site service | 1500K", "bandwidth": "2048", "encapsulation": "dot1Q 2234 second-dot1q 49", "vrf_forwarding": "CLIENT_VOICE:1000", "ip_address": "192.0.2.173 255.255.255.252", "no_ip_proxy_arp": "no ip proxy-arp", "unicast_source_verification": "reachable-via tx allow-default allow-self-ping", "access_groups": [{"name": "INPUT_ACL", "direction": "in"}, {"name": "OUTPUT_ACL", "direction": "out"}], "service_policies": [{"direction": "input", "name": "VOICE_POLICY_2048_IN"}, {"direction": "output", "name": "VOICE_POLICY_2048_OUT"}]},
+        {"name": "GigabitEthernet2/0/4.22341011", "description": "Test service | 100M", "mtu": "9096", "bandwidth": "1000", "encapsulation": "dot1Q 2234 second-dot1q 1011", "vrf_forwarding": "CLIENT_VOICE:1000", "ip_address": "192.0.2.177 255.255.255.252", "ipv6_address": "2001:db8:2234:1011::2/126", "flow_monitors": [{"name": "IPV4_MONITOR", "sampler": "FLOW_SAMPLER", "direction": "input"}], "no_ip_proxy_arp": "no ip proxy-arp", "no_negotiation": "no negotiation", "unicast_source_verification": "reachable-via rx allow-default allow-self-ping", "access_groups": [{"name": "INPUT_ACL", "direction": "in"}], "service_policies": [{"direction": "input", "name": "VOICE_POLICY_1000_IN"}, {"direction": "output", "name": "VOICE_POLICY_1000_OUT"}]},
+        {"name": "GigabitEthernet2/0/4.22341020", "description": "Backup service | 800K", "mtu": "1546", "bandwidth": "800", "encapsulation": "dot1Q 2234 second-dot1q 1020", "vrf_forwarding": "CLIENT_VOICE:1000", "flow_monitors": [{"name": "IPV4_MONITOR", "sampler": "FLOW_SAMPLER", "direction": "input"}], "ip_address": "192.0.2.181 255.255.255.252", "no_ip_proxy_arp": "no ip proxy-arp", "unicast_source_verification": "reachable-via rx allow-default allow-self-ping", "access_groups": [{"name": "OUTPUT_ACL", "direction": "out"}], "service_policies": [{"direction": "input", "name": "VOICE_POLICY_800_IN"}, {"direction": "output", "name": "VOICE_POLICY_800_OUT"}]}
+      ]
+    }
+  ],
+  "schema_contract": [
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/name", "type": "string", "required": true},
+    {"path": "/interfaces/*/description", "type": "string", "required": true},
+    {"path": "/interfaces/*/mtu", "type": "string", "required": false},
+    {"path": "/interfaces/*/bandwidth", "type": "string", "required": true},
+    {"path": "/interfaces/*/encapsulation", "type": "string", "required": true},
+    {"path": "/interfaces/*/vrf_forwarding", "type": "string", "required": true},
+    {"path": "/interfaces/*/ip_address", "type": "string", "required": true},
+    {"path": "/interfaces/*/ipv6_address", "type": "string", "required": false},
+    {"path": "/interfaces/*/flow_monitors", "type": "array", "required": false},
+    {"path": "/interfaces/*/flow_monitors/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/flow_monitors/*/name", "type": "string", "required": true},
+    {"path": "/interfaces/*/flow_monitors/*/sampler", "type": "string", "required": true},
+    {"path": "/interfaces/*/flow_monitors/*/direction", "type": "string", "required": true},
+    {"path": "/interfaces/*/no_ip_proxy_arp", "type": "string", "required": true},
+    {"path": "/interfaces/*/no_negotiation", "type": "string", "required": false},
+    {"path": "/interfaces/*/unicast_source_verification", "type": "string", "required": true},
+    {"path": "/interfaces/*/access_groups", "type": "array", "required": false},
+    {"path": "/interfaces/*/access_groups/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/access_groups/*/name", "type": "string", "required": true},
+    {"path": "/interfaces/*/access_groups/*/direction", "type": "string", "required": true},
+    {"path": "/interfaces/*/service_policies", "type": "array", "required": true},
+    {"path": "/interfaces/*/service_policies/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/service_policies/*/direction", "type": "string", "required": true},
+    {"path": "/interfaces/*/service_policies/*/name", "type": "string", "required": true}
+  ]
+}

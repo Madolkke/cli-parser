@@ -474,6 +474,49 @@ def test_full_parse_preserves_input_order_and_nested_records() -> None:
     ]
 
 
+def test_full_parse_omits_unmatched_optional_properties() -> None:
+    template = """\
+<group name="inventory*">
+NAME: {{ name | ORPHRASE }}
+PID: {{ pid | ORPHRASE }}
+</group>"""
+    source = """\
+NAME: first
+PID: one
+NAME: second
+NAME: third
+PID: three"""
+    item_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "pid": {"type": "string"},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"inventory": {"type": "array", "items": item_schema}},
+        "required": ["inventory"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(template, [source], schema)
+
+    assert result.valid, result.issues
+    assert result.records == [
+        {
+            "inventory": [
+                {"name": "first", "pid": "one"},
+                {"name": "second"},
+                {"name": "third", "pid": "three"},
+            ],
+        },
+    ]
+
+
 @pytest.mark.asyncio
 async def test_full_parse_can_spawn_from_asyncio_worker_thread() -> None:
     template = (
@@ -628,6 +671,17 @@ def test_scalar_source_issues_are_bounded() -> None:
     )
 
     assert len(issues) == 100
+    assert _codes(issues) == {"ttp.scalar_without_source"}
+
+
+@pytest.mark.parametrize("missing_value", ["", None])
+def test_missing_optional_value_cannot_be_materialized(missing_value: object) -> None:
+    issues = _validate_scalar_sources(
+        {"optional_value": missing_value},
+        "Optional value is absent",
+        output_index=0,
+    )
+
     assert _codes(issues) == {"ttp.scalar_without_source"}
 
 

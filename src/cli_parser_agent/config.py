@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import ssl
 from collections.abc import Mapping
-from typing import Self
+from typing import Literal, Self
 from urllib.parse import urlparse
 
 from pydantic import (
@@ -140,6 +140,15 @@ class TtpGeneratorSettings(BaseModel):
     stream: bool = False
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     parallel_tool_calls: bool = False
+    thinking_enable: bool | None = None
+    reasoning_effort: Literal[
+        "none",
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+    ] | None = None
     max_tokens: int = Field(default=8_192, ge=1)
     context_size: int = Field(default=128_000, ge=1)
     model_max_retries: int = Field(default=2, ge=0)
@@ -188,6 +197,8 @@ class TtpGeneratorSettings(BaseModel):
             "stream": "CLI_PARSER_MODEL_STREAM",
             "temperature": "CLI_PARSER_MODEL_TEMPERATURE",
             "parallel_tool_calls": "CLI_PARSER_MODEL_PARALLEL_TOOL_CALLS",
+            "thinking_enable": "CLI_PARSER_MODEL_THINKING_ENABLE",
+            "reasoning_effort": "CLI_PARSER_MODEL_REASONING_EFFORT",
             "max_tokens": "CLI_PARSER_MODEL_MAX_TOKENS",
             "context_size": "CLI_PARSER_MODEL_CONTEXT_SIZE",
             "model_max_retries": "CLI_PARSER_MODEL_MAX_RETRIES",

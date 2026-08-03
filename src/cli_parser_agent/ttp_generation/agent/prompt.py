@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v11-semantic-table-review-zh-cn"
+PROMPT_VERSION = "ttp-generator-v12-optional-schema-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -29,22 +29,23 @@ SCHEMA_SYSTEM_PROMPT = """\
 
 - 使用 JSON Schema Draft 2020-12，根类型必须是 object。它描述单份命令输出的
   一个解析后 record，而不是服务响应或样例列表。
-- 每个 object 都要在 required 中声明其全部 properties，并将
-  additionalProperties 设置为 false。字段名必须是英文 ASCII snake_case。
+- 每个 object 都要将 additionalProperties 设置为 false。字段名必须是英文 ASCII
+  snake_case。只把在该 object 的每个实例中都存在的 properties 列入 required；
+  只在部分实例中出现的明确业务字段保留为可选 property，也可以省略 required。
 - 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
   record；重复表格行或重复详情块应表示为根 record 内的 array。
-- 按业务语义进行细粒度建模。表格中稳定存在且有独立含义的列、详情块中稳定存在
-  的属性，应分别成为独立字段。字段名应表达该值的真实含义。
+- 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
+  应分别成为独立字段。字段名应表达该值的真实含义。
 - 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
-  在所有样例及同类记录中稳定出现的主要语义字段都应建模，同时排除确实只在部分
-  样例或部分记录出现、因 required 约束而无法可靠生成的字段。
+  在至少一个样例或同类记录中非空出现、含义明确且能可靠捕获的主要语义字段都应
+  建模；只在部分实例出现的字段应保持可选，不能因此丢弃有效信息。
 - 严禁将整条数据行、多列拼接文本或整个详情块放入 port、status、name 等具体语义
   字段。一个字段只能表示一个逻辑值。表头、分隔线、分页标记和提示符不是业务记录。
 - 提交前逐个样例检查表头、数据行边界、重复记录数量、列变化和空白值槽；确认每个
   array 条目的字段都能在每条对应记录中稳定得到，且没有遗漏明显的稳定业务列。
 - 保守推断类型。含义不明确的值保留为 string。只有不含前导零、单位、标识符或
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
-  才能使用 boolean。缺少标量时绝不能合成空 string；不引入 null 或可选字段。
+  才能使用 boolean。缺少可选标量时必须省略该键，绝不能合成空 string 或 null。
 - 每个叶子字段必须恰好提供一条 evidence；不要因多个样例重复同一个 path。
   array 条目的 path 使用 *，例如 /interfaces/*/name。填写从零开始的
   output_index，并从同一样例原样复制连续 excerpt。优先使用短的字面数据 token，
@@ -55,7 +56,7 @@ SCHEMA_SYSTEM_PROMPT = """\
 - assumptions 通常提交 []。确有无法避免的不确定性时，最多填写两句简短中文，
   不包含源文本引文、反引号或换行；不要发明输出中不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
-  整行误作单值、所有 object 是否封闭且 properties 与 required 完全一致。
+  整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
 """
 
 TTP_SYSTEM_PROMPT = """\
@@ -128,6 +129,9 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   使所有 group path 和具名捕获与冻结结构严格对齐。
 - 保持冻结字段名、嵌套结构和标量类型不变。TTP `DIGIT` 的结果是文本；冻结字段
   为 integer 时在 `DIGIT` 后添加 `to_int`，其他转换同理。
+- 冻结 Schema 中未列入 required 的字段可以在对应原文不存在时缺失。模板必须让
+  TTP 省略未匹配的可选键，不能填充空 string 或 null，也不能因可选行不存在而
+  丢弃其父 object、同级必填字段或整条业务记录。
 - 每次工具反馈中的 capture 都是当前候选对全部完整输入的真实解析结果：空对象表示
   该输入没有匹配；complete=false 时查看按输入索引给出的结构化 preview。
   capture 必须与 issues 一起用于修正，存在 capture 不代表候选通过验收。

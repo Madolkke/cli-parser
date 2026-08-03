@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import gc
 import json
+from contextlib import contextmanager
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -22,6 +24,7 @@ from agentscope.model import ChatResponse, ChatUsage
 from agentscope.state import AgentState
 from agentscope.tool import Toolkit
 
+from cli_parser_agent.ttp_generation.agent import runner as runner_module
 from cli_parser_agent.ttp_generation.agent.prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
@@ -237,6 +240,47 @@ async def test_schema_no_tool_response_is_removed_then_recovers() -> None:
     assert sum(usage.output_tokens for usage in usages) == 7
     assert len(model.calls) == 2
     assert len(model.responses) == 1
+
+
+async def test_agent_round_span_records_safe_round_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spans: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
+    stack: list[str] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        spans.append({"name": name, "parent": stack[-1] if stack else None, **kwargs})
+        stack.append(name)
+        try:
+            yield SimpleNamespace(enabled=True, creates_trace=False)
+        finally:
+            assert stack.pop() == name
+
+    def finish(**kwargs: Any) -> None:
+        finishes.append({"span": stack[-1], **kwargs})
+
+    monkeypatch.setattr(runner_module, "start_laminar_span", start)
+    monkeypatch.setattr(runner_module, "finish_laminar_span", finish)
+    session = _session()
+    agent = _agent(_ScriptedModel([_schema_call()]), session, "schema")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "schema",
+    )
+
+    assert outcome.phase_completed
+    assert [item["name"] for item in spans] == ["agent.round"]
+    attributes = finishes[0]["attributes"]
+    assert attributes["phase"] == "schema"
+    assert attributes["round_index"] == 1
+    assert attributes["tool_call"] is True
+    assert attributes["tool_names"] == SUBMIT_SCHEMA_TOOL_NAME
+    assert "value: one" not in str(attributes)
 
 
 async def test_terminal_tool_interrupts_reply_without_generator_exit() -> None:

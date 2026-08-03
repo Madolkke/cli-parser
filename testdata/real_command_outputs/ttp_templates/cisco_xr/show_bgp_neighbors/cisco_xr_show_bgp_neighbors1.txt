@@ -700,7 +700,7 @@ BGP neighbor is 10.0.0.123, vrf MGMT
 
   Connections established 1; dropped 0
   Local host: 10.0.2.2, Local port: 179, IF Handle: 0x1234567
-  Foreign host: 10.0.0.152, Foreign port: 25659
+  Foreign host: 10.0.0.123, Foreign port: 25659
   Last reset 4y10w, due to Admin. shutdown
   Time since last notification sent to neighbor: 4y10w
   Error Code: administrative shutdown

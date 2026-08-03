@@ -249,7 +249,6 @@ def _walk_schema(
 
     if schema_type == "object":
         properties = node.get("properties")
-        required = node.get("required")
         if not isinstance(properties, Mapping):
             issues.append(
                 _issue(
@@ -265,33 +264,6 @@ def _walk_schema(
                     "schema.object_not_closed",
                     "object schemas must set additionalProperties to false",
                     path=_pointer((*schema_path, "additionalProperties")),
-                ),
-            )
-        property_names = list(properties)
-        if (
-            not isinstance(required, list)
-            or any(not isinstance(name, str) for name in required)
-            or len(required) != len(set(required))
-            or set(required) != set(property_names)
-        ):
-            required_names = (
-                {name for name in required if isinstance(name, str)}
-                if isinstance(required, list)
-                else set()
-            )
-            issues.append(
-                _issue(
-                    "schema.required_mismatch",
-                    "required must contain every property exactly once",
-                    path=_pointer((*schema_path, "required")),
-                    details={
-                        "missing_required": sorted(
-                            set(property_names) - required_names,
-                        ),
-                        "unknown_required": sorted(
-                            required_names - set(property_names),
-                        ),
-                    },
                 ),
             )
         state["property_count"] += len(properties)

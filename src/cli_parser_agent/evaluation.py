@@ -284,43 +284,6 @@ def _json_type(value: Any) -> NodeType:
     raise HarnessError("target contains a non-JSON value")
 
 
-def _collect_record_structure(
-    value: Any,
-    path: str,
-    *,
-    required: bool,
-    collected: dict[str, SchemaNode],
-) -> None:
-    node = SchemaNode(path=path, type=_json_type(value), required=required)
-    previous = collected.get(path)
-    if previous is not None and previous != node:
-        raise HarnessError(f"target records disagree about structure at {path}")
-    collected[path] = node
-    if isinstance(value, dict):
-        if not value:
-            raise HarnessError(f"target contains an empty object at {path}")
-        for key, child in value.items():
-            if not _FIELD_RE.fullmatch(key):
-                raise HarnessError(f"target field is not ASCII snake_case: {key}")
-            child_path = f"/{key}" if path == "/" else f"{path}/{key}"
-            _collect_record_structure(
-                child,
-                child_path,
-                required=True,
-                collected=collected,
-            )
-    elif isinstance(value, list):
-        if not value:
-            raise HarnessError(f"target contains an empty array at {path}")
-        for child in value:
-            _collect_record_structure(
-                child,
-                f"{path}/*",
-                required=False,
-                collected=collected,
-            )
-
-
 def _validate_contract(
     nodes: tuple[SchemaNode, ...],
     records: tuple[JsonObject, ...],
@@ -343,30 +306,66 @@ def _validate_contract(
         if path.endswith("/*"):
             if parent.type != "array" or node.required:
                 raise HarnessError(f"array item contract is invalid at {path}")
-        elif parent.type != "object" or not node.required:
+        elif parent.type != "object":
             raise HarnessError(f"object property contract is invalid at {path}")
 
-    observed: dict[str, SchemaNode] = {}
+    children: dict[str, dict[str, SchemaNode]] = {}
+    for path, node in declared.items():
+        parent_path = _parent_path(path)
+        if parent_path is None or path.endswith("/*"):
+            continue
+        name = path.rsplit("/", 1)[-1]
+        children.setdefault(parent_path, {})[name] = node
+
+    observed: set[str] = set()
+
+    def validate_value(value: Any, path: str) -> None:
+        node = declared.get(path)
+        if node is None:
+            raise HarnessError(f"target record contains an undeclared path: {path}")
+        actual_type = _json_type(value)
+        if actual_type != node.type:
+            raise HarnessError(
+                f"target record type does not match schema contract at {path}",
+            )
+        observed.add(path)
+
+        if isinstance(value, dict):
+            if not value:
+                raise HarnessError(f"target contains an empty object at {path}")
+            expected = children.get(path, {})
+            for name, child_node in expected.items():
+                if child_node.required and name not in value:
+                    child_path = f"/{name}" if path == "/" else f"{path}/{name}"
+                    raise HarnessError(
+                        f"target record is missing a required path: {child_path}",
+                    )
+            for name, child in value.items():
+                if not _FIELD_RE.fullmatch(name):
+                    raise HarnessError(
+                        f"target field is not ASCII snake_case: {name}",
+                    )
+                child_path = f"/{name}" if path == "/" else f"{path}/{name}"
+                validate_value(child, child_path)
+        elif isinstance(value, list):
+            if not value:
+                raise HarnessError(f"target contains an empty array at {path}")
+            item_path = f"{path}/*"
+            if item_path not in declared:
+                raise HarnessError(
+                    f"schema contract is missing array item path: {item_path}",
+                )
+            for child in value:
+                validate_value(child, item_path)
+
     for record in records:
-        _collect_record_structure(record, "/", required=False, collected=observed)
-    if observed != declared:
-        missing = sorted(observed.keys() - declared.keys())
-        extra = sorted(declared.keys() - observed.keys())
-        mismatched = sorted(
-            path
-            for path in observed.keys() & declared.keys()
-            if observed[path] != declared[path]
-        )
-        details = []
-        if missing:
-            details.append(f"missing={','.join(missing)}")
-        if extra:
-            details.append(f"extra={','.join(extra)}")
-        if mismatched:
-            details.append(f"mismatched={','.join(mismatched)}")
+        validate_value(record, "/")
+
+    unobserved = sorted(declared.keys() - observed)
+    if unobserved:
         raise HarnessError(
-            "schema contract does not match expected records"
-            + (f" ({'; '.join(details)})" if details else ""),
+            "schema contract contains paths absent from expected records: "
+            + ",".join(unobserved),
         )
 
 
@@ -566,12 +565,14 @@ def schema_signature(schema: Mapping[str, Any]) -> dict[str, SchemaNode]:
         if node_type == "object":
             properties = node.get("properties")
             required_names = node.get("required")
-            if not isinstance(properties, Mapping) or not isinstance(
-                required_names,
-                list,
-            ):
+            if not isinstance(properties, Mapping):
                 raise HarnessError(f"generated object schema is incomplete at {path}")
-            required_set = set(required_names)
+            if required_names is None:
+                required_set: set[str] = set()
+            elif isinstance(required_names, list):
+                required_set = set(required_names)
+            else:
+                raise HarnessError(f"generated object schema is incomplete at {path}")
             for key, child in properties.items():
                 if not isinstance(key, str):
                     raise HarnessError(

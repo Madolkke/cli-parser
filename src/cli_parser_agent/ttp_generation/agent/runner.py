@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -27,6 +28,7 @@ from agentscope.event import (
 from agentscope.message import ToolResultState, UserMsg
 from agentscope.model import FinishedReason
 
+from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
 from .prompt import SCHEMA_NO_TOOL_RETRY_PROMPT, TTP_NO_TOOL_RETRY_PROMPT
 from .session import GenerationPhase, GenerationSession
@@ -232,6 +234,44 @@ async def run_generation_phase(
     last_model_call_event_id: str | None = None
     last_model_call_reply_id: str | None = None
     next_message = message
+    round_span_manager: Any | None = None
+    round_span_attributes: dict[str, Any] = {}
+    round_tool_names: set[str] = set()
+    round_finished_reason: str = ""
+    round_outcome: str = "success"
+
+    def remaining_seconds() -> float:
+        if session.deadline_monotonic is None:
+            return 0.0
+        return max(0.0, session.deadline_monotonic - time.monotonic())
+
+    def close_round() -> None:
+        nonlocal round_span_manager
+        if round_span_manager is None:
+            return
+        finish_laminar_span(
+            output={
+                "status": round_outcome,
+                "phase": phase,
+                "tool_call": bool(round_tool_names),
+            },
+            outcome=round_outcome,  # type: ignore[arg-type]
+            attributes={
+                **round_span_attributes,
+                "tool_call": bool(round_tool_names),
+                "tool_names": ",".join(sorted(round_tool_names)),
+                "finished_reason": round_finished_reason,
+                "schema_no_tool_retries": session.schema_no_tool_retries,
+                "ttp_no_tool_retries": session.ttp_no_tool_retries,
+                "remaining_rounds": max(
+                    0,
+                    session.max_agent_rounds - session.agent_rounds,
+                ),
+                "remaining_seconds": remaining_seconds(),
+            },
+        )
+        round_span_manager.__exit__(None, None, None)
+        round_span_manager = None
 
     if _phase_completed(session, phase):
         return AgentRunOutcome(
@@ -278,7 +318,31 @@ async def run_generation_phase(
                     )
 
                 if isinstance(event, ModelCallStartEvent):
+                    close_round()
                     session.record_agent_round(phase)
+                    round_span_attributes = {
+                        "phase": phase,
+                        "round_index": session.agent_rounds,
+                        "expected_tools": ",".join(expected_tools),
+                        "remaining_rounds": max(
+                            0,
+                            session.max_agent_rounds - session.agent_rounds,
+                        ),
+                        "remaining_seconds": remaining_seconds(),
+                    }
+                    round_tool_names = set()
+                    round_finished_reason = ""
+                    round_outcome = "success"
+                    round_span_manager = start_laminar_span(
+                        "agent.round",
+                        input={
+                            "phase": phase,
+                            "round_index": session.agent_rounds,
+                        },
+                        tags=("agent-round", f"{phase}-round"),
+                        attributes=round_span_attributes,
+                    )
+                    round_span_manager.__enter__()
                     last_model_call_event_id = event.id
                     last_model_call_reply_id = event.reply_id
                     if progress is not None:
@@ -295,6 +359,7 @@ async def run_generation_phase(
                     last_call_interrupted = False
 
                 elif isinstance(event, ModelCallEndEvent):
+                    round_finished_reason = str(event.finished_reason)
                     last_call_interrupted = (
                         event.finished_reason == FinishedReason.INTERRUPTED
                     )
@@ -302,6 +367,7 @@ async def run_generation_phase(
                 elif isinstance(event, ToolCallStartEvent):
                     session.tool_call_starts += 1
                     tool_name = event.tool_call_name
+                    round_tool_names.add(tool_name)
                     pending_tool_calls[event.tool_call_id] = (
                         tool_name,
                         _submission_count(session, tool_name),
@@ -359,6 +425,7 @@ async def run_generation_phase(
                             )
         except asyncio.CancelledError as error:
             if internal_cancel_task is None:
+                round_outcome = "cancelled"
                 raise
             remaining_cancellations = internal_cancel_task.uncancel()
             internal_cancel_task = None
@@ -366,8 +433,10 @@ async def run_generation_phase(
                 bool(error.args) and error.args[0] is internal_cancel_token
             )
             if not internal_cancel or remaining_cancellations:
+                round_outcome = "cancelled"
                 raise
         except BaseException:
+            round_outcome = "exception"
             if internal_cancel_task is not None:
                 internal_cancel_task.uncancel()
                 internal_cancel_task = None
@@ -393,6 +462,7 @@ async def run_generation_phase(
                     internal_cancel_task.uncancel()
                     internal_cancel_task = None
         finally:
+            close_round()
             agent.react_config.max_iters = original_reply_max_iters
             if terminal_checkpoint is not None:
                 _restore_context(agent, terminal_checkpoint)

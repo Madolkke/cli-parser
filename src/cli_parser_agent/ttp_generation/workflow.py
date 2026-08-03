@@ -82,11 +82,14 @@ async def _fit_sampled_outputs(
     max_initial_tokens: int,
     serialize_prompt: Callable[[Sequence[str]], str],
     estimate_tokens: Callable[[Sequence[str]], Awaitable[int]],
+    metrics: dict[str, Any] | None = None,
 ) -> tuple[list[SampledCommandOutput], bool]:
     """Fit raw samples to serialized-char and initial model-token budgets."""
 
     raw_budget = total_char_budget
+    fit_rounds = 0
     while True:
+        fit_rounds += 1
         sampled = sample_command_outputs(
             command_outputs,
             total_char_budget=raw_budget,
@@ -96,11 +99,39 @@ async def _fit_sampled_outputs(
             item.truncated and item.allocated_char_budget <= len(TRUNCATION_MARKER)
             for item in sampled
         ):
+            if metrics is not None:
+                metrics.update(
+                    {
+                        "fit_rounds": fit_rounds,
+                        "raw_budget_chars": raw_budget,
+                        "sampled_char_count": sum(
+                            item.sampled_char_count for item in sampled
+                        ),
+                        "truncated_count": sum(
+                            item.truncated for item in sampled
+                        ),
+                    },
+                )
             # A truncated marker without any source character is not a usable
             # view of that input. The fitter can only shrink from here.
             return sampled, False
         serialized_chars = len(serialize_prompt(texts))
         estimated_tokens = await estimate_tokens(texts)
+        if metrics is not None:
+            metrics.update(
+                {
+                    "fit_rounds": fit_rounds,
+                    "raw_budget_chars": raw_budget,
+                    "serialized_chars": serialized_chars,
+                    "estimated_tokens": estimated_tokens,
+                    "sampled_char_count": sum(
+                        item.sampled_char_count for item in sampled
+                    ),
+                    "truncated_count": sum(
+                        item.truncated for item in sampled
+                    ),
+                },
+            )
         if (
             serialized_chars <= total_char_budget
             and estimated_tokens <= max_initial_tokens
@@ -424,6 +455,7 @@ async def _run_before_deadline(
     operation: Callable[[], Awaitable[_T]],
     *,
     deadline_monotonic: float,
+    cleanup_attributes: Mapping[str, Any] | None = None,
 ) -> tuple[bool, _T | None]:
     """Run an operation under a watchdog that AgentScope cannot swallow."""
 
@@ -435,11 +467,55 @@ async def _run_before_deadline(
     try:
         done, _ = await asyncio.wait({task}, timeout=remaining)
     except asyncio.CancelledError:
-        await _cancel_and_drain(task)
+        started = time.monotonic()
+        with start_laminar_span(
+            "generation.deadline_cleanup",
+            input={"trigger": "external_cancel"},
+            tags=("deadline-cleanup", "external-cancel"),
+            attributes={
+                **(dict(cleanup_attributes) if cleanup_attributes else {}),
+                "trigger": "external_cancel",
+                "remaining_seconds": max(0.0, deadline_monotonic - started),
+            },
+        ):
+            await _cancel_and_drain(task)
+            finish_laminar_span(
+                output={"status": "cancelled", "drained": True},
+                outcome="cancelled",
+                attributes={
+                    "cleanup_duration_ms": round(
+                        (time.monotonic() - started) * 1000,
+                        3,
+                    ),
+                    "drained": True,
+                },
+            )
         raise
 
     if task not in done:
-        await _cancel_and_drain(task)
+        started = time.monotonic()
+        with start_laminar_span(
+            "generation.deadline_cleanup",
+            input={"trigger": "deadline"},
+            tags=("deadline-cleanup", "deadline"),
+            attributes={
+                **(dict(cleanup_attributes) if cleanup_attributes else {}),
+                "trigger": "deadline",
+                "remaining_seconds": 0.0,
+            },
+        ):
+            await _cancel_and_drain(task)
+            finish_laminar_span(
+                output={"status": "failed", "drained": True},
+                outcome="failed",
+                attributes={
+                    "cleanup_duration_ms": round(
+                        (time.monotonic() - started) * 1000,
+                        3,
+                    ),
+                    "drained": True,
+                },
+            )
         return False, None
     return True, task.result()
 
@@ -465,6 +541,7 @@ class _GenerationWorkflow:
         self.deadline = self.started + policy.total_timeout_seconds
         self.schema_sampled: list[SampledCommandOutput] = []
         self.ttp_sampled: list[SampledCommandOutput] = []
+        self._acceptance_trace_summary: dict[str, Any] = {}
         self.session = GenerationSession(
             command_outputs=tuple(request.command_outputs),
             schema_validator=self._schema_validator,
@@ -788,16 +865,61 @@ class _GenerationWorkflow:
                     phase,
                 )
 
-            fit_completed, fit_result = await _run_before_deadline(
-                lambda: _fit_sampled_outputs(
-                    tuple(self.request.command_outputs),
-                    total_char_budget=self.policy.model_input_char_budget,
-                    max_initial_tokens=max_initial_tokens,
-                    serialize_prompt=serialize_prompt,
-                    estimate_tokens=estimate_tokens,
-                ),
-                deadline_monotonic=self.deadline,
-            )
+            fit_metrics: dict[str, Any] = {}
+            fit_started = time.monotonic()
+            with start_laminar_span(
+                "context.fit",
+                input={"phase": phase},
+                tags=("context-fit", f"{phase}-context"),
+                attributes={
+                    "phase": phase,
+                    "command_output_count": len(self.request.command_outputs),
+                    "raw_char_count": sum(
+                        len(item) for item in self.request.command_outputs
+                    ),
+                    "char_budget": self.policy.model_input_char_budget,
+                    "max_initial_tokens": max_initial_tokens,
+                },
+            ):
+                fit_completed, fit_result = await _run_before_deadline(
+                    lambda: _fit_sampled_outputs(
+                        tuple(self.request.command_outputs),
+                        total_char_budget=self.policy.model_input_char_budget,
+                        max_initial_tokens=max_initial_tokens,
+                        serialize_prompt=serialize_prompt,
+                        estimate_tokens=estimate_tokens,
+                        metrics=fit_metrics,
+                    ),
+                    deadline_monotonic=self.deadline,
+                    cleanup_attributes={"phase": phase, "operation": "context_fit"},
+                )
+                fit_outcome = (
+                    "success"
+                    if fit_completed and fit_result is not None and fit_result[1]
+                    else "failed"
+                )
+                finish_laminar_span(
+                    output={
+                        "status": fit_outcome,
+                        "phase": phase,
+                        "input_fits": fit_result[1]
+                        if fit_result is not None
+                        else False,
+                    },
+                    outcome=fit_outcome,
+                    attributes={
+                        "phase": phase,
+                        "duration_ms": round(
+                            (time.monotonic() - fit_started) * 1000,
+                            3,
+                        ),
+                        "fit_completed": fit_completed,
+                        "input_fits": (
+                            fit_result[1] if fit_result is not None else False
+                        ),
+                        **fit_metrics,
+                    },
+                )
             if (
                 not fit_completed
                 or fit_result is None
@@ -875,6 +997,7 @@ class _GenerationWorkflow:
             completed, outcome = await _run_before_deadline(
                 run_phase,
                 deadline_monotonic=self.deadline,
+                cleanup_attributes={"phase": phase, "operation": "agent_run"},
             )
             return _PhaseExecution(
                 deadline_completed=(completed and time.monotonic() < self.deadline),
@@ -984,11 +1107,24 @@ class _GenerationWorkflow:
             max_schema_properties=self.policy.max_schema_properties,
         )
 
-    async def _accept_artifact_impl(self) -> GenerationResult:
+    async def _accept_artifact_impl(
+        self,
+        trace_summary: dict[str, Any] | None = None,
+    ) -> GenerationResult:
+        trace_summary = (
+            self._acceptance_trace_summary
+            if trace_summary is None
+            else trace_summary
+        )
+        schema_started = time.monotonic()
         try:
             schema_completed, schema_issues = await _run_before_deadline(
                 lambda: asyncio.to_thread(self._validate_frozen_schema),
                 deadline_monotonic=self.deadline,
+                cleanup_attributes={
+                    "phase": "acceptance",
+                    "operation": "schema_revalidation",
+                },
             )
         except asyncio.CancelledError:
             raise
@@ -1000,6 +1136,16 @@ class _GenerationWorkflow:
                 details={"exception_type": type(error).__name__},
             )
             return self._failure("final_validation_failed", [issue])
+        trace_summary.update(
+            {
+                "schema_revalidation_ms": round(
+                    (time.monotonic() - schema_started) * 1000,
+                    3,
+                ),
+                "schema_revalidated": bool(schema_completed and not schema_issues),
+                "schema_issue_count": len(schema_issues or ()),
+            },
+        )
         if (
             not schema_completed
             or schema_issues is None
@@ -1019,6 +1165,7 @@ class _GenerationWorkflow:
             self.policy.ttp_validation_timeout_seconds,
             max(0.0, self.deadline - time.monotonic()),
         )
+        ttp_started = time.monotonic()
         try:
             completed, acceptance = await _run_before_deadline(
                 lambda: asyncio.to_thread(
@@ -1037,6 +1184,10 @@ class _GenerationWorkflow:
                     max_schema_properties=self.policy.max_schema_properties,
                 ),
                 deadline_monotonic=self.deadline,
+                cleanup_attributes={
+                    "phase": "acceptance",
+                    "operation": "ttp_revalidation",
+                },
             )
         except asyncio.CancelledError:
             raise
@@ -1060,6 +1211,18 @@ class _GenerationWorkflow:
             acceptance.issues,
             fallback_stage="acceptance",
         )
+        trace_summary.update(
+            {
+                "ttp_revalidation_ms": round(
+                    (time.monotonic() - ttp_started) * 1000,
+                    3,
+                ),
+                "ttp_revalidated": bool(acceptance.valid),
+                "ttp_issue_count": len(final_issues),
+                "record_count": len(acceptance.records),
+                "records_mapped": bool(acceptance.valid),
+            },
+        )
         if not acceptance.valid:
             return self._failure("final_validation_failed", final_issues)
 
@@ -1071,10 +1234,15 @@ class _GenerationWorkflow:
                 assumptions=list(self.session.assumptions),
             )
 
+        artifact_started = time.monotonic()
         try:
             artifact_completed, artifact = await _run_before_deadline(
                 lambda: asyncio.to_thread(build_artifact),
                 deadline_monotonic=self.deadline,
+                cleanup_attributes={
+                    "phase": "acceptance",
+                    "operation": "artifact_package",
+                },
             )
         except asyncio.CancelledError:
             raise
@@ -1086,6 +1254,15 @@ class _GenerationWorkflow:
                 details={"exception_type": type(error).__name__},
             )
             return self._failure("final_validation_failed", [issue])
+        trace_summary.update(
+            {
+                "artifact_package_ms": round(
+                    (time.monotonic() - artifact_started) * 1000,
+                    3,
+                ),
+                "artifact_packaged": True,
+            },
+        )
         if (
             not artifact_completed
             or artifact is None
@@ -1114,30 +1291,85 @@ class _GenerationWorkflow:
                 phase="acceptance",
                 sensitive=False,
             )
-        try:
-            result = await self._accept_artifact_impl()
-        except asyncio.CancelledError:
-            if self.progress.enabled:
-                self.progress.custom(
-                    "cli_parser.final_validation.completed",
-                    {"status": "cancelled", "valid": False},
-                    phase="acceptance",
-                    sensitive=False,
-                )
-            raise
-        except BaseException as error:
-            if self.progress.enabled:
-                self.progress.custom(
-                    "cli_parser.final_validation.completed",
+        summary = self._acceptance_trace_summary = {
+            "phase": "acceptance",
+            "command_output_count": len(self.request.command_outputs),
+        }
+        started = time.monotonic()
+        with start_laminar_span(
+            "final.acceptance",
+            input={"phase": "acceptance"},
+            tags=("final-acceptance",),
+            attributes=summary,
+        ):
+            try:
+                result = await self._accept_artifact_impl(summary)
+            except asyncio.CancelledError:
+                summary.update(
                     {
-                        "status": "failed",
-                        "valid": False,
+                        "status": "cancelled",
+                        "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                    },
+                )
+                finish_laminar_span(
+                    output={"status": "cancelled"},
+                    outcome="cancelled",
+                    attributes=summary,
+                )
+                if self.progress.enabled:
+                    self.progress.custom(
+                        "cli_parser.final_validation.completed",
+                        {"status": "cancelled", "valid": False},
+                        phase="acceptance",
+                        sensitive=False,
+                    )
+                raise
+            except BaseException as error:
+                summary.update(
+                    {
+                        "status": "exception",
+                        "duration_ms": round((time.monotonic() - started) * 1000, 3),
                         "exception_type": type(error).__name__,
                     },
-                    phase="acceptance",
-                    sensitive=False,
                 )
-            raise
+                finish_laminar_span(
+                    output={
+                        "status": "exception",
+                        "exception_type": type(error).__name__,
+                    },
+                    outcome="exception",
+                    attributes=summary,
+                )
+                if self.progress.enabled:
+                    self.progress.custom(
+                        "cli_parser.final_validation.completed",
+                        {
+                            "status": "failed",
+                            "valid": False,
+                            "exception_type": type(error).__name__,
+                        },
+                        phase="acceptance",
+                        sensitive=False,
+                    )
+                raise
+
+            summary.update(
+                {
+                    "status": result.status,
+                    "duration_ms": round((time.monotonic() - started) * 1000, 3),
+                    "issue_codes": ",".join(
+                        sorted({item.code for item in result.issues})
+                    ),
+                },
+            )
+            finish_laminar_span(
+                output={
+                    "status": result.status,
+                    "valid": result.status == "success",
+                },
+                outcome=result.status,
+                attributes=summary,
+            )
 
         if self.progress.enabled:
             value: dict[str, Any] = {

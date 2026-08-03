@@ -1,8 +1,8 @@
-# Maximum stable semantic projection
+# Maximum evidenced semantic projection
 
 ## Objective
 
-Annotate the richest result that is simultaneously stable, source-grounded, and unambiguous across all supplied captures. The golden is not a transcript and not an attempt to preserve every token.
+Annotate the richest result that is source-grounded, semantically meaningful, and unambiguous across the supplied captures. The golden is not a transcript and not an attempt to preserve every token.
 
 ## Primary entities
 
@@ -13,16 +13,16 @@ Annotate the richest result that is simultaneously stable, source-grounded, and 
 
 Ask the human before editing if both a flat and nested representation, or two different primary entities, are equally defensible from the raw text. This is the one ambiguity the Skill must not resolve on its own.
 
-## Stable fields
+## Evidenced fields
 
-For each kind of primary entity, start with fine-grained business fields explicitly present in the source. Keep a field only if:
+For each kind of primary entity, start with fine-grained business fields explicitly present in the source. Keep a field if:
 
 1. its meaning is the same in every supplied format variant;
-2. it is present and non-empty for every entity of that kind across every input;
+2. it is present and non-empty for at least one entity of that kind;
 3. its boundary can be identified without borrowing neighboring columns or prose; and
 4. retaining it does not require inference, normalization, enrichment, or a lookup.
 
-Exclude an entire optional field when any same-kind entity lacks it, even if most rows contain it. Prefer separate atomic fields over a concatenated row, but do not split a value when the source does not expose a stable boundary.
+Mark a field required only when it is present and non-empty in every instance of its immediate parent object. Otherwise keep it as optional and omit the key from instances where the source has no value. Prefer separate atomic fields over a concatenated row, but do not split a value when the source does not expose a stable boundary.
 
 Never include empty strings, whitespace-only values, `null`, sentinel placeholders, empty containers, row numbers, synthetic IDs, or computed values. Do not normalize case, spacing inside meaningful values, units, addresses, abbreviations, or punctuation unless the source itself supplies the normalized token.
 

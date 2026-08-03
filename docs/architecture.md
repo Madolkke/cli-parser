@@ -47,7 +47,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 ### 2.3 模型与预算
 
-首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
+首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。不发送供应商专用的 `extra_body` 覆盖。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
 
 TTP 提示要求每个模型回复最多调用一个工具，并等待提交 ToolResult/capture 出现在后续模型上下文后再调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮 submit/finish 拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
 
@@ -267,7 +267,7 @@ GenerationRequest
     └─ GenerationResult(success | failed)
 ```
 
-Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象完整声明 `required` 并设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径必须提交一条真实存在于指定完整输入中的连续原文证据。
+Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。缺失可选值通过省略键表达，不允许用空字符串或 `null` 占位。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交一条真实存在于指定完整输入中的连续原文证据。
 
 TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
 
@@ -283,13 +283,13 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
-此外，仓库保留独立于 pytest 的公开真实命令输出语料：`networktocode/ntc-templates` `v9.2.0` 和 `dmulyalin/ttp_templates` `0.5.9` 中选取的 `13` 个 case、`40` 份 raw 文本。`corpus.json` 固定文件顺序、suite、来源版本和 SHA-256；不复制上游 YAML、解析模板、mock 数据或 JSON 输出。两份第三方许可证与版本说明随语料保存，本项目自身使用根目录 Apache-2.0 `LICENSE`。
+此外，仓库保留独立于 pytest 的公开真实命令输出语料：`networktocode/ntc-templates` `v9.2.0` 和 `dmulyalin/ttp_templates` `0.5.9` 中选取的 `11` 个 case、`31` 份文本。`corpus.json` 固定文件顺序、suite、来源版本和 SHA-256；不复制上游 YAML、解析模板、mock 数据或 JSON 输出。两份第三方许可证与版本说明随语料保存，本项目自身使用根目录 Apache-2.0 `LICENSE`。
 
 `scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
 `scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。模型、预算、Laminar 连接和本地产物目录均由环境变量注入；target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
 
-真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `13/13`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
+真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `11/11`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 
 ## 7. 暂缓事项
 

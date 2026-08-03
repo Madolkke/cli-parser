@@ -349,8 +349,13 @@ async def test_generation_result_captures_the_active_laminar_trace(
     )
 
     assert result.metadata.laminar_trace_id == "01234567-89ab-cdef-0123-456789abcdef"
-    assert finishes[0]["outcome"] == "failed"
-    assert finishes[0]["output"]["phase"] == "schema"
+    schema_finish = next(
+        item
+        for item in finishes
+        if item.get("output", {}).get("phase") == "schema"
+        and "phase_completed" in item.get("output", {})
+    )
+    assert schema_finish["outcome"] == "failed"
     assert finishes[-1]["outcome"] == "failed"
     assert finishes[-1]["output"] == result.model_dump(mode="json")
     assert finishes[-1]["trace_metadata"] == {
@@ -366,6 +371,11 @@ async def test_generation_result_captures_the_active_laminar_trace(
         "schema_submissions": 0,
         "ttp_submissions": 0,
         "termination_reason": "model_no_tool_retry_limit",
+        "fault_domain": "model",
+        "schema_frozen": False,
+        "entered_ttp": False,
+        "valid_ttp_candidate": False,
+        "finish_called": False,
         "status": "failed",
     }
 
@@ -521,15 +531,95 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     assert [(item["name"], item["parent"]) for item in span_starts] == [
         ("ttp.generate", None),
         ("schema.phase", "ttp.generate"),
+        ("context.fit", "schema.phase"),
         ("ttp.phase", "ttp.generate"),
+        ("context.fit", "ttp.phase"),
+        ("final.acceptance", "ttp.generate"),
     ]
     assert [item["span"] for item in span_finishes] == [
+        "context.fit",
         "schema.phase",
+        "context.fit",
         "ttp.phase",
+        "final.acceptance",
         "ttp.generate",
     ]
-    assert span_finishes[0]["outcome"] == "success"
-    assert span_finishes[1]["outcome"] == "success"
+    assert all(item["outcome"] == "success" for item in span_finishes)
+
+
+async def test_workflow_accepts_records_with_omitted_optional_properties(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command_output = """\
+NAME: first
+PID: one
+NAME: second"""
+    item_schema = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string"},
+            "pid": {"type": "string"},
+        },
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+    frozen_schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {"inventory": {"type": "array", "items": item_schema}},
+        "required": ["inventory"],
+        "additionalProperties": False,
+    }
+    template = """\
+<group name="inventory*">
+NAME: {{ name | ORPHRASE }}
+PID: {{ pid | ORPHRASE }}
+</group>"""
+    expected_records = (
+        {
+            "inventory": [
+                {"name": "first", "pid": "one"},
+                {"name": "second"},
+            ],
+        },
+    )
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            session.schema_submissions = 1
+            session.frozen_schema = frozen_schema
+            session.field_evidence = (
+                {"path": "/inventory/*/name", "output_index": 0, "excerpt": "first"},
+                {"path": "/inventory/*/pid", "output_index": 0, "excerpt": "one"},
+            )
+            return AgentRunOutcome(phase_completed=True)
+
+        session.ttp_submissions = 1
+        session.validated_ttp_template = template
+        session.records = expected_records
+        session.first_ttp_valid = True
+        session.last_issues = ()
+        session.generation_finished = True
+        session.terminal_reason = "success"
+        return AgentRunOutcome(phase_completed=True)
+
+    _install_agent_stubs(monkeypatch, run)
+
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=[command_output]),
+    )
+
+    assert result.status == "success"
+    assert result.artifact is not None
+    assert result.artifact.result_schema == frozen_schema
+    assert result.artifact.records == list(expected_records)
 
 
 async def test_valid_ttp_candidate_without_finish_does_not_build_artifact(
@@ -758,7 +848,13 @@ async def test_ttp_context_fit_failure_is_phase_tagged_and_not_counted(
     assert result.status == "failed"
     assert built_phases == ["schema", "ttp"]
     assert run_phases == ["schema"]
-    assert span_names == ["ttp.generate", "schema.phase", "ttp.phase"]
+    assert span_names == [
+        "ttp.generate",
+        "schema.phase",
+        "context.fit",
+        "ttp.phase",
+        "context.fit",
+    ]
     assert result.metadata.schema_sampled_char_count == len("value: one")
     assert result.metadata.ttp_sampled_char_count == 0
     assert result.metadata.schema_agent_rounds == 1
@@ -825,16 +921,24 @@ async def test_phase_cancellation_closes_child_and_root_spans(
     assert events == [
         "enter:ttp.generate",
         "enter:schema.phase",
+        "enter:context.fit",
+        "finish:context.fit",
+        "exit:context.fit",
         "finish:schema.phase",
         "exit:schema.phase",
         "finish:ttp.generate",
         "exit:ttp.generate",
     ]
     assert [item["span"] for item in finishes] == [
+        "context.fit",
         "schema.phase",
         "ttp.generate",
     ]
-    assert all(item["outcome"] == "cancelled" for item in finishes)
+    assert [item["outcome"] for item in finishes] == [
+        "success",
+        "cancelled",
+        "cancelled",
+    ]
     assert all("private cancellation text" not in str(item) for item in finishes)
 
 

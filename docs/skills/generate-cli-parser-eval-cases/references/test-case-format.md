@@ -46,9 +46,9 @@ The target root has exactly `records` and `schema_contract`:
 }
 ```
 
-There must be exactly one record per input, in the same order. Records must be non-empty root objects. Objects are closed by the contract: every observed path is declared and every declared path is observed.
+There must be exactly one record per input, in the same order. Records must be non-empty root objects. Objects are closed by the contract: every observed path is declared and every declared path is observed at least once. Optional object properties may be absent from individual parent instances.
 
-Supported node types are `object`, `array`, `string`, `integer`, `number`, and `boolean`. Field names are ASCII `snake_case`. `/` is the root. `*` is permitted only as an array item segment. Array item nodes are never required; object properties are required in this benchmark's stable projection.
+Supported node types are `object`, `array`, `string`, `integer`, `number`, and `boolean`. Field names are ASCII `snake_case`. `/` is the root. `*` is permitted only as an array item segment. Array item nodes are never required. An object property is required only when it appears in every instance of its immediate parent object; otherwise it is optional.
 
 Every string value in record `n` must occur literally in input `n`. This is a provenance check, not permission to copy headings or control text.
 

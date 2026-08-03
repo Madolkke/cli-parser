@@ -71,6 +71,16 @@ class TtpGenerator:
             "model_name": self.settings.model_name,
             "prompt_version": PROMPT_VERSION,
             "command_output_count": len(request.command_outputs),
+            "input_char_count": sum(
+                len(item) for item in request.command_outputs
+            ),
+            "policy_total_timeout_seconds": self.policy.total_timeout_seconds,
+            "policy_max_agent_rounds": self.policy.max_agent_rounds,
+            "policy_max_ttp_submissions": self.policy.max_ttp_submissions,
+            "policy_ttp_validation_timeout_seconds": (
+                self.policy.ttp_validation_timeout_seconds
+            ),
+            "policy_model_input_char_budget": self.policy.model_input_char_budget,
         }
         if progress.enabled:
             progress.custom(
@@ -191,6 +201,23 @@ class TtpGenerator:
                 "schema_submissions": result_metadata.schema_submissions,
                 "ttp_submissions": result_metadata.ttp_submissions,
                 "termination_reason": result_metadata.termination_reason or "",
+                "fault_domain": result_metadata.fault_domain or "",
+                "schema_frozen": bool(
+                    result.artifact is not None
+                    or result_metadata.ttp_agent_rounds > 0
+                ),
+                "entered_ttp": bool(
+                    result_metadata.ttp_agent_rounds > 0
+                    or result_metadata.ttp_sampled_char_count > 0
+                ),
+                "valid_ttp_candidate": bool(
+                    result.artifact is not None
+                    or (
+                        result.last_attempt is not None
+                        and result.last_attempt.ttp_template is not None
+                    )
+                ),
+                "finish_called": result_metadata.termination_reason == "success",
                 "status": result.status,
             }
             finish_laminar_span(

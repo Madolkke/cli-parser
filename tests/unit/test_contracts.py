@@ -229,6 +229,8 @@ def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> Non
     assert settings.stream is False
     assert settings.temperature == 0
     assert settings.parallel_tool_calls is False
+    assert settings.thinking_enable is None
+    assert settings.reasoning_effort is None
     assert settings.max_tokens == 8192
     assert settings.context_size == 128000
     assert settings.model_max_retries == 2
@@ -247,6 +249,8 @@ def test_settings_from_env_reads_all_model_overrides() -> None:
             "CLI_PARSER_MODEL_STREAM": "true",
             "CLI_PARSER_MODEL_TEMPERATURE": "0.7",
             "CLI_PARSER_MODEL_PARALLEL_TOOL_CALLS": "true",
+            "CLI_PARSER_MODEL_THINKING_ENABLE": "true",
+            "CLI_PARSER_MODEL_REASONING_EFFORT": "high",
             "CLI_PARSER_MODEL_MAX_TOKENS": "4096",
             "CLI_PARSER_MODEL_CONTEXT_SIZE": "8192",
             "CLI_PARSER_MODEL_MAX_RETRIES": "4",
@@ -257,10 +261,34 @@ def test_settings_from_env_reads_all_model_overrides() -> None:
     assert settings.stream is True
     assert settings.temperature == 0.7
     assert settings.parallel_tool_calls is True
+    assert settings.thinking_enable is True
+    assert settings.reasoning_effort == "high"
     assert settings.max_tokens == 4096
     assert settings.context_size == 8192
     assert settings.model_max_retries == 4
     assert settings.model_timeout_seconds == 90
+
+
+@pytest.mark.parametrize("value", ["invalid", "HIGH"])
+def test_settings_reject_invalid_reasoning_effort(value: str) -> None:
+    with pytest.raises(ValidationError):
+        TtpGeneratorSettings(
+            api_key="secret",
+            model_name="test-model",
+            reasoning_effort=value,
+        )
+
+
+@pytest.mark.parametrize("value", ["maybe", "2"])
+def test_settings_reject_invalid_thinking_enable(value: str) -> None:
+    with pytest.raises(ValidationError):
+        TtpGeneratorSettings.from_env(
+            {
+                "OPENAI_API_KEY": "secret",
+                "OPENAI_MODEL": "test-model",
+                "CLI_PARSER_MODEL_THINKING_ENABLE": value,
+            },
+        )
 
 
 @pytest.mark.parametrize("value", ["1", "true", "yes", "on"])

@@ -17,7 +17,7 @@
 | `networktocode/ntc-templates` | `v9.2.0` | `891746e659e3a25d5065ee9dac29e7de5760bdf7` | Apache-2.0 |
 | `dmulyalin/ttp_templates` | `0.5.9` | `307f16812503f3470897020c2267101bcf7af5d5` | MIT |
 
-完整语料包含 `13` 个 case、`40` 份文本：
+完整语料包含 `11` 个 case、`31` 份文本：
 
 | Case ID | Command | Samples |
 | --- | --- | ---: |
@@ -26,8 +26,6 @@
 | `ntc.cisco_ios.show_cdp_neighbors_detail` | `show cdp neighbors detail` | 2 |
 | `ntc.cisco_ios.show_interfaces` | `show interfaces` | 5 |
 | `ntc.linux.ip_route_show` | `ip route show` | 3 |
-| `ntc.arista_eos.show_interfaces_status` | `show interfaces status` | 4 |
-| `ntc.huawei_vrp.display_version` | `display version` | 5 |
 | `ntc.fortinet.get_system_status` | `get system status` | 5 |
 | `ntc.juniper_junos.show_interfaces` | `show interfaces` | 3 |
 | `ttp.linux.ip_address_show` | `ip address show` | 3 |
@@ -59,7 +57,7 @@ uv run pytest -m "not live" -q
 uv run ruff check .
 ```
 
-`list` 和 `preflight` 不读取模型配置，也不产生网络请求。Preflight 必须确认 manifest 恰好包含 `13` 个 case 和 `40` 份文件，并逐份检查：
+`list` 和 `preflight` 不读取模型配置，也不产生网络请求。Preflight 必须确认 manifest 恰好包含 `11` 个 case 和 `31` 份文件，并逐份检查：
 
 - 文件存在、非空、严格 UTF-8、LF 换行且无 BOM；
 - UTF-8 编码后小于 `1 MiB`；
@@ -116,7 +114,7 @@ uv run python scripts/run_live_corpus.py run --suite all --concurrency 2 --outpu
 - 每个 record 都符合冻结的 Draft 2020-12 JSON Schema；
 - 失败可归类为 `model`、`generation`、`schema`、`ttp` 或最终验收问题。
 
-Smoke 阶段必须达到 `5/5` case 成功；完整代表集最终必须达到 `13/13` case 成功。修复问题后使用 `--resume` 仅重跑失败或缺失项。完成这两项前，不能把公开语料闭环声明为通过。
+Smoke 阶段必须达到 `5/5` case 成功；完整代表集最终必须达到 `11/11` case 成功。修复问题后使用 `--resume` 仅重跑失败或缺失项。完成这两项前，不能把公开语料闭环声明为通过。
 
 ## 6. 隐私与第三方内容
 

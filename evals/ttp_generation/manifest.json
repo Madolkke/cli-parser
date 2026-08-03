@@ -22,7 +22,7 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_interfaces_status.json",
-        "sha256": "8d61ad8fa49c7fd27ad3cd395c728b8c1052ed360709735d11c8787de842170d"
+        "sha256": "6660a1a9e113693e1ff85496d4262c295b953f74ac3c2897bd61c7e7de8f55ac"
       }
     },
     {
@@ -46,7 +46,7 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.linux.ip_address_show.json",
-        "sha256": "7470e41b5adf3893f0b4f324de3d35fccb94276c405c9eec32aca5250a913840"
+        "sha256": "ec7b7371f438096d52d019aa4224d430e1f04e00172ee4ec1b2d01ddb607e742"
       }
     },
     {
@@ -66,7 +66,7 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.json",
-        "sha256": "03d23b4db8106078269f91bf758b597d207df03eee45a10ecc3006a7198b339f"
+        "sha256": "4c6415e940708cf54e48bcc2a0a3339aefab9b9ea514de98e0aa2a82d1de60bb"
       }
     },
     {
@@ -86,7 +86,7 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.json",
-        "sha256": "8bd2a6b2dc7a07147a6fdd3145a560068cf57bf0686cc65e4b38acdb039cf17a"
+        "sha256": "c2177a270505849b3f0742198e7950ce6c59208ef7b69a52fa52bd08c50cc482"
       }
     },
     {
@@ -101,12 +101,60 @@
         },
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors1.txt",
-          "sha256": "ac9cd994359ff4afc4ab268967c6430263bccc6a866a4a9e048f11364b2d1dc4"
+          "sha256": "7fbcd75cb7f10858efb2ef3381f95cd85a7450305734998616d70f6b13d3f70d"
         }
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.cisco_xr.show_bgp_neighbors.json",
-        "sha256": "aa6a8a517bdab18472ede48cb1983aaf2fdcc159b0c87a50fecbb37d3fd61dbd"
+        "sha256": "126da54eb9d659ca6d516575b83fee7959eb61b35aef53c79a0717a586f76826"
+      }
+    },
+    {
+      "id": "ntc.cisco_ios.show_ip_interface_brief",
+      "command": "show ip interface brief",
+      "suites": ["baseline"],
+      "tags": ["baseline", "single-input", "cisco-ios", "fixed-width-table"],
+      "inputs": [
+        {
+          "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_ip_interface_brief/cisco_ios_show_ip_interface_brief.raw",
+          "sha256": "3ae206d00c82f04b23062add5819b4dbf45e308b519436eae11441cdc8255371"
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_ip_interface_brief.json",
+        "sha256": "85e7d6d0cbfc9667a084aef614e56043bb397fcc1baca73900e01697192ce0e3"
+      }
+    },
+    {
+      "id": "ttp.cisco_ios.show_inventory.single_basic",
+      "command": "show inventory",
+      "suites": ["baseline"],
+      "tags": ["baseline", "single-input", "cisco-ios", "repeated-detail-blocks"],
+      "inputs": [
+        {
+          "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_inventory/show_inventory.txt",
+          "sha256": "4bf487ad8160c0e20a01ed91470b0fc90db259ec4fc953c3ac99d81ac8995cc6"
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.single_basic.json",
+        "sha256": "0631925839a7396109f2d096f80896848605d90a5f07a38eaa03631b358888fd"
+      }
+    },
+    {
+      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq",
+      "command": "show running-config | section interface",
+      "suites": ["baseline"],
+      "tags": ["baseline", "single-input", "cisco-ios", "hierarchical-configuration"],
+      "inputs": [
+        {
+          "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface_qinq.txt",
+          "sha256": "16c4ea6d3d36e178e23cfeaf1b9e999c7bc7b3adc56a943c467aefdf157226b0"
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq.json",
+        "sha256": "00eccb1af1130f1a8c7d7c4e92d8d0efa53aa1be38169c2d7ab5292b13644ca3"
       }
     }
   ]

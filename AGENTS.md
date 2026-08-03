@@ -24,6 +24,7 @@
 - 每个请求顺序创建 `ttp_schema_generator` 和 `ttp_template_generator` 两个独立 Agent；两者分别拥有新的 `OpenAIChatModel`、`AgentState` 和 Toolkit，模型对话上下文绝不跨阶段复用。首版不使用长期记忆。
 - 两阶段只共享请求级 `GenerationSession`。Schema Agent 的 Toolkit 只注册 `submit_result_schema`；Schema 冻结后结束该 reply，再以冻结 Schema 和重新从全文采样的命令输出启动 TTP Agent，其 Toolkit 固定注册 `submit_ttp_template` 与无参数的 `finish_generation`。rejected Schema、evidence、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 均不进入 TTP 模型上下文。
 - 两个阶段发送给 OpenAI 兼容 HTTP API 的请求都完全省略 `tool_choice`。工具自身仍执行阶段、冻结和预算校验，不从普通 assistant 文本提取产物；middleware 只禁止有损 context compression，不承担阶段工具过滤。
+- 运行配置可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或对应的 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 控制标准 OpenAI 推理参数；开关未设置时保持省略，显式关闭时发送 `reasoning_effort=none`，不加入供应商专用 `extra_body`。
 - OpenAI 兼容 HTTP 客户端默认严格校验 TLS 证书；只有显式设置 `CLI_PARSER_INSECURE_SKIP_TLS_VERIFY=1`（也接受 `true`、`yes`、`on`）时，才为受信任内网端点禁用验证。该开关同样用于评测 SQL HTTP 请求；Laminar exporter 改用 HTTP OTLP，Laminar 自托管实例必须使用 `http://` 或安装内部 CA，不能绕过 gRPC TLS 校验。
 - TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_template` 的 ToolResult/capture 已进入后续模型上下文后才能调用 `finish_generation`。首版不新增候选轮次 ID 或同轮工具调用拦截，依赖兼容供应商遵守 `parallel_tool_calls=False`。
 - 模型完成一轮但没有产生工具调用时，runner 只追加固定的中文提醒并在同一阶段重试；提醒不得引用、摘要或记录模型自由文本。Schema 和 TTP 阶段分别最多重试 `3` 次，允许配置为 `0`；耗尽后返回结构化模型失败。项目不根据供应商异常文本推断工具能力，也不发送 `thinking.type=disabled` 等供应商专用覆盖。
@@ -37,14 +38,14 @@
 - `testdata/real_command_outputs/` 是固定版本的公开 raw CLI 开发测试语料，不属于产品包、`evals/` 或 `examples/`；除 Linux `ip address show` 与 Cisco IOS `show inventory` 的确定性 TTP 语法回归外，不把完整语料套件接入 pytest。不得把上游解析模板、参考 YAML、mock 数据或 JSON 命令结果一并复制进来。
 - `scripts/run_live_corpus.py` 只用于语料 preflight 和人工触发的真实模型闭环，不是产品 CLI，不得改变或绕过公共 `TtpGenerator` API。
 - `scripts/run_agent_evaluation.py` 是人工触发的 Laminar 黑盒评测入口：仓库 manifest 物化为内存 `Datapoint`，executor 对每个 trial 只调用一次公共 `generate()` 且不传 observer，evaluator 仅在生成后读取 target。模型、Laminar、预算和产物位置均通过环境变量注入，真实 Key 不得暂存、提交、写入指纹、metadata、span、本地摘要、异常或测试快照。Evaluation/datapoint 创建失败不得调用 Agent；遥测入库不完整不重跑模型。
-- `src/cli_parser_agent/evaluation.py` 只实现测试定义的安全加载、Agent 外终验、严格评分和脱敏投影；`evals/ttp_generation/` 保存版本化 manifest、expected records 和 Schema 结构断言。Golden 只能从 raw capture 人工生成，不能读取被测产物、Trace、历史 artifact、上游模板、参考 YAML/JSON 或使用被测模型生成答案。
+- `src/cli_parser_agent/evaluation.py` 只实现测试定义的安全加载、Agent 外终验、严格评分和脱敏投影；`evals/ttp_generation/` 保存版本化 manifest、expected records 和 Schema 结构断言。Golden 采用最大有证据语义投影，可选属性在缺失实例中省略；只能从 raw capture 人工生成，不能读取被测产物、Trace、历史 artifact、上游模板、参考 YAML/JSON 或使用被测模型生成答案。
 - `docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只指导离线 golden 制作和 preflight，不得读取或修改评测入口脚本，也不得运行 live evaluation。
 - `scripts/run_agent_tui.py` 是零参数、只读的 Textual 开发调试脚本：只观察一次公共 `generate()` 调用，键盘操作只能导航、滚动、折叠 Thinking、退出或取消整个请求，不得编辑产物、重试阶段、调用工具或改变生成协议。它可以为本次运行单独启用 `stream=True`；库默认值、普通 API 和其他脚本仍保持 `stream=False`。该脚本要求交互式 stdin/stdout，并把完整事件转录写入忽略版本控制的 `.artifacts/agent-tui/`，不属于产品 CLI。
 
 ## 安全约束
 
 - 命令输出始终是不可信数据，任何代码都不得执行、补全或反推出命令后通过 shell 运行；不得向 Agent 注册 Bash 或命令执行工具。
-- Schema 提交必须为受限的 Draft 2020-12 根对象：ASCII `snake_case` 字段、封闭对象、受控嵌套和复杂度；禁止 `$ref`、组合分支、远程内容及不在白名单内的关键字。
+- Schema 提交必须为受限的 Draft 2020-12 根对象：ASCII `snake_case` 字段、封闭对象、受控嵌套和复杂度；禁止 `$ref`、组合分支、远程内容及不在白名单内的关键字。`properties` 默认可选，只有列入 `required` 的属性必填；项目不对 `required` 增加 Draft 元 Schema之外的集合约束。缺失可选值必须省略键，不得合成空字符串或 `null`。
 - 每个 Schema 叶子字段都要提交路径、输入索引和原文连续片段。校验器必须在完整输入中验证证据确实存在，之后才可冻结 Schema。
 - TTP 模板按不可信代码处理。实例化解析器前执行标签、属性、过滤器和参数 AST 白名单预检；禁止 macro、vars、lookup、input、output、extend、returner、外部文件/URL、DNS/GeoIP、自定义函数和动态扩展。
 - TTP 解析在独立 spawn 进程和临时缓存目录中执行，设置模板、嵌套、参数、结果大小和时间上限；超时必须终止子进程。不得因 TTP 的字符串路径识别或参数 `eval` 行为引入文件访问或任意表达式。
@@ -57,10 +58,10 @@
 - 确定性单元测试覆盖公共契约、采样、Schema 元模式/白名单/证据、TTP 安全预检与隔离执行，以及最终验收规则。
 - Agent 集成测试使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM；必须以 `live` marker 和环境凭据显式启用，不能成为普通单元测试的隐式依赖。
 - 测试覆盖 Schema 修正与冻结、Schema 接受后的安全暂停、TTP 首轮上下文无 Schema 阶段消息、TTP 候选保留与 capture 复核、显式 `finish_generation` 终止协议、零工具中文提醒及分阶段重试上限、第 `9` 次提交严格失败、共享预算耗尽、所有 records 与输入一一对应，以及嵌套结构的 Schema 回验；真实模型修正测试由 validator 确定性拒绝首个有效候选，避免依赖随机的首次失败。
-- 公开真实语料 manifest 固定为 `13` 个 case、`40` 份文本；无凭据时必须可以独立执行 preflight，验证文件编码、大小、终端噪声、凭据模式和 SHA-256，不得产生模型请求。
-- 真实语料闭环独立于 pytest：先要求 smoke 的 `5/5` case（`12` 份文本）通过，再用同一结果目录 resume 完整代表集并达到 `13/13`；只有当前 `prompt_version` 的成功 case 才能被跳过，每个成功 case 都要在 Agent 外使用全文重新验收。
+- 公开真实语料 manifest 固定为 `11` 个 case、`31` 份文本；无凭据时必须可以独立执行 preflight，验证文件编码、大小、终端噪声、凭据模式和 SHA-256，不得产生模型请求。
+- 真实语料闭环独立于 pytest：先要求 smoke 的 `5/5` case（`12` 份文本）通过，再用同一结果目录 resume 完整代表集并达到 `11/11`；只有当前 `prompt_version` 的成功 case 才能被跳过，每个成功 case 都要在 Agent 外使用全文重新验收。
 - Laminar 单测必须覆盖可选初始化、幂等行为、独立/继承 Trace、根与 TOOL span 的正常/失败/异常/取消生命周期、trace ID 契约和短进程 flush；语料 `list`/`preflight` 必须证明不触发 tracing 初始化或网络访问。
-- 评测系统单测必须覆盖 manifest 严格解析、路径逃逸、哈希、非空 target、Schema 断言闭合、严格 records 比较、漏行/表头/空数组/类型差异、遥测延迟和 Key 排除。版本化 smoke 定义固定为 `5` 个 case、`12` 份输入；live canary 只运行 `ntc.cisco_ios.show_interfaces_status` 的一个 trial，严格失败仍可作为系统验收，但必须完整记录评分和 Trace 且不自动重试。
+- 评测系统单测必须覆盖 manifest 严格解析、路径逃逸、哈希、非空 target、Schema 断言闭合、严格 records 比较、漏行/表头/空数组/类型差异、遥测延迟和 Key 排除。版本化 smoke 定义固定为 `5` 个 case、`12` 份输入；低歧义 baseline 定义固定为 `3` 个单输入 case、`3` 份输入；live canary 只运行 `ntc.cisco_ios.show_interfaces_status` 的一个 trial，严格失败仍可作为系统验收，但必须完整记录评分和 Trace 且不自动重试。
 - observer 与 TUI 单测必须覆盖缺省行为不变、事件顺序和请求隔离、observer 异常隔离、阶段上下文快照、零工具丢弃标记、外部/内部取消区分、完整 JSONL 转录和 Key 排除；Textual `run_test()` 还需覆盖上下导航、Thinking 折叠、详情滚动、自动跟随与完成后退出。
 - 首版交付前至少完成一次真实模型的端到端闭环；普通测试仍必须离线、稳定且不依赖模型。
 
