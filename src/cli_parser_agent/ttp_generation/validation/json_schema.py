@@ -380,15 +380,6 @@ def validate_result_schema(
                 path="/type",
             ),
         )
-    if "$schema" not in schema:
-        issues.append(
-            _issue(
-                "schema.draft_required",
-                "result schema must explicitly declare JSON Schema Draft 2020-12",
-                path="/$schema",
-            ),
-        )
-
     state: dict[str, Any] = {
         "issues": issues,
         "leaf_paths": set(),
@@ -466,14 +457,20 @@ def validate_field_evidence(
     *,
     max_schema_depth: int = MAX_SCHEMA_DEPTH,
     max_schema_properties: int = MAX_SCHEMA_PROPERTIES,
+    max_schema_evidence: int = MAX_SCHEMA_EVIDENCE,
 ) -> list[ValidationIssue]:
     """Require at least one real source excerpt for every inferred leaf field."""
 
-    if len(evidence) > MAX_SCHEMA_EVIDENCE:
+    max_schema_evidence = _effective_limit(
+        max_schema_evidence,
+        MAX_SCHEMA_EVIDENCE,
+        "max_schema_evidence",
+    )
+    if len(evidence) > max_schema_evidence:
         return [
             _issue(
                 "schema.evidence_limit_exceeded",
-                f"field evidence cannot exceed {MAX_SCHEMA_EVIDENCE} items",
+                f"field evidence cannot exceed {max_schema_evidence} items",
                 path="/",
             ),
         ]
@@ -485,7 +482,6 @@ def validate_field_evidence(
         max_schema_properties=max_schema_properties,
     )
     evidenced_paths: set[str] = set()
-    submitted_paths: set[str] = set()
 
     for item in evidence:
         if item.path not in leaf_paths:
@@ -498,17 +494,6 @@ def validate_field_evidence(
                 ),
             )
             continue
-        if item.path in submitted_paths:
-            issues.append(
-                _issue(
-                    "schema.evidence_duplicate_path",
-                    "submit exactly one evidence item for each schema leaf",
-                    path=item.path,
-                    output_index=item.output_index,
-                ),
-            )
-            continue
-        submitted_paths.add(item.path)
         if item.output_index >= len(command_outputs):
             issues.append(
                 _issue(
@@ -565,6 +550,7 @@ def validate_schema_proposal(
     max_schema_bytes: int = MAX_SCHEMA_BYTES,
     max_schema_depth: int = MAX_SCHEMA_DEPTH,
     max_schema_properties: int = MAX_SCHEMA_PROPERTIES,
+    max_schema_evidence: int = MAX_SCHEMA_EVIDENCE,
 ) -> list[ValidationIssue]:
     """Validate a schema submission and its evidence before freezing it."""
 
@@ -582,6 +568,7 @@ def validate_schema_proposal(
         command_outputs,
         max_schema_depth=max_schema_depth,
         max_schema_properties=max_schema_properties,
+        max_schema_evidence=max_schema_evidence,
     )
 
 

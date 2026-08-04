@@ -142,7 +142,7 @@ def test_missing_evidence_requires_replacement_when_no_sample_contains_it() -> N
     }
 
 
-def test_evidence_rejects_duplicate_leaf_paths() -> None:
+def test_evidence_accepts_multiple_valid_items_for_one_leaf() -> None:
     evidence = [
         FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
         FieldEvidence(path="/hostname", output_index=1, excerpt="branch_1"),
@@ -156,7 +156,24 @@ def test_evidence_rejects_duplicate_leaf_paths() -> None:
         ["Hostname: edge_1\neth0 up mtu 1500", "Hostname: branch_1"],
     )
 
-    assert _codes(issues) == {"schema.evidence_duplicate_path"}
+    assert issues == []
+
+
+def test_each_duplicate_evidence_item_must_be_valid() -> None:
+    evidence = [
+        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
+        FieldEvidence(path="/hostname", output_index=1, excerpt="invented"),
+        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
+        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
+    ]
+
+    issues = validate_schema_proposal(
+        _inventory_schema(),
+        evidence,
+        ["Hostname: edge_1\neth0 up mtu 1500", "Hostname: branch_1"],
+    )
+
+    assert _codes(issues) == {"schema.evidence_not_found"}
 
 
 @pytest.mark.parametrize(
@@ -252,14 +269,56 @@ def test_schema_subset_rejects_open_ambiguous_or_remote_constructs(
     assert expected_code in _codes(validate_result_schema(schema))
 
 
-def test_schema_must_explicitly_declare_draft_2020_12() -> None:
+def test_schema_may_omit_draft_declaration_without_normalization() -> None:
     schema = _inventory_schema()
     del schema["$schema"]
 
-    assert "schema.draft_required" in _codes(validate_result_schema(schema))
+    evidence = [
+        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
+        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
+        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
+    ]
+    outputs = ["Hostname: edge_1\neth0 up mtu 1500"]
+
+    assert validate_result_schema(schema) == []
+    assert validate_schema_proposal(schema, evidence, outputs) == []
+    assert validate_records_against_schema(
+        [{"hostname": "edge_1", "interfaces": [{"name": "eth0", "mtu": 1500}]}],
+        schema,
+    ) == []
+    assert "$schema" not in schema
+
+
+def test_explicit_draft_declaration_must_be_draft_2020_12() -> None:
+    schema = _inventory_schema()
 
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema#"
     assert "schema.wrong_draft" in _codes(validate_result_schema(schema))
+
+
+def test_evidence_limit_can_be_tightened_but_not_raised() -> None:
+    evidence = [
+        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
+        FieldEvidence(path="/hostname", output_index=0, excerpt="Hostname"),
+        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
+        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
+    ]
+    outputs = ["Hostname: edge_1\neth0 up mtu 1500"]
+
+    issues = validate_schema_proposal(
+        _inventory_schema(),
+        evidence,
+        outputs,
+        max_schema_evidence=3,
+    )
+    assert _codes(issues) == {"schema.evidence_limit_exceeded"}
+
+    assert validate_schema_proposal(
+        _inventory_schema(),
+        evidence,
+        outputs,
+        max_schema_evidence=10**9,
+    ) == []
 
 
 def test_schema_complexity_limits_are_enforced() -> None:
@@ -332,11 +391,26 @@ def test_callers_can_tighten_but_not_loosen_schema_limits() -> None:
 
 @pytest.mark.parametrize(
     "keyword",
-    ["max_schema_bytes", "max_schema_depth", "max_schema_properties"],
+    [
+        "max_schema_bytes",
+        "max_schema_depth",
+        "max_schema_properties",
+        "max_schema_evidence",
+    ],
 )
 def test_schema_limits_must_be_positive(keyword: str) -> None:
+    function = (
+        validate_schema_proposal
+        if keyword == "max_schema_evidence"
+        else validate_result_schema
+    )
+    args = (
+        (_inventory_schema(), [], ["output"])
+        if keyword == "max_schema_evidence"
+        else (_inventory_schema(),)
+    )
     with pytest.raises(ValueError, match="positive integer"):
-        validate_result_schema(_inventory_schema(), **{keyword: 0})
+        function(*args, **{keyword: 0})
 
 
 def test_record_validation_is_value_safe_and_reports_paths() -> None:

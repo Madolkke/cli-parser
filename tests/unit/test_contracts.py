@@ -325,6 +325,7 @@ def test_generation_policy_has_bounded_defaults() -> None:
     assert policy.max_ttp_submissions == 9
     assert policy.model_input_char_budget == 240_000
     assert policy.ttp_validation_timeout_seconds == 20
+    assert policy.max_schema_evidence == 256
 
     with pytest.raises(ValidationError, match="cannot exceed"):
         GenerationPolicy(total_timeout_seconds=1, ttp_validation_timeout_seconds=2)
@@ -348,6 +349,7 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
             "CLI_PARSER_MAX_SCHEMA_BYTES": "32000",
             "CLI_PARSER_MAX_SCHEMA_DEPTH": "8",
             "CLI_PARSER_MAX_SCHEMA_PROPERTIES": "128",
+            "CLI_PARSER_MAX_SCHEMA_EVIDENCE": "64",
             "CLI_PARSER_MAX_EVIDENCE_EXCERPT_CHARS": "2048",
         },
     )
@@ -366,10 +368,17 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
     assert policy.max_schema_bytes == 32_000
     assert policy.max_schema_depth == 8
     assert policy.max_schema_properties == 128
+    assert policy.max_schema_evidence == 64
     assert policy.max_evidence_excerpt_chars == 2_048
 
     with pytest.raises(ValidationError):
         GenerationPolicy.from_env({"CLI_PARSER_MAX_AGENT_ITERS": "not-an-int"})
+
+    for value in ("0", "257", "not-an-int"):
+        with pytest.raises(ValidationError):
+            GenerationPolicy.from_env(
+                {"CLI_PARSER_MAX_SCHEMA_EVIDENCE": value},
+            )
 
 
 @pytest.mark.parametrize(
@@ -384,6 +393,7 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
         ("max_schema_bytes", 64 * 1024 + 1),
         ("max_schema_depth", 17),
         ("max_schema_properties", 257),
+        ("max_schema_evidence", 257),
         ("max_evidence_excerpt_chars", 4_097),
     ],
 )

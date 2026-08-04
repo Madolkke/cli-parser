@@ -115,7 +115,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v12-optional-schema-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v13-flexible-evidence-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -215,6 +215,9 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     }
     for property_schema in evidence_contract["properties"].values():
         assert _contains_chinese(property_schema["description"])
+    assert "恰好一条" not in schema_protocol
+    assert "至少" in schema_contract["properties"]["evidence"]["description"]
+    assert "maxItems" not in schema_contract["properties"]["evidence"]
 
     assumptions_description = schema_contract["properties"]["assumptions"][
         "description"
@@ -311,7 +314,10 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     accepted_schema = _schema()
     accepted = await tool.call(
         result_schema=accepted_schema,
-        evidence=[{"path": "/value", "output_index": 1, "excerpt": "two"}],
+        evidence=[
+            {"path": "/value", "output_index": 0, "excerpt": "one"},
+            {"path": "/value", "output_index": 1, "excerpt": "two"},
+        ],
         assumptions=["这些值按标签处理。"],
     )
     assert _payload(accepted)["accepted"] is True
@@ -319,6 +325,7 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     assert session.schema_submissions == 2
     assert session.frozen_schema == _schema()
     assert session.field_evidence == (
+        {"path": "/value", "output_index": 0, "excerpt": "one"},
         {"path": "/value", "output_index": 1, "excerpt": "two"},
     )
     assert session.assumptions == ("这些值按标签处理。",)

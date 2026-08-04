@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v12-optional-schema-zh-cn"
+PROMPT_VERSION = "ttp-generator-v13-flexible-evidence-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -46,8 +46,8 @@ SCHEMA_SYSTEM_PROMPT = """\
 - 保守推断类型。含义不明确的值保留为 string。只有不含前导零、单位、标识符或
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。缺少可选标量时必须省略该键，绝不能合成空 string 或 null。
-- 每个叶子字段必须恰好提供一条 evidence；不要因多个样例重复同一个 path。
-  array 条目的 path 使用 *，例如 /interfaces/*/name。填写从零开始的
+- 每个叶子字段至少提供一条 evidence；同一个 path 可以根据多个样例提供多条
+  evidence。array 条目的 path 使用 *，例如 /interfaces/*/name。填写从零开始的
   output_index，并从同一样例原样复制连续 excerpt。优先使用短的字面数据 token，
   不要使用重构后的短语、规范化间距或虚构占位符。同一条数据行可为多个相关字段
   分别提供证据。

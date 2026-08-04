@@ -45,8 +45,8 @@
 ## 安全约束
 
 - 命令输出始终是不可信数据，任何代码都不得执行、补全或反推出命令后通过 shell 运行；不得向 Agent 注册 Bash 或命令执行工具。
-- Schema 提交必须为受限的 Draft 2020-12 根对象：ASCII `snake_case` 字段、封闭对象、受控嵌套和复杂度；禁止 `$ref`、组合分支、远程内容及不在白名单内的关键字。`properties` 默认可选，只有列入 `required` 的属性必填；项目不对 `required` 增加 Draft 元 Schema之外的集合约束。缺失可选值必须省略键，不得合成空字符串或 `null`。
-- 每个 Schema 叶子字段都要提交路径、输入索引和原文连续片段。校验器必须在完整输入中验证证据确实存在，之后才可冻结 Schema。
+- Schema 提交必须为受限的 Draft 2020-12 根对象：ASCII `snake_case` 字段、封闭对象、受控嵌套和复杂度；禁止 `$ref`、组合分支、远程内容及不在白名单内的关键字。根 `$schema` 可以省略；显式提供时必须声明 Draft 2020-12，冻结和返回时不自动补全。`properties` 默认可选，只有列入 `required` 的属性必填；项目不对 `required` 增加 Draft 元 Schema之外的集合约束。缺失可选值必须省略键，不得合成空字符串或 `null`。
+- 每个 Schema 叶子字段至少要提交一条包含路径、输入索引和原文连续片段的 evidence；同一路径允许多条并逐条验证。校验器必须在完整输入中验证证据确实存在，之后才可冻结 Schema。evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧，但该资源上限不进入 Agent 工具 Schema。
 - TTP 模板按不可信代码处理。实例化解析器前执行标签、属性、过滤器和参数 AST 白名单预检；禁止 macro、vars、lookup、input、output、extend、returner、外部文件/URL、DNS/GeoIP、自定义函数和动态扩展。
 - TTP 解析在独立 spawn 进程和临时缓存目录中执行，设置模板、嵌套、参数、结果大小和时间上限；超时必须终止子进程。不得因 TTP 的字符串路径识别或参数 `eval` 行为引入文件访问或任意表达式。
 - spawn 宿主必须能够重新导入 `__main__`；交互式 `python -`/不具备可导入入口的宿主返回结构化 `ttp.worker_host_unsupported`，不得把 bootstrap 失败伪装成解析超时。

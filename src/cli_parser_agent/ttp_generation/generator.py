@@ -81,6 +81,7 @@ class TtpGenerator:
                 self.policy.ttp_validation_timeout_seconds
             ),
             "policy_model_input_char_budget": self.policy.model_input_char_budget,
+            "policy_max_schema_evidence": self.policy.max_schema_evidence,
         }
         if progress.enabled:
             progress.custom(

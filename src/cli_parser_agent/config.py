@@ -80,6 +80,7 @@ class GenerationPolicy(BaseModel):
     max_schema_bytes: int = Field(default=64 * 1024, ge=1, le=64 * 1024)
     max_schema_depth: int = Field(default=16, ge=1, le=16)
     max_schema_properties: int = Field(default=256, ge=1, le=256)
+    max_schema_evidence: int = Field(default=256, ge=1, le=256)
     max_evidence_excerpt_chars: int = Field(default=4_096, ge=1, le=4_096)
 
     @model_validator(mode="after")
@@ -113,6 +114,7 @@ class GenerationPolicy(BaseModel):
             "max_schema_bytes": "CLI_PARSER_MAX_SCHEMA_BYTES",
             "max_schema_depth": "CLI_PARSER_MAX_SCHEMA_DEPTH",
             "max_schema_properties": "CLI_PARSER_MAX_SCHEMA_PROPERTIES",
+            "max_schema_evidence": "CLI_PARSER_MAX_SCHEMA_EVIDENCE",
             "max_evidence_excerpt_chars": "CLI_PARSER_MAX_EVIDENCE_EXCERPT_CHARS",
         }
         overrides = {

@@ -74,10 +74,9 @@ class SchemaSubmissionInput(ParamsBase):
     )
     evidence: list[FieldEvidenceInput] = Field(
         min_length=1,
-        max_length=256,
         description=(
-            "Schema 声明的每个叶子字段必须恰好有一条 evidence；不要因多个"
-            "样例而重复同一个 path。"
+            "Schema 声明的每个叶子字段至少有一条 evidence；同一个 path 可以"
+            "根据多个样例提供多条 evidence。"
         ),
     )
     assumptions: list[str] = Field(
@@ -324,7 +323,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     name = SUBMIT_SCHEMA_TOOL_NAME
     description = (
-        "提交完整的结果 JSON Schema、每个叶子字段恰好一条 evidence，以及"
+        "提交完整的结果 JSON Schema、每个叶子字段至少一条 evidence，以及"
         "必要的 assumptions。Schema 一旦通过便永久冻结；被拒绝后可以修正并"
         "重新提交。"
     )

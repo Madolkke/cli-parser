@@ -8,9 +8,12 @@ import pytest
 
 from cli_parser_agent.ttp_generation.validation import (
     inspect_ttp_template,
+    validate_records_against_schema,
     validate_ttp_template,
 )
-from cli_parser_agent.ttp_generation.validation.ttp import _validate_scalar_sources
+from cli_parser_agent.ttp_generation.validation.ttp import (
+    _validate_materialized_missing_values,
+)
 
 
 def _table_schema() -> dict:
@@ -598,7 +601,7 @@ def test_full_parse_requires_frozen_schema_match() -> None:
     assert "schema.record_mismatch" in _codes(result.issues)
 
 
-def test_leading_zero_numeric_conversion_fails_source_provenance() -> None:
+def test_leading_zero_conversion_no_longer_requires_source_match() -> None:
     template = "Value: {{ value | DIGIT | to_int }}"
 
     result = validate_ttp_template(
@@ -607,8 +610,30 @@ def test_leading_zero_numeric_conversion_fails_source_provenance() -> None:
         _line_schema(field_type="integer"),
     )
 
+    assert result.valid
     assert result.records == [{"value": 1}]
-    assert "ttp.scalar_without_source" in _codes(result.issues)
+
+
+def test_cidr_conversion_no_longer_requires_final_value_in_source() -> None:
+    result = validate_ttp_template(
+        "Mask: {{ value | ORPHRASE | to_cidr }}",
+        ["Mask: 255.255.255.0"],
+        _line_schema(field_type="integer"),
+    )
+
+    assert result.valid
+    assert result.records == [{"value": 24}]
+
+
+def test_ip_normalization_no_longer_requires_normalized_source_text() -> None:
+    result = validate_ttp_template(
+        "Address: {{ value | IPV6 | to_ip }}",
+        ["Address: 2001:0db8::1"],
+        _line_schema(),
+    )
+
+    assert result.valid
+    assert result.records == [{"value": "2001:db8::1"}]
 
 
 def test_input_that_is_an_existing_path_is_parsed_as_text(tmp_path: Path) -> None:
@@ -663,26 +688,32 @@ def test_timeout_must_be_finite(timeout: float) -> None:
     assert _codes(result.issues) == {"ttp.invalid_timeout"}
 
 
-def test_scalar_source_issues_are_bounded() -> None:
-    issues = _validate_scalar_sources(
-        {"values": [f"invented_{index}" for index in range(1_000)]},
-        "source contains none of those values",
+def test_materialized_missing_value_issues_are_bounded() -> None:
+    issues = _validate_materialized_missing_values(
+        {"values": ["" for _ in range(1_000)]},
         output_index=0,
     )
 
     assert len(issues) == 100
-    assert _codes(issues) == {"ttp.scalar_without_source"}
+    assert _codes(issues) == {"ttp.materialized_missing_value"}
 
 
-@pytest.mark.parametrize("missing_value", ["", None])
-def test_missing_optional_value_cannot_be_materialized(missing_value: object) -> None:
-    issues = _validate_scalar_sources(
-        {"optional_value": missing_value},
-        "Optional value is absent",
+def test_empty_optional_value_cannot_be_materialized() -> None:
+    issues = _validate_materialized_missing_values(
+        {"optional_value": ""},
         output_index=0,
     )
 
-    assert _codes(issues) == {"ttp.scalar_without_source"}
+    assert _codes(issues) == {"ttp.materialized_missing_value"}
+
+
+def test_null_optional_value_is_rejected_by_frozen_schema() -> None:
+    issues = validate_records_against_schema(
+        [{"value": None}],
+        _line_schema(),
+    )
+
+    assert _codes(issues) == {"schema.record_mismatch"}
 
 
 def test_isolated_worker_applies_tightened_result_size_limit() -> None:

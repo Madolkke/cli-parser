@@ -53,11 +53,11 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 模型构造层不识别供应商主机名，不发送 `thinking.type=disabled` 或其他供应商专用覆盖，也不根据异常正文推断模型是否支持工具。两个独立模型请求都只携带所属 Toolkit 的阶段工具 Schema 并省略 `tool_choice`；正常完成却未调用工具属于可观测的协议行为，而不是供应商能力结论。
 
-默认执行限制是总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。零工具回复及其重试计入总轮次和总时长。第 `9` 次模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；因此最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
+默认执行限制是总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。第 `9` 次模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；因此最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v11-semantic-table-review-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示明确区分机械 accepted 与业务语义合法性，并要求固定宽度表格在提交前建立列映射和预期数据行数、在 capture 后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v13-flexible-evidence-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示明确区分机械 accepted 与业务语义合法性，并要求固定宽度表格在提交前建立列映射和预期数据行数、在 capture 后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -175,7 +175,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `agent/tools.py` | 阶段专属提交/完成工具与有界 TOOL span；通过 session 的窄接口提交候选或显式 finish | 是 |
 | `validation/capture.py` | 将 TTP 候选的实际 records 编码为不超过 `32 KiB` 的完整反馈或结构化 preview，供模型复核或修正 | 否 |
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
-| `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema/来源终验 | 否 |
+| `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema/缺失值终验 | 否 |
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
 | `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
@@ -262,12 +262,12 @@ GenerationRequest
     │      ├─ 隔离进程逐份全文 parse(one=True)
     │      ├─ 每份恰好一个根 object 且索引不变
     │      ├─ 所有 records 符合冻结 Schema
-    │      └─ 标量值具有输入来源
+    │      └─ 缺失可选值不以空字符串或 null 占位
     │
     └─ GenerationResult(success | failed)
 ```
 
-Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。缺失可选值通过省略键表达，不允许用空字符串或 `null` 占位。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交一条真实存在于指定完整输入中的连续原文证据。
+Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。缺失可选值通过省略键表达，不允许用空字符串或 `null` 占位。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交至少一条真实存在于指定完整输入中的连续原文证据；同一路径允许多条且逐条验证。
 
 TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
 

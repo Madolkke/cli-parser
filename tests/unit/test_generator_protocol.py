@@ -528,6 +528,7 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     assert result.metadata.schema_agent_rounds == 1
     assert result.metadata.ttp_agent_rounds == 2
     assert result.metadata.agent_rounds == 3
+    assert span_starts[0]["attributes"]["policy_max_schema_evidence"] == 256
     assert [(item["name"], item["parent"]) for item in span_starts] == [
         ("ttp.generate", None),
         ("schema.phase", "ttp.generate"),
@@ -564,7 +565,6 @@ NAME: second"""
         "additionalProperties": False,
     }
     frozen_schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
         "properties": {"inventory": {"type": "array", "items": item_schema}},
         "required": ["inventory"],
@@ -597,6 +597,11 @@ PID: {{ pid | ORPHRASE }}
             session.frozen_schema = frozen_schema
             session.field_evidence = (
                 {"path": "/inventory/*/name", "output_index": 0, "excerpt": "first"},
+                {
+                    "path": "/inventory/*/name",
+                    "output_index": 0,
+                    "excerpt": "second",
+                },
                 {"path": "/inventory/*/pid", "output_index": 0, "excerpt": "one"},
             )
             return AgentRunOutcome(phase_completed=True)
@@ -619,6 +624,7 @@ PID: {{ pid | ORPHRASE }}
     assert result.status == "success"
     assert result.artifact is not None
     assert result.artifact.result_schema == frozen_schema
+    assert "$schema" not in result.artifact.result_schema
     assert result.artifact.records == list(expected_records)
 
 

@@ -591,6 +591,7 @@ class _GenerationWorkflow:
             max_schema_bytes=self.policy.max_schema_bytes,
             max_schema_depth=self.policy.max_schema_depth,
             max_schema_properties=self.policy.max_schema_properties,
+            max_schema_evidence=self.policy.max_schema_evidence,
         )
         return ValidatorOutcome(valid=not issues, issues=tuple(issues))
 
@@ -1105,6 +1106,7 @@ class _GenerationWorkflow:
             max_schema_bytes=self.policy.max_schema_bytes,
             max_schema_depth=self.policy.max_schema_depth,
             max_schema_properties=self.policy.max_schema_properties,
+            max_schema_evidence=self.policy.max_schema_evidence,
         )
 
     async def _accept_artifact_impl(

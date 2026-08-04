@@ -44,9 +44,6 @@ _GROUP_SEGMENT_RE = re.compile(
 )
 _XML_TAG_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*$")
 _VARIABLE_RE = re.compile(r"{{([\s\S]*?)}}")
-_NUMBER_TOKEN_RE = re.compile(
-    r"(?<![\w.])[-+]?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][-+]?\d+)?(?![\w.])",
-)
 _DANGEROUS_XML_RE = re.compile(
     r"<!\s*(?:DOCTYPE|ENTITY)|<\?xml-stylesheet|<\?",
     re.IGNORECASE,
@@ -982,54 +979,20 @@ def _run_ttp_isolated(
     return payload, []
 
 
-def _string_has_source(value: str, source: str) -> bool:
-    if not value:
-        return False
-    if value in source:
-        return True
-    # joinmatches may combine captures while preserving each non-trivial fragment.
-    fragments = [fragment for fragment in re.split(r"[\s,;|]+", value) if fragment]
-    return bool(fragments) and all(fragment in source for fragment in fragments)
-
-
-def _number_has_source(value: int | float, source: str) -> bool:
-    for match in _NUMBER_TOKEN_RE.finditer(source):
-        token = match.group(0)
-        try:
-            matches_integer = (
-                isinstance(value, int)
-                and not isinstance(value, bool)
-                and not any(marker in token.lower() for marker in (".", "e"))
-                and int(token) == value
-            )
-            matches_number = isinstance(value, float) and float(token) == value
-            if matches_integer or matches_number:
-                return True
-        except (OverflowError, ValueError):
-            continue
-    return False
-
-
-def _scalar_has_source(value: Any, source: str) -> bool:
-    if isinstance(value, str):
-        return _string_has_source(value, source)
-    if isinstance(value, bool):
-        expected = {"true", "yes", "on", "1"} if value else {"false", "no", "off", "0"}
-        tokens = {token.lower() for token in re.findall(r"[A-Za-z0-9]+", source)}
-        return bool(expected & tokens)
-    if isinstance(value, (int, float)):
-        return _number_has_source(value, source)
-    return False
-
-
-def _validate_scalar_sources(
+def _validate_materialized_missing_values(
     value: Any,
-    source: str,
     *,
     output_index: int,
     path: tuple[str, ...] = (),
     max_issues: int = MAX_TTP_VALIDATION_ISSUES,
 ) -> list[ValidationIssue]:
+    """Reject empty-string placeholders for absent optional values.
+
+    JSON Schema validation remains responsible for rejecting ``null`` and other
+    type mismatches. This check intentionally does not infer whether non-empty
+    transformed values appeared textually in the input.
+    """
+
     issues: list[ValidationIssue] = []
     stack: list[tuple[Any, tuple[str, ...]]] = [(value, path)]
     while stack and len(issues) < max_issues:
@@ -1040,13 +1003,13 @@ def _validate_scalar_sources(
         elif isinstance(current, list):
             for child in reversed(current):
                 stack.append((child, (*current_path, "*")))
-        elif not _scalar_has_source(current, source):
+        elif isinstance(current, str) and not current:
             pointer = "/" + "/".join(current_path) if current_path else "/"
             issues.append(
                 _issue(
-                    "ttp.scalar_without_source",
-                    "parsed scalar cannot be conservatively traced to the "
-                    "command output",
+                    "ttp.materialized_missing_value",
+                    "missing optional values must be omitted rather than "
+                    "materialized as empty strings",
                     path=pointer,
                     output_index=output_index,
                     stage="acceptance",
@@ -1144,15 +1107,13 @@ def validate_ttp_template(
         )
         if issue.output_index not in no_match_indexes
     )
-    pairs = zip(records, command_outputs, strict=True)
-    for output_index, (record, source) in enumerate(pairs):
+    for output_index, record in enumerate(records):
         remaining_issues = MAX_TTP_VALIDATION_ISSUES - len(issues)
         if remaining_issues <= 0:
             break
         issues.extend(
-            _validate_scalar_sources(
+            _validate_materialized_missing_values(
                 record,
-                source,
                 output_index=output_index,
                 max_issues=remaining_issues,
             ),

@@ -28,7 +28,7 @@ flowchart TD
     HANDOFF --> TSAMPLE["从全文重新采样"]
     TSAMPLE --> TAGENT["ttp_template_generator<br/>全新 Model + AgentState + Toolkit"]
     TAGENT --> TTOOL["submit_ttp_template"]
-    TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射 / 来源校验"]
+    TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射 / 缺失值校验"]
     TVALIDATE -->|拒绝| CAPTURE["issues + 有界 capture"]
     CAPTURE --> TAGENT
     TVALIDATE -->|通过| CANDIDATE["保留最新有效候选 + capture"]
@@ -108,7 +108,7 @@ workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度
 
 ### 3. 提交、修正并冻结 Schema
 
-Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每个叶子字段的原文证据和 assumptions。工具在完整输入上检查元模式、安全子集、复杂度、封闭对象、字段名、required 集合和 evidence。
+Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每个叶子字段至少一条原文证据和 assumptions；同一路径可以包含多条证据并逐条验证。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具在完整输入上检查元模式、安全子集、复杂度、封闭对象、字段名、required 集合和 evidence。evidence 总数默认上限为 `256`，可由 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 向下收紧，但该资源上限不进入 Agent 工具协议。
 
 无效候选及其 issues 留在 Schema `AgentState` 中，模型可以继续修正。第一个通过校验的 Schema 被深拷贝并永久冻结；对应的 `ToolResultEndEvent` 是安全暂停点，runner 立即结束当前 reply。若 Schema 恰好耗尽了全局轮次，请求直接失败，不启动 TTP Agent。
 
@@ -116,7 +116,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每�
 
 进入 TTP 阶段时，workflow 只从 session 读取冻结 Schema，并重新从完整输出执行 TTP 阶段采样和 token fitting。冻结 Schema 会计入该阶段的上下文预算。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v11-semantic-table-review-zh-cn`。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v13-flexible-evidence-zh-cn`。
 
 ### 5. 生成和修正 TTP
 
@@ -144,7 +144,7 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 
 ### 6. Agent 外最终验收
 
-`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射、Schema 与标量来源。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
+`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射、Schema 与缺失值占位规则。当前不对转换后的标量做原文子串溯源；成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 
 失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
 
@@ -196,4 +196,4 @@ TUI 为这次运行启用流式模型事件；所有界面操作都不改变脚�
 
 总时间限制是协作式超时，而不是进程强杀。底层模型请求的取消和清理可能继续占用时间，因此实际墙钟耗时可能超过配置值；TTP worker 的单次解析超时仍会终止独立子进程。
 
-确定性验收保证安全、结构一致、全文执行和来源可追溯，但不等同于业务语义完整性的证明。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
+确定性验收保证安全、结构一致、全文执行和缺失值语义，但不等同于业务语义完整性的证明。转换后的标量来源追踪暂未启用，后续方案记录在 `docs/ROADMAP.md`。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
