@@ -628,6 +628,55 @@ PID: {{ pid | ORPHRASE }}
     assert result.artifact.records == list(expected_records)
 
 
+async def test_workflow_accepts_literal_empty_string_allowed_by_schema(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command_output = "PID: ,"
+    frozen_schema = {
+        "type": "object",
+        "properties": {"pid": {"type": "string"}},
+        "required": ["pid"],
+        "additionalProperties": False,
+    }
+    template = 'PID: {{ pid | re("[^ ]*") }},'
+    expected_records = ({"pid": ""},)
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            session.schema_submissions = 1
+            session.frozen_schema = frozen_schema
+            session.field_evidence = (
+                {"path": "/pid", "output_index": 0, "excerpt": "PID: ,"},
+            )
+            return AgentRunOutcome(phase_completed=True)
+
+        session.ttp_submissions = 1
+        session.validated_ttp_template = template
+        session.records = expected_records
+        session.first_ttp_valid = True
+        session.last_issues = ()
+        session.generation_finished = True
+        session.terminal_reason = "success"
+        return AgentRunOutcome(phase_completed=True)
+
+    _install_agent_stubs(monkeypatch, run)
+
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=[command_output]),
+    )
+
+    assert result.status == "success"
+    assert result.artifact is not None
+    assert result.artifact.records == list(expected_records)
+
+
 async def test_valid_ttp_candidate_without_finish_does_not_build_artifact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

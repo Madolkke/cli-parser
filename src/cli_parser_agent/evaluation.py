@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -50,6 +51,30 @@ _CREDENTIAL_PATTERNS = (
 
 JsonObject = dict[str, Any]
 NodeType = Literal["object", "array", "string", "integer", "number", "boolean"]
+
+# Issue domains are deliberately coarse.  The evaluation summary is allowed to
+# retain issue codes, but must not retain their human-readable messages or any
+# candidate/input payloads.
+_ISSUE_DOMAIN_PREFIXES = frozenset(
+    {
+        "agent",
+        "acceptance",
+        "budget",
+        "generation",
+        "model",
+        "records",
+        "runner",
+        "schema",
+        "telemetry",
+        "ttp",
+        "worker",
+    },
+)
+_SAFE_ISSUE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$")
+_REVIEW_LABELS = frozenset({"reasonable", "repairable", "unreasonable"})
+_REVIEW_PHASES = frozenset({"schema", "ttp"})
+_REVIEW_DIMENSION_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+_REVIEW_VALUE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
 
 class HarnessError(ValueError):
@@ -632,8 +657,764 @@ def _precision_recall_f1(
     return precision, recall, f1
 
 
+def wilson_interval(
+    successes: int | float,
+    total: int | float,
+    *,
+    confidence: float = 0.95,
+) -> tuple[float, float]:
+    """Return a bounded Wilson score interval for a binomial proportion.
+
+    The helper intentionally accepts counts rather than raw observations so it
+    can be used by both the Laminar evaluator and the local summary builder.
+    Invalid/empty samples return ``(0.0, 0.0)`` instead of raising, which keeps
+    diagnostics best-effort and never changes generation behavior.
+    """
+
+    try:
+        successes_value = float(successes)
+        total_value = float(total)
+        confidence_value = float(confidence)
+    except (TypeError, ValueError):
+        return 0.0, 0.0
+    if (
+        not math.isfinite(successes_value)
+        or not math.isfinite(total_value)
+        or not math.isfinite(confidence_value)
+        or total_value <= 0.0
+        or not 0.0 < confidence_value < 1.0
+    ):
+        return 0.0, 0.0
+    successes_value = min(max(successes_value, 0.0), total_value)
+    # The normal approximation is sufficient for the fixed diagnostic
+    # confidence level and avoids a dependency solely for this projection.
+    z = 1.959963984540054
+    if confidence_value != 0.95:
+        # Inverse-normal values are intentionally limited to the supported
+        # confidence levels used by the evaluation harness.
+        z_by_confidence = {
+            0.90: 1.6448536269514722,
+            0.95: 1.959963984540054,
+            0.99: 2.5758293035489004,
+        }
+        z = z_by_confidence.get(round(confidence_value, 2), z)
+    proportion = successes_value / total_value
+    denominator = 1.0 + z * z / total_value
+    center = (proportion + z * z / (2.0 * total_value)) / denominator
+    margin = (
+        z
+        * math.sqrt(
+            proportion * (1.0 - proportion) / total_value
+            + z * z / (4.0 * total_value * total_value),
+        )
+        / denominator
+    )
+    return max(0.0, center - margin), min(1.0, center + margin)
+
+
+def _numeric_percentile(values: Sequence[float], percentile: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return 0.0
+    index = max(0, min(len(ordered) - 1, math.ceil(percentile * len(ordered)) - 1))
+    return ordered[index]
+
+
+def aggregate_trial_scores(
+    trials: Sequence[Mapping[str, Any]],
+    *,
+    metric_names: Sequence[str] | None = None,
+    binary_metrics: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """Aggregate safe trial facts without retaining candidate payloads.
+
+    ``trials`` may either contain metrics directly or under a ``metrics`` key.
+    Every returned metric is numeric; binary metrics additionally receive a
+    Wilson 95% interval.  The function is deliberately independent of the
+    Laminar SDK so offline tests and post-run SQL projection can share it.
+    """
+
+    metric_sources: list[Mapping[str, Any]] = []
+    for trial in trials:
+        if not isinstance(trial, Mapping):
+            continue
+        source = trial.get("metrics")
+        if isinstance(source, Mapping):
+            # Keep top-level safe outcome flags available to aggregators while
+            # preserving the existing nested metric contract.
+            merged = dict(source)
+            for key in ("strict_pass", "candidate_pass"):
+                if key in trial and key not in merged:
+                    value = trial[key]
+                    merged[key] = float(value) if isinstance(value, bool) else value
+            metric_sources.append(merged)
+        else:
+            metric_sources.append(trial)
+    if metric_names is None:
+        names: set[str] = set()
+        for source in metric_sources:
+            names.update(
+                key
+                for key, value in source.items()
+                if isinstance(key, str)
+                and isinstance(value, int | float)
+                and not isinstance(value, bool)
+            )
+        metric_names = tuple(sorted(names))
+    # Durations and counts can legitimately be zero or one; only classify
+    # explicitly named outcome/funnel fields as Bernoulli observations.
+    binary_set = {
+        "candidate_pass",
+        "strict_pass",
+        "generation_success",
+        "independent_acceptance",
+        "public_issue_free",
+        "record_count_match",
+        "records_exact_match",
+        "schema_contract_match",
+        "finish_called",
+        "first_ttp_passed",
+        "trace_id_consistent",
+        *(binary_metrics or ()),
+    }
+    result: dict[str, Any] = {
+        "trial_count": len(metric_sources),
+        "metrics": {},
+        "binary": {},
+    }
+    for name in metric_names:
+        values = [
+            float(source[name])
+            for source in metric_sources
+            if isinstance(source.get(name), int | float)
+            and not isinstance(source.get(name), bool)
+            and math.isfinite(float(source[name]))
+        ]
+        if not values:
+            continue
+        result["metrics"][name] = {
+            "count": len(values),
+            "mean": sum(values) / len(values),
+            "min": min(values),
+            "max": max(values),
+            "p50": _numeric_percentile(values, 0.50),
+            "p95": _numeric_percentile(values, 0.95),
+            "p99": _numeric_percentile(values, 0.99),
+        }
+        if name in binary_set:
+            successes = sum(value == 1.0 for value in values)
+            lower, upper = wilson_interval(successes, len(values))
+            result["binary"][name] = {
+                "successes": successes,
+                "observations": len(values),
+                "rate": successes / len(values),
+                "wilson_95": {"lower": lower, "upper": upper},
+            }
+    return result
+
+
+def summarize_span_metrics(spans: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Summarize safe span timings and LLM context-token growth.
+
+    The function consumes SQL-projected numeric columns only.  It never reads
+    span input/output payloads, so callers can use it for local summaries.
+    Phase durations are used for the root coverage estimate because nested
+    context-fit/round/LLM/TOOL spans would otherwise be double-counted.
+    """
+
+    segment_names = (
+        "ttp.generate",
+        "schema.phase",
+        "ttp.phase",
+        "context.fit",
+        "agent.round",
+        "generation.deadline_cleanup",
+        "final.acceptance",
+        "LLM",
+        "TOOL",
+    )
+    durations: dict[str, list[float]] = {name: [] for name in segment_names}
+    llm_tokens: list[tuple[float, float]] = []
+    for ordinal, span in enumerate(spans):
+        if not isinstance(span, Mapping):
+            continue
+        name = span.get("name")
+        span_type = span.get("span_type")
+        if not isinstance(name, str):
+            name = ""
+        if not isinstance(span_type, str):
+            span_type = ""
+        if name in durations:
+            segment = str(name)
+        elif span_type in {"LLM", "TOOL"}:
+            segment = str(span_type)
+        else:
+            continue
+        try:
+            duration = float(span.get("duration", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            duration = 0.0
+        if math.isfinite(duration) and duration >= 0.0:
+            durations[segment].append(duration)
+        if segment == "LLM":
+            try:
+                input_tokens = float(span.get("input_tokens", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                input_tokens = 0.0
+            try:
+                start_order = float(span.get("start_time", ordinal) or ordinal)
+            except (TypeError, ValueError):
+                start_order = float(ordinal)
+            if math.isfinite(input_tokens) and input_tokens >= 0.0:
+                llm_tokens.append((start_order, input_tokens))
+
+    segment_stats: dict[str, dict[str, float | int]] = {}
+    for name, values in durations.items():
+        if not values:
+            continue
+        segment_stats[name] = {
+            "count": len(values),
+            "total_seconds": sum(values),
+            "p50_seconds": _numeric_percentile(values, 0.50),
+            "p95_seconds": _numeric_percentile(values, 0.95),
+            "p99_seconds": _numeric_percentile(values, 0.99),
+        }
+
+    ordered_tokens = [value for _, value in sorted(llm_tokens)]
+    token_growth: dict[str, float | int] = {
+        "observations": len(ordered_tokens),
+        "first_input_tokens": ordered_tokens[0] if ordered_tokens else 0.0,
+        "last_input_tokens": ordered_tokens[-1] if ordered_tokens else 0.0,
+        "max_input_tokens": max(ordered_tokens, default=0.0),
+        "growth_slope_tokens_per_call": (
+            (ordered_tokens[-1] - ordered_tokens[0]) / (len(ordered_tokens) - 1)
+            if len(ordered_tokens) > 1
+            else 0.0
+        ),
+    }
+    generation_seconds = float(
+        segment_stats.get("ttp.generate", {}).get("total_seconds", 0.0),
+    )
+    explained_seconds = sum(
+        float(segment_stats.get(name, {}).get("total_seconds", 0.0))
+        for name in ("schema.phase", "ttp.phase", "final.acceptance")
+    )
+    unexplained_seconds = max(0.0, generation_seconds - explained_seconds)
+    explained_ratio = (
+        min(1.0, explained_seconds / generation_seconds)
+        if generation_seconds > 0.0
+        else 0.0
+    )
+    return {
+        "segment_stats": segment_stats,
+        "token_growth": token_growth,
+        "explained_duration_seconds": explained_seconds,
+        "unexplained_duration_seconds": unexplained_seconds,
+        "explained_duration_ratio": explained_ratio,
+        "unexplained_duration_ratio": max(0.0, 1.0 - explained_ratio),
+    }
+
+
+def issue_domain(code: Any) -> str:
+    """Map a public issue code to a bounded diagnostic fault domain."""
+
+    if not isinstance(code, str) or not code:
+        return "unknown"
+    prefix = code.split(".", 1)[0].casefold()
+    if prefix in _ISSUE_DOMAIN_PREFIXES:
+        return prefix
+    if prefix in {"record", "records"} or code.startswith("record_"):
+        return "records"
+    if prefix in {"timeout", "cancel", "cleanup"}:
+        return "budget"
+    return "unknown"
+
+
+def issue_taxonomy(codes: Sequence[Any]) -> dict[str, Any]:
+    """Return safe issue-code and coarse-domain counts."""
+
+    normalized = [code for code in codes if isinstance(code, str) and code]
+    code_counts = Counter(normalized)
+    domain_counts = Counter(issue_domain(code) for code in normalized)
+    return {
+        "total": len(normalized),
+        "unique": len(code_counts),
+        "codes": dict(sorted(code_counts.items())),
+        "domains": dict(sorted(domain_counts.items())),
+    }
+
+
 def _schema_counter(nodes: Mapping[str, SchemaNode]) -> Counter[tuple[str, str, bool]]:
     return Counter((path, node.type, node.required) for path, node in nodes.items())
+
+
+def _schema_path_counter(nodes: Mapping[str, SchemaNode]) -> Counter[str]:
+    return Counter(path for path in nodes)
+
+
+def _schema_type_counter(nodes: Mapping[str, SchemaNode]) -> Counter[tuple[str, str]]:
+    return Counter((path, node.type) for path, node in nodes.items())
+
+
+def _schema_required_counter(
+    nodes: Mapping[str, SchemaNode],
+) -> Counter[tuple[str, bool]]:
+    return Counter((path, node.required) for path, node in nodes.items())
+
+
+def _value_shape_counts(value: Any) -> dict[str, int]:
+    """Count structural properties without retaining any scalar values."""
+
+    counts = {
+        "scalar_count": 0,
+        "empty_string_count": 0,
+        "null_count": 0,
+        "empty_container_count": 0,
+        "empty_object_count": 0,
+        "empty_array_count": 0,
+    }
+
+    def visit(item: Any) -> None:
+        if isinstance(item, dict):
+            if not item:
+                counts["empty_container_count"] += 1
+                counts["empty_object_count"] += 1
+            for child in item.values():
+                visit(child)
+        elif isinstance(item, list):
+            if not item:
+                counts["empty_container_count"] += 1
+                counts["empty_array_count"] += 1
+            for child in item:
+                visit(child)
+        else:
+            counts["scalar_count"] += 1
+            if item is None:
+                counts["null_count"] += 1
+            elif item == "":
+                counts["empty_string_count"] += 1
+
+    visit(value)
+    return counts
+
+
+def score_records_by_input(
+    actual_records: Sequence[Any],
+    expected_records: Sequence[Any],
+) -> list[dict[str, Any]]:
+    """Score each input-aligned record using only bounded numeric facts."""
+
+    diagnostics: list[dict[str, Any]] = []
+    for index, expected in enumerate(expected_records):
+        actual_present = index < len(actual_records)
+        actual = actual_records[index] if actual_present else None
+        actual_counter = _leaf_counter(actual) if actual_present else Counter()
+        expected_counter = _leaf_counter(expected)
+        precision, recall, f1 = _precision_recall_f1(actual_counter, expected_counter)
+        actual_shape = _value_shape_counts(actual) if actual_present else {
+            key: 0 for key in _value_shape_counts({})
+        }
+        expected_shape = _value_shape_counts(expected)
+        diagnostics.append(
+            {
+                "input_index": index,
+                "actual_present": actual_present,
+                "expected_present": True,
+                "actual_root_object": isinstance(actual, dict),
+                "expected_root_object": isinstance(expected, dict),
+                "records_exact_match": bool(
+                    actual_present
+                    and _canonical_json(actual) == _canonical_json(expected)
+                ),
+                "leaf_precision": precision,
+                "leaf_recall": recall,
+                "leaf_f1": f1,
+                "actual_leaf_count": sum(actual_counter.values()),
+                "expected_leaf_count": sum(expected_counter.values()),
+                "actual_scalar_count": actual_shape["scalar_count"],
+                "expected_scalar_count": expected_shape["scalar_count"],
+                "actual_empty_string_count": actual_shape["empty_string_count"],
+                "actual_null_count": actual_shape["null_count"],
+                "actual_empty_container_count": actual_shape[
+                    "empty_container_count"
+                ],
+            },
+        )
+    return diagnostics
+
+
+def _json_mapping(value: Any) -> Mapping[str, Any]:
+    if isinstance(value, Mapping):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return {}
+        return parsed if isinstance(parsed, Mapping) else {}
+    return {}
+
+
+def _candidate_payload(span: Mapping[str, Any]) -> Mapping[str, Any]:
+    payload = span.get("output")
+    if isinstance(payload, Mapping):
+        return payload
+    if isinstance(payload, str):
+        return _json_mapping(payload)
+    # SQL projections may already expose the tool result as the row itself.
+    return span
+
+
+def project_candidate_quality(
+    span: Mapping[str, Any],
+    *,
+    expected_records: Sequence[Any] | None = None,
+) -> dict[str, Any]:
+    """Project one TTP tool span into safe candidate-quality facts.
+
+    The projection never returns the template, captures, messages, or scalar
+    values.  ``expected_records`` is used only to calculate numeric comparison
+    metrics and is not copied into the result.
+    """
+
+    payload = _candidate_payload(span)
+    capture = _json_mapping(payload.get("capture"))
+    records = capture.get("records")
+    records_value = records if isinstance(records, list) else []
+    shape = _value_shape_counts(records_value)
+    issue_values = payload.get("issues")
+    issue_codes = [
+        issue.get("code")
+        for issue in issue_values
+        if (
+            isinstance(issue, Mapping)
+            and isinstance(issue.get("code"), str)
+            and len(issue["code"]) <= 128
+            and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
+        )
+    ] if isinstance(issue_values, list) else []
+    result: dict[str, Any] = {
+        "phase": "ttp",
+        "accepted": payload.get("accepted") is True,
+        "candidate_available": payload.get("validated_candidate_available") is True,
+        "submission_index": (
+            payload.get("ttp_submission")
+            if isinstance(payload.get("ttp_submission"), int)
+            and not isinstance(payload.get("ttp_submission"), bool)
+            else None
+        ),
+        "issue_codes": sorted(set(issue_codes)),
+        "issue_domains": issue_taxonomy(issue_codes)["domains"],
+        "capture_available": capture.get("available") is True,
+        "capture_complete": capture.get("complete") is True,
+        "capture_record_count": len(records_value),
+        "capture_nonempty_record_count": sum(
+            isinstance(record, dict) and bool(record) for record in records_value
+        ),
+        "capture_empty_container_count": shape["empty_container_count"],
+        "capture_empty_string_count": shape["empty_string_count"],
+        "capture_null_count": shape["null_count"],
+        "capture_scalar_count": shape["scalar_count"],
+    }
+    if expected_records is not None:
+        precision, recall, f1 = _precision_recall_f1(
+            _leaf_counter(records_value),
+            _leaf_counter(list(expected_records)),
+        )
+        result.update(
+            capture_record_count_match=len(records_value) == len(expected_records),
+            capture_records_exact_match=(
+                _canonical_json(records_value)
+                == _canonical_json(list(expected_records))
+            ),
+            capture_leaf_precision=precision,
+            capture_leaf_recall=recall,
+            capture_leaf_f1=f1,
+        )
+    return result
+
+
+def _project_schema_quality(span: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a Schema submission without retaining schema/evidence data."""
+
+    payload = _candidate_payload(span)
+    issue_values = payload.get("issues")
+    issue_codes = [
+        issue.get("code")
+        for issue in issue_values
+        if (
+            isinstance(issue, Mapping)
+            and isinstance(issue.get("code"), str)
+            and len(issue["code"]) <= 128
+            and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
+        )
+    ] if isinstance(issue_values, list) else []
+    submission_index = payload.get("schema_submission")
+    if not isinstance(submission_index, int) or isinstance(
+        submission_index,
+        bool,
+    ):
+        submission_index = None
+    return {
+        "phase": "schema",
+        "accepted": payload.get("accepted") is True,
+        "candidate_available": payload.get("frozen") is True,
+        "frozen": payload.get("frozen") is True,
+        "submission_index": submission_index,
+        "issue_codes": sorted(set(issue_codes)),
+        "issue_domains": issue_taxonomy(issue_codes)["domains"],
+    }
+
+
+def project_candidate_trajectory(
+    spans: Sequence[Mapping[str, Any]],
+    *,
+    expected_records: Sequence[Any] | None = None,
+) -> dict[str, Any]:
+    """Summarize all candidate submissions in a Trace without raw content."""
+
+    candidates: list[dict[str, Any]] = []
+    schema_candidates: list[dict[str, Any]] = []
+    finish_called = False
+    for ordinal, span in enumerate(spans):
+        if not isinstance(span, Mapping):
+            continue
+        name = str(span.get("name", ""))
+        payload = _candidate_payload(span)
+        if name in {"finish_generation", "generation.finish_generation"}:
+            finish_called = True
+            continue
+        if name in {
+            "submit_result_schema",
+            "schema.submit_result_schema",
+        } or "schema_submission" in payload:
+            schema_quality = _project_schema_quality(span)
+            if schema_quality["submission_index"] is None:
+                schema_quality["submission_index"] = ordinal + 1
+            schema_candidates.append(schema_quality)
+            continue
+        if (
+            name
+            and name not in {"submit_ttp_template", "ttp.submit_ttp_template"}
+            and "ttp_submission" not in payload
+        ):
+            continue
+        if "ttp_submission" not in payload and "accepted" not in payload:
+            continue
+        quality = project_candidate_quality(span, expected_records=expected_records)
+        if quality["submission_index"] is None:
+            quality["submission_index"] = ordinal + 1
+        candidates.append(quality)
+    candidates.sort(key=lambda item: int(item["submission_index"]))
+    schema_candidates.sort(key=lambda item: int(item["submission_index"]))
+    accepted_indices = [
+        int(item["submission_index"])
+        for item in candidates
+        if item["accepted"]
+    ]
+    first_accepted = accepted_indices[0] if accepted_indices else None
+    return {
+        "schema_submission_count": len(schema_candidates),
+        "schema_accepted_count": sum(
+            item["accepted"] for item in schema_candidates
+        ),
+        "schema_candidates": schema_candidates,
+        "submission_count": len(candidates),
+        "accepted_count": len(accepted_indices),
+        "candidate_available_count": sum(
+            item["candidate_available"] for item in candidates
+        ),
+        "first_accepted_submission": first_accepted,
+        "last_accepted_submission": accepted_indices[-1]
+        if accepted_indices
+        else None,
+        "accepted_indices": accepted_indices,
+        "finish_called": finish_called,
+        "finish_after_first_accepted": bool(
+            finish_called and first_accepted is not None
+        ),
+        "issue_domains": dict(
+            sorted(
+                Counter(
+                    domain
+                    for item in candidates
+                    for domain in item["issue_domains"]
+                ).items(),
+            ),
+        ),
+        "candidates": candidates,
+    }
+
+
+def project_human_reviews(
+    spans: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Project Laminar HumanEvaluator spans into bounded review facts.
+
+    Reviewers may annotate the same submission more than once.  The raw
+    annotations stay in Laminar; this projection retains only safe labels,
+    bounded dimensions and issue-code counts for the local evaluation report.
+    """
+
+    by_submission: dict[tuple[str, int], list[dict[str, Any]]] = {}
+    for span in spans:
+        if not isinstance(span, Mapping):
+            continue
+        payload = _json_mapping(span.get("output"))
+        attributes = _json_mapping(span.get("attributes"))
+        attribute_values = {
+            key.rsplit(".", 1)[-1]: value
+            for key, value in attributes.items()
+            if isinstance(key, str)
+        }
+
+        raw_index = payload.get("submission_index")
+        raw_phase = payload.get("phase")
+        if raw_phase is None:
+            raw_phase = _json_mapping(span.get("input")).get("phase")
+        if raw_phase is None:
+            raw_phase = attribute_values.get("review_phase", "ttp")
+        if raw_phase not in _REVIEW_PHASES:
+            continue
+        if raw_index is None:
+            raw_index = _json_mapping(span.get("input")).get(
+                "submission_index",
+            )
+        if raw_index is None:
+            raw_index = attribute_values.get("review_submission_index")
+        if (
+            not isinstance(raw_index, int)
+            or isinstance(raw_index, bool)
+            or raw_index < 1
+        ):
+            continue
+        label = payload.get("label")
+        if not isinstance(label, str):
+            label = attribute_values.get("review_label")
+        if label not in _REVIEW_LABELS:
+            continue
+
+        raw_dimensions = payload.get("dimensions")
+        if raw_dimensions is None:
+            raw_dimensions = attribute_values.get("review_dimensions")
+        dimensions = _json_mapping(raw_dimensions)
+        safe_dimensions = {
+            key: value
+            for key, value in dimensions.items()
+            if (
+                isinstance(key, str)
+                and _REVIEW_DIMENSION_RE.fullmatch(key)
+                and isinstance(value, str)
+                and _REVIEW_VALUE_RE.fullmatch(value)
+            )
+        }
+
+        raw_issue_codes = payload.get("issue_codes")
+        if raw_issue_codes is None:
+            raw_issue_codes = attribute_values.get("review_issue_codes")
+        if isinstance(raw_issue_codes, str):
+            try:
+                raw_issue_codes = json.loads(raw_issue_codes)
+            except (TypeError, ValueError):
+                raw_issue_codes = []
+        safe_issue_codes = sorted(
+            {
+                code
+                for code in (raw_issue_codes or ())
+                if isinstance(code, str)
+                and len(code) <= 128
+                and _SAFE_ISSUE_CODE_RE.fullmatch(code)
+            },
+        )
+        by_submission.setdefault((raw_phase, raw_index), []).append(
+            {
+                "phase": raw_phase,
+                "label": label,
+                "dimensions": safe_dimensions,
+                "issue_codes": safe_issue_codes,
+            },
+        )
+
+    submissions: dict[str, dict[str, Any]] = {}
+    label_counts: Counter[str] = Counter()
+    issue_counts: Counter[str] = Counter()
+    for (phase, index), reviews in sorted(by_submission.items()):
+        labels = Counter(review["label"] for review in reviews)
+        # Stable tie-breaking keeps reports reproducible when multiple
+        # reviewers disagree.
+        selected_label = max(
+            labels,
+            key=lambda label: (
+                labels[label],
+                {"reasonable": 2, "repairable": 1, "unreasonable": 0}[label],
+            ),
+        )
+        dimensions: dict[str, Counter[str]] = {}
+        for review in reviews:
+            for key, value in review["dimensions"].items():
+                dimensions.setdefault(key, Counter())[value] += 1
+            issue_counts.update(review["issue_codes"])
+        label_counts.update(labels)
+        submission_key = str(index) if phase == "ttp" else f"{phase}:{index}"
+        submissions[submission_key] = {
+            "review_count": len(reviews),
+            "phase": phase,
+            "label": selected_label,
+            "label_counts": dict(sorted(labels.items())),
+            "dimensions": {
+                key: dict(sorted(values.items()))
+                for key, values in sorted(dimensions.items())
+            },
+            "issue_codes": sorted(
+                {code for review in reviews for code in review["issue_codes"]},
+            ),
+        }
+    return {
+        "review_count": sum(len(reviews) for reviews in by_submission.values()),
+        "reviewed_submission_count": len(submissions),
+        "label_counts": dict(sorted(label_counts.items())),
+        "issue_codes": dict(sorted(issue_counts.items())),
+        "submissions": submissions,
+    }
+
+
+def attach_human_reviews(
+    trajectory: Mapping[str, Any],
+    reviews: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Attach safe per-submission review facts to a candidate trajectory."""
+
+    result = dict(trajectory)
+    review_submissions = reviews.get("submissions")
+    if not isinstance(review_submissions, Mapping):
+        return result
+    candidates = []
+    for collection_name in ("candidates", "schema_candidates"):
+        collection = []
+        for candidate in trajectory.get(collection_name, ()):
+            if not isinstance(candidate, Mapping):
+                continue
+            projected = dict(candidate)
+            index = projected.get("submission_index")
+            phase = projected.get("phase", "ttp")
+            review_key = (
+                f"schema:{index}" if phase == "schema" else str(index)
+            )
+            review = review_submissions.get(review_key)
+            if isinstance(review, Mapping):
+                projected["human_review"] = dict(review)
+            collection.append(projected)
+        if collection_name == "candidates":
+            candidates = collection
+        else:
+            result["schema_candidates"] = collection
+    result["candidates"] = candidates
+    result["human_review"] = {
+        key: value
+        for key, value in reviews.items()
+        if key != "submissions"
+    }
+    return result
 
 
 def independent_acceptance(
@@ -711,6 +1492,25 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "schema_path_precision": 0.0,
         "schema_path_recall": 0.0,
         "schema_path_f1": 0.0,
+        # ``schema_path_*`` above preserves the historical tuple contract
+        # (path + type + required).  These projections separate the three
+        # dimensions for diagnostic reporting without breaking old consumers.
+        "schema_path_only_precision": 0.0,
+        "schema_path_only_recall": 0.0,
+        "schema_path_only_f1": 0.0,
+        "schema_type_precision": 0.0,
+        "schema_type_recall": 0.0,
+        "schema_type_f1": 0.0,
+        "schema_required_precision": 0.0,
+        "schema_required_recall": 0.0,
+        "schema_required_f1": 0.0,
+        "input_count": 0.0,
+        "input_present_count": 0.0,
+        "input_exact_match_count": 0.0,
+        "input_exact_match_rate": 0.0,
+        "input_leaf_precision_macro": 0.0,
+        "input_leaf_recall_macro": 0.0,
+        "input_leaf_f1_macro": 0.0,
         "finish_called": 0.0,
         "first_ttp_passed": 0.0,
         "elapsed_seconds": 0.0,
@@ -725,6 +1525,7 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "ttp_no_tool_responses": 0.0,
         "schema_no_tool_retries": 0.0,
         "ttp_no_tool_retries": 0.0,
+        "model_retries_observed": 0.0,
     }
     if not isinstance(output, Mapping) or not isinstance(target, Mapping):
         return zero
@@ -784,7 +1585,41 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         _schema_counter(actual_nodes),
         _schema_counter(expected_nodes),
     )
+    schema_path_only = _precision_recall_f1(
+        _schema_path_counter(actual_nodes),
+        _schema_path_counter(expected_nodes),
+    )
+    schema_type = _precision_recall_f1(
+        _schema_type_counter(actual_nodes),
+        _schema_type_counter(expected_nodes),
+    )
+    schema_required = _precision_recall_f1(
+        _schema_required_counter(actual_nodes),
+        _schema_required_counter(expected_nodes),
+    )
     schema_contract_match = actual_nodes == expected_nodes
+
+    input_diagnostics = score_records_by_input(actual_records, expected_records)
+    input_count = len(input_diagnostics)
+    input_exact_match_count = sum(
+        item["records_exact_match"] for item in input_diagnostics
+    )
+    input_present_count = sum(item["actual_present"] for item in input_diagnostics)
+    input_leaf_precision_macro = (
+        sum(item["leaf_precision"] for item in input_diagnostics) / input_count
+        if input_count
+        else 0.0
+    )
+    input_leaf_recall_macro = (
+        sum(item["leaf_recall"] for item in input_diagnostics) / input_count
+        if input_count
+        else 0.0
+    )
+    input_leaf_f1_macro = (
+        sum(item["leaf_f1"] for item in input_diagnostics) / input_count
+        if input_count
+        else 0.0
+    )
 
     metadata = raw_result.get("metadata")
     if not isinstance(metadata, Mapping):
@@ -815,6 +1650,24 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         schema_path_precision=schema_precision,
         schema_path_recall=schema_recall,
         schema_path_f1=schema_f1,
+        schema_path_only_precision=schema_path_only[0],
+        schema_path_only_recall=schema_path_only[1],
+        schema_path_only_f1=schema_path_only[2],
+        schema_type_precision=schema_type[0],
+        schema_type_recall=schema_type[1],
+        schema_type_f1=schema_type[2],
+        schema_required_precision=schema_required[0],
+        schema_required_recall=schema_required[1],
+        schema_required_f1=schema_required[2],
+        input_count=float(input_count),
+        input_present_count=float(input_present_count),
+        input_exact_match_count=float(input_exact_match_count),
+        input_exact_match_rate=(
+            float(input_exact_match_count / input_count) if input_count else 0.0
+        ),
+        input_leaf_precision_macro=input_leaf_precision_macro,
+        input_leaf_recall_macro=input_leaf_recall_macro,
+        input_leaf_f1_macro=input_leaf_f1_macro,
         finish_called=float(
             generation_success and metadata.get("termination_reason") == "success",
         ),
@@ -841,6 +1694,52 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
     return scores
 
 
+def score_executor_output_details(output: Any, target: Any) -> dict[str, Any]:
+    """Return numeric trial scores plus safe per-input diagnostics.
+
+    The existing :func:`score_executor_output` remains the Laminar evaluator
+    contract and returns numeric values only.  This richer projection is for
+    post-run reporting; it intentionally excludes records, schemas, captures,
+    templates, and model text.
+    """
+
+    scores = score_executor_output(output, target)
+    actual_records: Sequence[Any] = ()
+    expected_records: Sequence[Any] = ()
+    raw_result = (
+        output.get("generation_result") if isinstance(output, Mapping) else None
+    )
+    artifact = raw_result.get("artifact") if isinstance(raw_result, Mapping) else None
+    if isinstance(artifact, Mapping) and isinstance(artifact.get("records"), list):
+        actual_records = artifact["records"]
+    if isinstance(target, Mapping) and isinstance(target.get("records"), list):
+        expected_records = target["records"]
+    diagnostics = score_records_by_input(actual_records, expected_records)
+    codes: list[str] = []
+    if isinstance(raw_result, Mapping) and isinstance(raw_result.get("issues"), list):
+        codes.extend(
+            issue["code"]
+            for issue in raw_result["issues"]
+            if isinstance(issue, Mapping) and isinstance(issue.get("code"), str)
+        )
+    acceptance = (
+        output.get("independent_acceptance") if isinstance(output, Mapping) else None
+    )
+    if isinstance(acceptance, Mapping) and isinstance(
+        acceptance.get("issue_codes"), list
+    ):
+        codes.extend(
+            code for code in acceptance["issue_codes"] if isinstance(code, str)
+        )
+    taxonomy = issue_taxonomy(codes)
+    return {
+        "scores": scores,
+        "inputs": diagnostics,
+        "extra_actual_input_count": max(0, len(actual_records) - len(expected_records)),
+        "issue_taxonomy": taxonomy,
+    }
+
+
 def safe_trial_facts(
     output: Mapping[str, Any],
     scores: Mapping[str, float],
@@ -857,6 +1756,7 @@ def safe_trial_facts(
             "termination_reason": "exception",
             "fault_domain": None,
             "issue_codes": [],
+            "issue_taxonomy": issue_taxonomy(()),
             "last_attempt_present": False,
             "metrics": dict(scores),
         }
@@ -899,6 +1799,7 @@ def safe_trial_facts(
         "termination_reason": metadata.get("termination_reason"),
         "fault_domain": metadata.get("fault_domain"),
         "issue_codes": issue_codes,
+        "issue_taxonomy": issue_taxonomy(issue_codes),
         "last_attempt_present": result.get("last_attempt") is not None,
         "metrics": dict(scores),
     }

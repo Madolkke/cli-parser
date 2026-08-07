@@ -2,7 +2,7 @@
 
 <!-- markdownlint-disable MD013 -->
 
-当前 Agent 是一个“模型提出候选、复核 capture 并显式完成，确定性代码负责验收”的两阶段生成器。输入是 `1-5` 份同一命令的实际输出，目标是生成一份共享 TTP 模板、一份描述单条解析结果的 JSON Schema、与输入一一对应的 `records`，以及必要的 `assumptions`。
+当前 Agent 是一个“模型提出候选、复核 records 并显式完成，确定性代码负责验收”的两阶段生成器。输入是 `1-5` 份同一命令的实际输出，目标是生成一份共享 TTP 模板、一份描述单条解析结果的 JSON Schema、与输入一一对应的 `records`，以及必要的 `assumptions`。
 
 本文用于理解运行过程。精确的公共契约、模块边界、默认限制和安全规则以 [首版架构](architecture.md) 为准。
 
@@ -28,11 +28,14 @@ flowchart TD
     HANDOFF --> TSAMPLE["从全文重新采样"]
     TSAMPLE --> TAGENT["ttp_template_generator<br/>全新 Model + AgentState + Toolkit"]
     TAGENT --> TTOOL["submit_ttp_template"]
-    TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射 / 缺失值校验"]
-    TVALIDATE -->|拒绝| CAPTURE["issues + 有界 capture"]
-    CAPTURE --> TAGENT
-    TVALIDATE -->|通过| CANDIDATE["保留最新有效候选 + capture"]
-    CANDIDATE --> REVIEW["模型主动复核捕获结果"]
+    TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射校验"]
+    TVALIDATE --> DIAGNOSTIC["内部诊断<br/>accepted + issues + 有界 capture"]
+    TVALIDATE -->|有 records| MATCH["模型可见完整 records"]
+    TVALIDATE -->|无 records| EMPTY["[] + 固定中文错误"]
+    MATCH --> TAGENT
+    EMPTY --> TAGENT
+    TVALIDATE -->|通过| CANDIDATE["保留最新有效候选"]
+    CANDIDATE --> REVIEW["模型主动复核 records"]
     REVIEW -->|继续修正| TAGENT
     REVIEW -->|确认候选| FTOOL["finish_generation"]
     TAGENT -->|无候选时误调用| FTOOL
@@ -116,35 +119,29 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每�
 
 进入 TTP 阶段时，workflow 只从 session 读取冻结 Schema，并重新从完整输出执行 TTP 阶段采样和 token fitting。冻结 Schema 会计入该阶段的上下文预算。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v13-flexible-evidence-zh-cn`。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v15-model-content-acceptance-zh-cn`。
 
 ### 5. 生成和修正 TTP
 
-TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言白名单和参数 AST 检查，再在独立 `spawn` 进程中对所有完整输入执行解析。校验器要求每份输入恰好产生一个根 `dict`，逐个使用冻结 Schema 验证 record，并检查标量能否追溯到原始输出。模板通过这些检查时只保存为最新有效候选，不会结束 Agent。
+TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言白名单和参数 AST 检查，再在独立 `spawn` 进程中对所有完整输入执行解析。校验器要求每份输入恰好产生一个根 `dict`，并逐个使用冻结 Schema 验证 record；不再额外拒绝空字符串、空根对象或空容器。模型可见 ToolResult 直接是按输入索引排列的完整 records；没有 records 时追加固定中文错误。模板通过这些检查时只保存为最新有效候选，不会结束 Agent。
 
-只要 worker 成功运行，即使候选最终不合格，工具也会把实际捕获结果反馈给同一 TTP Agent：
+只要 worker 产生 records，即使候选最终未通过 Schema 校验，工具也会把实际解析结果直接反馈给同一 TTP Agent：
 
 ```json
-{
-  "capture": {
-    "available": true,
-    "complete": true,
-    "records": [{}, {"interfaces": []}]
-  }
-}
+[{}, {"interfaces": []}]
 ```
 
-完整 capture 有固定大小上限；超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 保留在 TTP 阶段的修正链中，不会写入失败的公共结果，也不会回传 Schema Agent。
+完整 records 受 `GenerationPolicy.max_parse_result_bytes` 约束，默认最高 `8 MiB`；超限沿用结构化模型失败路径。内部 capture 仍有固定 `32 KiB` 上限，超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 只保留在 Laminar、observer/TUI 和评测诊断链中，不会写入失败的公共结果，也不会回传 Schema Agent。
 
 模型必须复核每份输入的记录数量、异常空数组/空对象、表头或分隔线误捕获、字段是否为细粒度值，以及多样例结构是否一致。若不满意，它继续提交模板；后续无效提交不清除先前有效候选，新的有效提交会替换旧候选。若满意，它调用无参数的 `finish_generation`。没有有效候选时 finish 返回结构化拒绝，只有存在有效候选且 finish 成功时 TTP 阶段才结束。
 
-每个模型回复最多调用一个工具；模型必须等提交 ToolResult/capture 进入后续上下文后再 finish。首版通过 `parallel_tool_calls=False` 和提示协议维持这个顺序，不额外记录候选产生轮次或实现同轮调用拦截。
+每个模型回复最多调用一个工具；模型必须等提交 ToolResult/records 进入后续上下文后再 finish。首版通过 `parallel_tool_calls=False` 和提示协议维持这个顺序，不额外记录候选产生轮次或实现同轮调用拦截。
 
-默认最多提交 `9` 次模板。第 `9` 次候选仍会执行校验并返回 capture/issues，但随后请求无条件以 `ttp_submission_limit` 失败；因此最晚只能在第 `8` 次提交后调用 finish。轮次、时间或零工具预算在 finish 前耗尽时，即使 session 已保留有效候选也不会自动接受。
+默认最多提交 `9` 次模板。达到有效 `max_ttp_submissions` 上限的候选仍会执行校验并向模型返回 records，但随后请求无条件以 `ttp_submission_limit` 失败；内部 capture/issues 仍进入诊断通道。默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后调用 finish。轮次、时间或零工具预算在 finish 前耗尽时，即使 session 已保留有效候选也不会自动接受。
 
 ### 6. Agent 外最终验收
 
-`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射、Schema 与缺失值占位规则。当前不对转换后的标量做原文子串溯源；成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
+`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。当前不对转换后的标量做原文子串溯源；成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 
 失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
 
@@ -171,6 +168,12 @@ Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observabili
 
 人工运行 `scripts/run_agent_evaluation.py` 时，Laminar 在上述树外再增加 `evaluation` 与 `executor` 两层。每个 repository `Datapoint` 对应一个 case 的一个 trial；executor 只把完整 raw outputs 传给一次公共 `generate()`，不传 observer，也看不到 expected target。生成结束后确定性 evaluator 才读取 target，执行严格 records/Schema 评分；随后只读 SQL 从同一 Trace 汇总 LLM/TOOL 调用、tokens、cost 和阶段时延。这个外层不改变 session、模型上下文、工具或 finish 协议。详细定义、安全边界和运行方式见 [Agent 黑盒评测](agent-evaluation.md)。
 
+系统化评测把结果分成四组：records/Schema 严格正确性，Schema 冻结、TTP 进入、首个有效候选、finish 和最终验收的流程漏斗，`agent.round`/`context.fit`/`generation.deadline_cleanup`/`final.acceptance`/LLM/TOOL 的时延与 tokens/cost，以及按 case、suite、输入形状分层的重复 trial 可靠性。严格通过是最终门槛；叶子值和 Schema 的 precision/recall/F1、逐输入差异和 issue-code 只用于定位缺陷。评测报告同时提供按 case 的 macro 结果和按输入的 micro 结果，不能用多输入 case 的数量掩盖单输入失败。
+
+需要完整修正链时，评测入口可以在独立进程中使用高预算配置：总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交、单次模型超时 `120` 秒，并保持并发 `1`、不自动重试。高预算只用于开发诊断，不改变公共 API 或默认 `GenerationPolicy`；每次运行必须把有效模型、推理设置、预算和安全限制绑定到配置指纹，并保留对应 Trace。
+
+HumanEvaluator 是评测入口的开发期人工补充：它可以在 Laminar 只读 Trace 中检查该 run 产生的全部 Schema/TTP 候选、capture 复核和最终候选，并按解析边界、字段粒度、可选字段、多输入一致性、过拟合和可维护性打标签。评审写入时显式区分 `phase=schema|ttp`，本地按阶段和 submission index 聚合覆盖率。HumanEvaluator 不属于 `TtpGenerator.generate()`、产品部署或普通 pytest，不修改 Agent 状态、不触发重试、不向模型回灌内容；本地摘要只保存有界标签、issue-code、Trace ID 和数值指标。
+
 ## 只读 Textual TUI
 
 `scripts/run_agent_tui.py` 是单次真实运行的零参数开发入口。通过环境变量设置输入路径与运行配置后，在交互式终端中执行：
@@ -192,8 +195,8 @@ TUI 为这次运行启用流式模型事件；所有界面操作都不改变脚�
 
 ## 当前运行特性
 
-默认共享预算是总时长 `360` 秒、两个阶段合计 `13` 个模型轮次和最多 `9` 次 TTP 提交；Schema/TTP 各自还有最多 `3` 次零工具重试，单次 TTP worker 解析默认限时 `20` 秒。
+默认共享预算是总时长 `360` 秒、两个阶段合计 `13` 个模型轮次和最多 `9` 次 TTP 提交；Schema/TTP 各自还有最多 `3` 次零工具重试，单次 TTP worker 解析默认限时 `20` 秒。高预算诊断只能通过开发评测入口显式覆盖这些值，不能把诊断配置当成产品默认或公共配置契约。
 
 总时间限制是协作式超时，而不是进程强杀。底层模型请求的取消和清理可能继续占用时间，因此实际墙钟耗时可能超过配置值；TTP worker 的单次解析超时仍会终止独立子进程。
 
-确定性验收保证安全、结构一致、全文执行和缺失值语义，但不等同于业务语义完整性的证明。转换后的标量来源追踪暂未启用，后续方案记录在 `docs/ROADMAP.md`。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
+确定性验收保证安全、结构一致、全文执行和 Schema 一致，但不判断 Schema 合法的空字符串、空根对象或空容器是否符合业务语义；该判断由模型结合完整 records 与原文完成。转换后的标量来源追踪暂未启用，后续方案记录在 `docs/ROADMAP.md`。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。

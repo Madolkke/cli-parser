@@ -8,12 +8,15 @@ import hashlib
 import json
 import math
 import os
+import re
 import socket
 import subprocess
 import sys
 import threading
 import time
 import urllib.request
+import uuid
+from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -32,11 +35,18 @@ from cli_parser_agent.config import (  # noqa: E402
 from cli_parser_agent.evaluation import (  # noqa: E402
     EvaluationCase,
     HarnessError,
+    aggregate_trial_scores,
+    attach_human_reviews,
     independent_acceptance,
+    issue_taxonomy,
     load_evaluation_manifest,
+    project_candidate_trajectory,
+    project_human_reviews,
     safe_trial_facts,
     score_executor_output,
+    score_executor_output_details,
     select_cases,
+    summarize_span_metrics,
 )
 
 RUNNER_VERSION = 1
@@ -103,21 +113,10 @@ def _environment_positive_float(
     return parsed
 
 
-def _configuration(
-    environ: Mapping[str, str] | None = None,
-) -> tuple[Any, Any, EvaluationRuntimeConfig, dict[str, Any]]:
-    from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings
-
-    source = os.environ if environ is None else environ
-    try:
-        settings = TtpGeneratorSettings.from_env(source)
-        policy = GenerationPolicy.from_env(source)
-    except (TypeError, ValueError) as error:
-        raise RunnerError(
-            "model or generation configuration is invalid "
-            f"({type(error).__name__})"
-        ) from None
-    runtime = EvaluationRuntimeConfig(
+def _runtime_configuration(
+    source: Mapping[str, str],
+) -> EvaluationRuntimeConfig:
+    return EvaluationRuntimeConfig(
         laminar_project_api_key=_validate_local_key(
             _required_environment_value(source, "LMNR_PROJECT_API_KEY"),
             "LMNR_PROJECT_API_KEY",
@@ -138,6 +137,23 @@ def _configuration(
             default=60.0,
         ),
     )
+
+
+def _configuration(
+    environ: Mapping[str, str] | None = None,
+) -> tuple[Any, Any, EvaluationRuntimeConfig, dict[str, Any]]:
+    from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings
+
+    source = os.environ if environ is None else environ
+    try:
+        settings = TtpGeneratorSettings.from_env(source)
+        policy = GenerationPolicy.from_env(source)
+    except (TypeError, ValueError) as error:
+        raise RunnerError(
+            "model or generation configuration is invalid "
+            f"({type(error).__name__})"
+        ) from None
+    runtime = _runtime_configuration(source)
     snapshot = {
         "model": {
             "name": settings.model_name,
@@ -149,6 +165,9 @@ def _configuration(
             "context_size": settings.context_size,
             "model_max_retries": settings.model_max_retries,
             "model_timeout_seconds": settings.model_timeout_seconds,
+            "verify_tls": settings.verify_tls,
+            "thinking_enable": settings.thinking_enable,
+            "reasoning_effort": settings.reasoning_effort,
         },
         "policy": policy.model_dump(mode="json"),
         "laminar": {
@@ -210,7 +229,54 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--trials", type=_trials, default=1)
     run.add_argument("--concurrency", type=_concurrency, default=1)
     run.add_argument("--name")
+    review = commands.add_parser(
+        "review",
+        help="write one bounded HumanEvaluator label to an existing Trace",
+    )
+    review.add_argument("--trace-id", required=True)
+    review.add_argument(
+        "--phase",
+        choices=sorted(_REVIEW_PHASES),
+        default="ttp",
+    )
+    review.add_argument("--submission", type=_positive_int, required=True)
+    review.add_argument("--label", choices=sorted(_REVIEW_LABELS), required=True)
+    review.add_argument(
+        "--dimension",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="bounded quality dimension label; may be repeated",
+    )
+    review.add_argument("--issue-code", action="append", default=[])
     return parser
+
+
+def _parse_review_dimensions(values: Sequence[str]) -> dict[str, str]:
+    dimensions: dict[str, str] = {}
+    for value in values:
+        if "=" not in value:
+            raise RunnerError("--dimension must use NAME=VALUE")
+        name, label = value.split("=", 1)
+        if name in dimensions:
+            raise RunnerError("--dimension must not repeat a name")
+        dimensions[name] = label
+    return dimensions
+
+
+def _command_review(args: argparse.Namespace) -> int:
+    runtime = _runtime_configuration(os.environ)
+    record_human_review(
+        runtime,
+        trace_id=args.trace_id,
+        phase=args.phase,
+        submission_index=args.submission,
+        label=args.label,
+        dimensions=_parse_review_dimensions(args.dimension),
+        issue_codes=args.issue_code,
+    )
+    print("review recorded")
+    return 0
 
 
 def _command_list() -> int:
@@ -419,6 +485,11 @@ def _telemetry_for_trace(
             countIf(name = 'ttp.generate') AS generation_span_count,
             countIf(name = 'schema.phase') AS schema_phase_count,
             countIf(name = 'ttp.phase') AS ttp_phase_count,
+            countIf(name = 'context.fit') AS context_fit_span_count,
+            countIf(name = 'agent.round') AS agent_round_span_count,
+            countIf(name = 'generation.deadline_cleanup')
+                AS deadline_cleanup_span_count,
+            countIf(name = 'final.acceptance') AS final_acceptance_span_count,
             countIf(span_type = 'LLM') AS llm_call_count,
             countIf(span_type = 'TOOL') AS tool_span_count,
             sumIf(input_tokens, span_type = 'LLM') AS input_tokens,
@@ -428,7 +499,13 @@ def _telemetry_for_trace(
             sumIf(duration, span_type = 'TOOL') AS tool_duration_seconds,
             maxIf(duration, name = 'ttp.generate') AS generation_duration_seconds,
             sumIf(duration, name = 'schema.phase') AS schema_duration_seconds,
-            sumIf(duration, name = 'ttp.phase') AS ttp_duration_seconds
+            sumIf(duration, name = 'ttp.phase') AS ttp_duration_seconds,
+            sumIf(duration, name = 'context.fit') AS context_fit_duration_seconds,
+            sumIf(duration, name = 'agent.round') AS agent_round_duration_seconds,
+            sumIf(duration, name = 'generation.deadline_cleanup')
+                AS deadline_cleanup_duration_seconds,
+            sumIf(duration, name = 'final.acceptance')
+                AS final_acceptance_duration_seconds
         FROM spans
         WHERE trace_id = {trace_id:UUID}
           AND start_time > now() - INTERVAL 1 DAY
@@ -437,11 +514,214 @@ def _telemetry_for_trace(
     )
     if len(rows) != 1:
         return {}
-    return rows[0]
+    result = dict(rows[0])
+    span_rows = _sql_query(
+        runtime,
+        """
+        SELECT name, span_type, start_time, duration, input_tokens
+        FROM spans
+        WHERE trace_id = {trace_id:UUID}
+          AND start_time > now() - INTERVAL 1 DAY
+        ORDER BY start_time
+        """,
+        {"trace_id": trace_id},
+    )
+    result.update(summarize_span_metrics(span_rows))
+    # Root attributes carry the observed phase funnel.  Keep only booleans and
+    # enums in the local projection; the raw root output remains Laminar-only.
+    root_rows = _sql_query(
+        runtime,
+        """
+        SELECT attributes, output
+        FROM spans
+        WHERE trace_id = {trace_id:UUID}
+          AND name = 'ttp.generate'
+          AND start_time > now() - INTERVAL 1 DAY
+        ORDER BY start_time DESC
+        LIMIT 1
+        """,
+        {"trace_id": trace_id},
+    )
+    root = root_rows[0] if root_rows else {}
+    root_attributes = _parse_json_object(root.get("attributes"))
+    root_output = _parse_json_object(root.get("output"))
+    root_metadata = root_output.get("metadata")
+    if not isinstance(root_metadata, Mapping):
+        root_metadata = {}
+    for name in (
+        "schema_frozen",
+        "entered_ttp",
+        "valid_ttp_candidate",
+        "finish_called",
+    ):
+        value = root_attributes.get(name, root_metadata.get(name))
+        if isinstance(value, bool):
+            result[name] = value
+    result["reported_trace_id"] = root_metadata.get("laminar_trace_id")
+    return result
+
+
+def _candidate_spans_for_trace(
+    runtime: EvaluationRuntimeConfig,
+    trace_id: str,
+) -> list[dict[str, Any]]:
+    """Fetch candidate TOOL outputs for post-run diagnostics only."""
+
+    rows = _sql_query(
+        runtime,
+        """
+        SELECT name, span_type, start_time, duration, input, output, attributes
+        FROM spans
+        WHERE trace_id = {trace_id:UUID}
+          AND name IN (
+              'submit_result_schema',
+              'schema.submit_result_schema',
+              'submit_ttp_template',
+              'ttp.submit_ttp_template',
+              'finish_generation',
+              'generation.finish_generation'
+          )
+          AND start_time > now() - INTERVAL 1 DAY
+        ORDER BY start_time
+        """,
+        {"trace_id": trace_id},
+    )
+    return [row for row in rows if isinstance(row, Mapping)]
+
+
+def _human_review_spans_for_trace(
+    runtime: EvaluationRuntimeConfig,
+    trace_id: str,
+) -> list[dict[str, Any]]:
+    """Fetch evaluation-only HumanEvaluator spans for one Trace."""
+
+    rows = _sql_query(
+        runtime,
+        """
+        SELECT name, start_time, input, output, attributes
+        FROM spans
+        WHERE trace_id = {trace_id:UUID}
+          AND name = 'template.human_review'
+          AND start_time > now() - INTERVAL 1 DAY
+        ORDER BY start_time
+        """,
+        {"trace_id": trace_id},
+    )
+    return [row for row in rows if isinstance(row, Mapping)]
+
+
+_REVIEW_LABELS = frozenset({"reasonable", "repairable", "unreasonable"})
+_REVIEW_PHASES = frozenset({"schema", "ttp"})
+_REVIEW_DIMENSION_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
+_REVIEW_VALUE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+_ISSUE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)*$")
+
+
+def record_human_review(
+    runtime: EvaluationRuntimeConfig,
+    *,
+    trace_id: str,
+    phase: str = "ttp",
+    submission_index: int,
+    label: str,
+    dimensions: Mapping[str, str] | None = None,
+    issue_codes: Sequence[str] = (),
+) -> None:
+    """Write a bounded review label into Laminar without copying a candidate.
+
+    This helper is intentionally evaluation-only.  Reviewers identify the
+    candidate by Trace ID and submission index; the template and capture remain
+    in the existing Laminar TOOL span and are never placed in the review span's
+    local input/output or in the local evaluation summary.
+    """
+
+    try:
+        trace_uuid = uuid.UUID(trace_id)
+    except (ValueError, AttributeError, TypeError) as error:
+        raise RunnerError("review trace_id must be a UUID") from error
+    if label not in _REVIEW_LABELS:
+        raise RunnerError("review label is unsupported")
+    if phase not in _REVIEW_PHASES:
+        raise RunnerError("review phase is unsupported")
+    if not isinstance(submission_index, int) or isinstance(submission_index, bool):
+        raise RunnerError("review submission_index must be an integer")
+    if submission_index < 1:
+        raise RunnerError("review submission_index must be positive")
+    safe_dimensions: dict[str, str] = {}
+    for key, value in (dimensions or {}).items():
+        if (
+            not isinstance(key, str)
+            or not _REVIEW_DIMENSION_RE.fullmatch(key)
+            or not isinstance(value, str)
+            or not _REVIEW_VALUE_RE.fullmatch(value)
+        ):
+            raise RunnerError("review dimensions contain an unsupported value")
+        safe_dimensions[key] = value
+    safe_issue_codes = [
+        code
+        for code in issue_codes
+        if isinstance(code, str) and _ISSUE_CODE_RE.fullmatch(code)
+    ][:32]
+
+    from lmnr import Laminar, LaminarSpanContext
+    from lmnr.opentelemetry_lib.tracing.attributes import (
+        HUMAN_EVALUATOR_OPTIONS,
+        SPAN_TYPE,
+    )
+
+    if not Laminar.is_initialized():
+        Laminar.initialize(
+            project_api_key=runtime.laminar_project_api_key,
+            base_url=runtime.laminar_base_url,
+            http_port=runtime.laminar_http_port,
+            grpc_port=runtime.laminar_grpc_port,
+        )
+    # Laminar requires a parent span ID as well as a trace ID.  A synthetic
+    # remote parent keeps the annotation in the original Trace without adding
+    # any candidate content or depending on an SDK-specific span lookup API.
+    parent = LaminarSpanContext(
+        trace_id=trace_uuid,
+        span_id=uuid.UUID(int=uuid.uuid4().int & ((1 << 64) - 1)),
+        is_remote=True,
+    )
+    with Laminar.start_as_current_span(
+        "template.human_review",
+        input={"phase": phase, "submission_index": submission_index},
+        parent_span_context=parent,
+        tags=["agent-evaluation", "human-review"],
+        metadata={
+            "review_label": label,
+            "review_phase": phase,
+            "review_submission_index": submission_index,
+            "review_dimensions": safe_dimensions,
+            "review_issue_codes": safe_issue_codes,
+        },
+    ) as span:
+        span.set_attribute(SPAN_TYPE, "HUMAN_EVALUATOR")
+        span.set_attribute(
+            HUMAN_EVALUATOR_OPTIONS,
+            json.dumps(
+                [
+                    {"label": "reasonable", "value": 1.0},
+                    {"label": "repairable", "value": 0.5},
+                    {"label": "unreasonable", "value": 0.0},
+                ],
+            ),
+        )
+        Laminar.set_span_output(
+            {
+                "phase": phase,
+                "submission_index": submission_index,
+                "label": label,
+                "dimensions": safe_dimensions,
+                "issue_codes": safe_issue_codes,
+            },
+        )
+    Laminar.flush()
 
 
 def _telemetry_complete(telemetry: Mapping[str, Any]) -> bool:
-    return all(
+    base_complete = all(
         int(telemetry.get(name, 0) or 0) >= 1
         for name in (
             "evaluation_span_count",
@@ -450,6 +730,16 @@ def _telemetry_complete(telemetry: Mapping[str, Any]) -> bool:
             "schema_phase_count",
             "llm_call_count",
         )
+    )
+    if not base_complete:
+        return False
+    if telemetry.get("entered_ttp") is True and int(
+        telemetry.get("ttp_phase_count", 0) or 0,
+    ) < 1:
+        return False
+    return not (
+        telemetry.get("finish_called") is True
+        and int(telemetry.get("final_acceptance_span_count", 0) or 0) < 1
     )
 
 
@@ -514,6 +804,17 @@ def _aggregate_trials(trials: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         by_case.setdefault(str(trial["case_id"]), []).append(trial)
     result: dict[str, Any] = {}
     metric_names = (
+        "strict_pass",
+        "candidate_pass",
+        "generation_success",
+        "independent_acceptance",
+        "records_exact_match",
+        "schema_contract_match",
+        "input_exact_match_rate",
+        "leaf_f1",
+        "schema_path_f1",
+        "finish_called",
+        "first_ttp_passed",
         "elapsed_seconds",
         "agent_rounds",
         "ttp_submissions",
@@ -521,27 +822,134 @@ def _aggregate_trials(trials: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "output_tokens",
         "total_cost",
         "generation_duration_seconds",
+        "schema_duration_seconds",
+        "ttp_duration_seconds",
+        "context_fit_duration_seconds",
+        "agent_round_duration_seconds",
+        "deadline_cleanup_duration_seconds",
+        "final_acceptance_duration_seconds",
+        "explained_duration_seconds",
+        "unexplained_duration_seconds",
+        "explained_duration_ratio",
+        "unexplained_duration_ratio",
+        "first_input_tokens",
+        "last_input_tokens",
+        "max_input_tokens",
+        "growth_slope_tokens_per_call",
     )
     for case_id, items in by_case.items():
-        metrics: dict[str, dict[str, float]] = {}
-        for name in metric_names:
-            values = [
-                float(item["metrics"].get(name, 0.0) or 0.0)
-                for item in items
-            ]
-            metrics[name] = {
-                "mean": sum(values) / len(values),
-                "p50": _percentile(values, 0.50),
-                "p95": _percentile(values, 0.95),
-            }
+        issue_codes = Counter(
+            code
+            for item in items
+            for code in item.get("issue_codes", [])
+            if isinstance(code, str)
+        )
+        candidate_trajectories = [
+            item.get("candidate_trajectory")
+            for item in items
+            if isinstance(item.get("candidate_trajectory"), Mapping)
+        ]
+        candidate_summary = {
+            "trial_count": len(candidate_trajectories),
+            "submission_count": sum(
+                int(item.get("submission_count", 0) or 0)
+                for item in candidate_trajectories
+            ),
+            "accepted_count": sum(
+                int(item.get("accepted_count", 0) or 0)
+                for item in candidate_trajectories
+            ),
+            "schema_submission_count": sum(
+                int(item.get("schema_submission_count", 0) or 0)
+                for item in candidate_trajectories
+            ),
+            "schema_accepted_count": sum(
+                int(item.get("schema_accepted_count", 0) or 0)
+                for item in candidate_trajectories
+            ),
+            "finish_after_first_accepted_count": sum(
+                bool(item.get("finish_after_first_accepted"))
+                for item in candidate_trajectories
+            ),
+        }
+        review_counts: Counter[str] = Counter()
+        review_count = 0
+        reviewed_submission_count = 0
+        for trajectory in candidate_trajectories:
+            review = trajectory.get("human_review")
+            if not isinstance(review, Mapping):
+                continue
+            review_count += int(review.get("review_count", 0) or 0)
+            reviewed_submission_count += int(
+                review.get("reviewed_submission_count", 0) or 0,
+            )
+            raw_labels = review.get("label_counts")
+            if isinstance(raw_labels, Mapping):
+                review_counts.update(
+                    {
+                        str(label): int(count)
+                        for label, count in raw_labels.items()
+                        if isinstance(label, str)
+                        and isinstance(count, int | float)
+                        and count >= 0
+                    },
+                )
+        candidate_summary["human_review_count"] = review_count
+        candidate_summary["human_reviewed_submission_count"] = (
+            reviewed_submission_count
+        )
+        candidate_summary["human_review_label_counts"] = dict(
+            sorted(review_counts.items()),
+        )
+        strict_pass_count = sum(
+            item.get("strict_pass") is True for item in items
+        )
+        aggregate = aggregate_trial_scores(items, metric_names=metric_names)
         result[case_id] = {
             "trial_count": len(items),
-            "strict_pass_count": sum(item["strict_pass"] is True for item in items),
+            "strict_pass_count": strict_pass_count,
             "strict_pass_rate": (
-                sum(item["strict_pass"] is True for item in items) / len(items)
+                strict_pass_count / len(items)
             ),
-            "metrics": metrics,
+            "strict_pass_wilson_95": dict(
+                aggregate.get("binary", {})
+                .get("strict_pass", {})
+                .get("wilson_95", {})
+            ),
+            "metrics": aggregate.get("metrics", {}),
+            "binary": aggregate.get("binary", {}),
+            "issue_codes": dict(sorted(issue_codes.items())),
+            "candidate_quality": candidate_summary,
         }
+    if trials:
+        aggregate = aggregate_trial_scores(trials, metric_names=metric_names)
+        total_inputs = sum(
+            float(item.get("metrics", {}).get("input_count", 0.0) or 0.0)
+            for item in trials
+        )
+        exact_inputs = sum(
+            float(
+                item.get("metrics", {}).get("input_exact_match_count", 0.0)
+                or 0.0
+            )
+            for item in trials
+        )
+        case_rates = [
+            float(item.get("metrics", {}).get("input_exact_match_rate", 0.0) or 0.0)
+            for item in trials
+            if isinstance(item.get("metrics"), Mapping)
+        ]
+        micro_rate = exact_inputs / total_inputs if total_inputs else 0.0
+        macro_rate = sum(case_rates) / len(case_rates) if case_rates else 0.0
+        aggregate["input_exact_match"] = {
+            "micro": {
+                "successes": exact_inputs,
+                "observations": total_inputs,
+                "rate": micro_rate,
+            },
+            "macro": {"case_count": len(case_rates), "rate": macro_rate},
+        }
+        result["__overall__"] = aggregate
     return result
 
 
@@ -577,7 +985,7 @@ def _build_local_summary(
 
 
 async def _run_evaluation(args: argparse.Namespace) -> int:
-    from lmnr import Instruments, Laminar, evaluate
+    from lmnr import HumanEvaluator, Instruments, Laminar, evaluate
 
     from cli_parser_agent import GenerationRequest, TtpGenerator
     from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION
@@ -656,6 +1064,16 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
         if isinstance(output, Mapping):
             key = str(output.get("trial_key", ""))
             facts = safe_trial_facts(output, scores)
+            details = score_executor_output_details(output, target)
+            facts["input_diagnostics"] = details.get("inputs", [])
+            facts["extra_actual_input_count"] = details.get(
+                "extra_actual_input_count",
+                0,
+            )
+            facts["issue_taxonomy"] = details.get(
+                "issue_taxonomy",
+                issue_taxonomy(()),
+            )
             result = output.get("generation_result")
             metadata = result.get("metadata") if isinstance(result, Mapping) else None
             facts["reported_trace_id"] = (
@@ -675,7 +1093,16 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
     evaluation_result = await evaluate(
         data=datapoints,
         executor=executor,
-        evaluators={"deterministic": evaluator},
+        evaluators={
+            "deterministic": evaluator,
+            "template_review": HumanEvaluator(
+                options=[
+                    {"label": "reasonable", "value": 1.0},
+                    {"label": "repairable", "value": 0.5},
+                    {"label": "unreasonable", "value": 0.0},
+                ],
+            ),
+        },
         name=evaluation_name,
         group_name=group_name,
         metadata={
@@ -705,6 +1132,56 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
         len(datapoints),
     )
 
+    # Candidate outputs are queried only after generation and are projected to
+    # bounded structural facts before entering the local summary.  The raw
+    # template/capture remains available solely in Laminar for reviewer agents.
+    case_by_key = {
+        _trial_key(case.id, trial_index): case
+        for case in cases
+        for trial_index in range(args.trials)
+    }
+    for key, trace in telemetry.items():
+        trace_id = trace.get("trace_id")
+        case = case_by_key.get(key)
+        if not isinstance(trace_id, str) or case is None:
+            continue
+        try:
+            candidate_rows = await asyncio.to_thread(
+                _candidate_spans_for_trace,
+                runtime,
+                trace_id,
+            )
+            trace["candidate_trajectory"] = project_candidate_trajectory(
+                candidate_rows,
+                expected_records=case.target.records,
+            )
+            review_rows = await asyncio.to_thread(
+                _human_review_spans_for_trace,
+                runtime,
+                trace_id,
+            )
+            review_projection = project_human_reviews(review_rows)
+            trace["candidate_trajectory"] = attach_human_reviews(
+                trace["candidate_trajectory"],
+                review_projection,
+            )
+        except RunnerError:
+            # Candidate diagnostics are additive.  A SQL projection problem
+            # must not erase the deterministic evaluator result.
+            trace["candidate_trajectory"] = {
+                "submission_count": 0,
+                "accepted_count": 0,
+                "candidate_available_count": 0,
+                "first_accepted_submission": None,
+                "last_accepted_submission": None,
+                "accepted_indices": [],
+                "finish_called": False,
+                "finish_after_first_accepted": False,
+                "issue_domains": {},
+                "candidates": [],
+                "query_error": True,
+            }
+
     trials: list[dict[str, Any]] = []
     for case in cases:
         for trial_index in range(args.trials):
@@ -726,7 +1203,28 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
             trace = telemetry.get(key, {})
             span_metrics = trace.get("spans", {})
             combined_metrics = {**facts["metrics"], **span_metrics}
+            token_growth = trace.get("token_growth", {})
+            if isinstance(token_growth, Mapping):
+                combined_metrics.update(
+                    {
+                        key: value
+                        for key, value in token_growth.items()
+                        if isinstance(value, int | float)
+                        and not isinstance(value, bool)
+                    },
+                )
             complete = trace.get("complete") is True
+            reported_trace_id = facts["reported_trace_id"] or span_metrics.get(
+                "reported_trace_id",
+            )
+            trace_id_consistent = not reported_trace_id or (
+                reported_trace_id == trace.get("trace_id")
+            )
+            if not trace_id_consistent:
+                complete = False
+                combined_metrics["trace_id_consistent"] = 0.0
+            else:
+                combined_metrics["trace_id_consistent"] = 1.0
             trials.append(
                 {
                     "case_id": case.id,
@@ -745,8 +1243,34 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                     "exception_type": facts["exception_type"],
                     "last_attempt_present": facts["last_attempt_present"],
                     "trace_id": trace.get("trace_id"),
-                    "reported_trace_id": facts["reported_trace_id"],
+                    "reported_trace_id": reported_trace_id,
+                    "trace_id_consistent": trace_id_consistent,
                     "metrics": combined_metrics,
+                    "input_diagnostics": facts.get("input_diagnostics", []),
+                    "issue_taxonomy": facts.get(
+                        "issue_taxonomy",
+                        issue_taxonomy(()),
+                    ),
+                    "segment_stats": trace.get("segment_stats", {}),
+                    "token_growth": trace.get("token_growth", {}),
+                    "duration_coverage": {
+                        key: trace.get(key, 0.0)
+                        for key in (
+                            "explained_duration_seconds",
+                            "unexplained_duration_seconds",
+                            "explained_duration_ratio",
+                            "unexplained_duration_ratio",
+                        )
+                    },
+                    "candidate_trajectory": trace.get(
+                        "candidate_trajectory",
+                        {
+                            "submission_count": 0,
+                            "accepted_count": 0,
+                            "candidate_available_count": 0,
+                            "finish_after_first_accepted": False,
+                        },
+                    ),
                 },
             )
 
@@ -792,6 +1316,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _command_list()
         if args.command == "preflight":
             return _command_preflight()
+        if args.command == "review":
+            return _command_review(args)
         return _command_run(args)
     except (HarnessError, RunnerError) as error:
         print(f"error: {error}", file=sys.stderr)

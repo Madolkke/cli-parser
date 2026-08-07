@@ -11,9 +11,6 @@ from cli_parser_agent.ttp_generation.validation import (
     validate_records_against_schema,
     validate_ttp_template,
 )
-from cli_parser_agent.ttp_generation.validation.ttp import (
-    _validate_materialized_missing_values,
-)
 
 
 def _table_schema() -> dict:
@@ -47,6 +44,15 @@ def _line_schema(field: str = "value", field_type: str = "string") -> dict:
         "required": [field],
         "additionalProperties": False,
     }
+
+
+def _optional_line_schema(
+    field: str = "value",
+    field_type: str = "string",
+) -> dict:
+    schema = _line_schema(field, field_type)
+    schema["required"] = []
+    return schema
 
 
 def _array_schema(container: str, field: str) -> dict:
@@ -414,18 +420,29 @@ PID: {{ ignore(".*?") }}, VID: {{ ignore(".*?") }}, SN: {{ sn | WORD }}
     assert all(item["sn"] for record in result.records for item in record["inventory"])
 
 
-def test_empty_root_record_is_reported_as_no_match_before_schema_errors() -> None:
+def test_empty_root_record_is_accepted_when_schema_allows_it() -> None:
+    result = validate_ttp_template(
+        "Value: {{ value | WORD }}",
+        ["Different: text"],
+        _optional_line_schema(),
+    )
+
+    assert result.valid
+    assert result.records == [{}]
+
+
+def test_empty_root_record_is_rejected_only_by_required_schema() -> None:
     result = validate_ttp_template(
         "Value: {{ value | WORD }}",
         ["Different: text"],
         _line_schema(),
     )
 
-    assert [issue.code for issue in result.issues] == ["ttp.no_match"]
+    assert _codes(result.issues) == {"schema.record_mismatch"}
     assert result.issues[0].output_index == 0
 
 
-def test_no_match_does_not_hide_other_sample_schema_errors() -> None:
+def test_empty_root_and_other_schema_errors_are_reported_uniformly() -> None:
     result = validate_ttp_template(
         "Value: {{ value | WORD }}",
         ["Different: text", "Value: text"],
@@ -434,7 +451,7 @@ def test_no_match_does_not_hide_other_sample_schema_errors() -> None:
 
     assert result.records == [{}, {"value": "text"}]
     assert [issue.code for issue in result.issues] == [
-        "ttp.no_match",
+        "schema.record_mismatch",
         "schema.record_mismatch",
     ]
     assert [issue.output_index for issue in result.issues] == [0, 1]
@@ -688,23 +705,35 @@ def test_timeout_must_be_finite(timeout: float) -> None:
     assert _codes(result.issues) == {"ttp.invalid_timeout"}
 
 
-def test_materialized_missing_value_issues_are_bounded() -> None:
-    issues = _validate_materialized_missing_values(
-        {"values": ["" for _ in range(1_000)]},
-        output_index=0,
+def test_empty_required_string_is_allowed_by_frozen_schema() -> None:
+    issues = validate_records_against_schema(
+        [{"value": ""}],
+        _line_schema(),
     )
 
-    assert len(issues) == 100
-    assert _codes(issues) == {"ttp.materialized_missing_value"}
+    assert issues == []
 
 
-def test_empty_optional_value_cannot_be_materialized() -> None:
-    issues = _validate_materialized_missing_values(
-        {"optional_value": ""},
-        output_index=0,
+def test_full_parse_preserves_literal_empty_string_when_schema_allows() -> None:
+    result = validate_ttp_template(
+        'PID: {{ value | re("[^ ]*") }},',
+        ["PID: ,"],
+        _line_schema(),
     )
 
-    assert _codes(issues) == {"ttp.materialized_missing_value"}
+    assert result.valid, result.issues
+    assert result.records == [{"value": ""}]
+
+
+def test_multiple_empty_root_records_are_left_for_model_review() -> None:
+    result = validate_ttp_template(
+        "Value: {{ value | WORD }}",
+        ["Different: one", "Different: two"],
+        _optional_line_schema(),
+    )
+
+    assert result.valid
+    assert result.records == [{}, {}]
 
 
 def test_null_optional_value_is_rejected_by_frozen_schema() -> None:

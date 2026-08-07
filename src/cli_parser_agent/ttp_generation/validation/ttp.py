@@ -979,45 +979,6 @@ def _run_ttp_isolated(
     return payload, []
 
 
-def _validate_materialized_missing_values(
-    value: Any,
-    *,
-    output_index: int,
-    path: tuple[str, ...] = (),
-    max_issues: int = MAX_TTP_VALIDATION_ISSUES,
-) -> list[ValidationIssue]:
-    """Reject empty-string placeholders for absent optional values.
-
-    JSON Schema validation remains responsible for rejecting ``null`` and other
-    type mismatches. This check intentionally does not infer whether non-empty
-    transformed values appeared textually in the input.
-    """
-
-    issues: list[ValidationIssue] = []
-    stack: list[tuple[Any, tuple[str, ...]]] = [(value, path)]
-    while stack and len(issues) < max_issues:
-        current, current_path = stack.pop()
-        if isinstance(current, dict):
-            for key, child in reversed(list(current.items())):
-                stack.append((child, (*current_path, str(key))))
-        elif isinstance(current, list):
-            for child in reversed(current):
-                stack.append((child, (*current_path, "*")))
-        elif isinstance(current, str) and not current:
-            pointer = "/" + "/".join(current_path) if current_path else "/"
-            issues.append(
-                _issue(
-                    "ttp.materialized_missing_value",
-                    "missing optional values must be omitted rather than "
-                    "materialized as empty strings",
-                    path=pointer,
-                    output_index=output_index,
-                    stage="acceptance",
-                ),
-            )
-    return issues
-
-
 def validate_ttp_template(
     template: str,
     command_outputs: Sequence[str],
@@ -1086,38 +1047,11 @@ def validate_ttp_template(
     if issues:
         return TtpValidationResult(records=[], issues=issues)
 
-    no_match_indexes = {
-        output_index for output_index, record in enumerate(records) if not record
-    }
-    issues = [
-        _issue(
-            "ttp.no_match",
-            "TTP template produced an empty root object; simplify the first "
-            "group match line so it matches this command output",
-            output_index=output_index,
-        )
-        for output_index in sorted(no_match_indexes)
-    ]
-    issues.extend(
-        issue
-        for issue in validate_records_against_schema(
-            records,
-            result_schema,
-            **schema_limits,
-        )
-        if issue.output_index not in no_match_indexes
+    issues = validate_records_against_schema(
+        records,
+        result_schema,
+        **schema_limits,
     )
-    for output_index, record in enumerate(records):
-        remaining_issues = MAX_TTP_VALIDATION_ISSUES - len(issues)
-        if remaining_issues <= 0:
-            break
-        issues.extend(
-            _validate_materialized_missing_values(
-                record,
-                output_index=output_index,
-                max_issues=remaining_issues,
-            ),
-        )
     return TtpValidationResult(
         records=records,
         issues=issues[:MAX_TTP_VALIDATION_ISSUES],

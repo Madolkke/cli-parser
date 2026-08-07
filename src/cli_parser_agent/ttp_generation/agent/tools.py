@@ -6,7 +6,7 @@ import asyncio
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from enum import Enum
 from typing import Any
 
@@ -120,6 +120,21 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+def _result_payload(
+    *,
+    phase: str,
+    accepted: bool,
+    issues: Sequence[Any] = (),
+    **details: Any,
+) -> dict[str, Any]:
+    return {
+        "phase": phase,
+        "accepted": accepted,
+        "issues": _jsonable(tuple(issues)),
+        **details,
+    }
+
+
 def _result_chunk(
     *,
     phase: str,
@@ -127,12 +142,12 @@ def _result_chunk(
     issues: Sequence[Any] = (),
     **details: Any,
 ) -> ToolChunk:
-    payload = {
-        "phase": phase,
-        "accepted": accepted,
-        "issues": _jsonable(tuple(issues)),
+    payload = _result_payload(
+        phase=phase,
+        accepted=accepted,
+        issues=issues,
         **details,
-    }
+    )
     return ToolChunk(
         content=[
             TextBlock(
@@ -145,6 +160,97 @@ def _result_chunk(
         ],
         state=ToolResultState.SUCCESS,
         metadata={"phase": phase, "accepted": accepted},
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class _TracedToolResult:
+    """Separate model-visible feedback from the diagnostic TOOL payload."""
+
+    chunk: ToolChunk
+    diagnostic_payload: dict[str, Any]
+
+
+_TTP_SYNTAX_OR_SAFETY_CODES = {
+    "ttp.duplicate_line_variable",
+    "ttp.empty_template",
+    "ttp.forbidden_group_attribute",
+    "ttp.forbidden_tag",
+    "ttp.forbidden_template_attribute",
+    "ttp.forbidden_xml_declaration",
+    "ttp.group_attribute_too_long",
+    "ttp.group_depth_exceeded",
+    "ttp.invalid_field_name",
+    "ttp.invalid_group_method",
+    "ttp.invalid_group_name",
+    "ttp.invalid_ignore_syntax",
+    "ttp.invalid_line_control",
+    "ttp.invalid_root_tag",
+    "ttp.invalid_utf8",
+    "ttp.invalid_variable_syntax",
+    "ttp.invalid_xml",
+    "ttp.no_variables",
+    "ttp.submission_invalid",
+    "ttp.template_too_large",
+    "ttp.unsafe_group_attribute",
+    "ttp.unsafe_variable_attribute",
+}
+_TTP_PARSE_FAILURE_CODES = {
+    "generation.timeout",
+    "ttp.timeout",
+    "ttp.validator_failed",
+    "ttp.worker_bootstrap_failed",
+    "ttp.worker_error",
+    "ttp.worker_host_unsupported",
+    "ttp.worker_start_failed",
+}
+
+
+def _issue_code(issue: Any) -> str | None:
+    value = _jsonable(issue)
+    if not isinstance(value, Mapping):
+        return None
+    code = value.get("code")
+    return code if isinstance(code, str) else None
+
+
+def _brief_ttp_error(issues: Sequence[Any]) -> str:
+    codes = {_issue_code(issue) for issue in issues}
+    if any(code in _TTP_PARSE_FAILURE_CODES for code in codes):
+        return "错误：模板解析未能完成。"
+    if any(code in _TTP_SYNTAX_OR_SAFETY_CODES for code in codes):
+        return "错误：模板未通过语法或安全检查。"
+    return "错误：模板未产生可用的匹配结果。"
+
+
+def _ttp_result_chunk(
+    *,
+    accepted: bool,
+    issues: Sequence[Any] = (),
+    matched_records: Sequence[Any] = (),
+    **details: Any,
+) -> _TracedToolResult:
+    diagnostic_payload = _result_payload(
+        phase="template",
+        accepted=accepted,
+        issues=issues,
+        **details,
+    )
+    records = _jsonable(tuple(matched_records))
+    model_text = json.dumps(
+        records,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    if not records:
+        model_text = f"{model_text}\n{_brief_ttp_error(issues)}"
+    return _TracedToolResult(
+        chunk=ToolChunk(
+            content=[TextBlock(text=model_text)],
+            state=ToolResultState.SUCCESS,
+            metadata={"phase": "template", "accepted": accepted},
+        ),
+        diagnostic_payload=diagnostic_payload,
     )
 
 
@@ -166,7 +272,7 @@ async def _run_traced_tool_call(
     *,
     name: str,
     input: Mapping[str, Any],
-    operation: Callable[[], Awaitable[ToolChunk]],
+    operation: Callable[[], Awaitable[ToolChunk | _TracedToolResult]],
     progress: ProgressEmitter | None,
     phase: GenerationPhase,
 ) -> ToolChunk:
@@ -178,7 +284,7 @@ async def _run_traced_tool_call(
         span_type="TOOL",
     ):
         try:
-            result = await operation()
+            operation_result = await operation()
         except asyncio.CancelledError as error:
             if progress is not None and progress.enabled:
                 progress.custom(
@@ -225,7 +331,12 @@ async def _run_traced_tool_call(
             )
             raise
         else:
-            payload = _tool_chunk_payload(result)
+            if isinstance(operation_result, _TracedToolResult):
+                result = operation_result.chunk
+                payload = operation_result.diagnostic_payload
+            else:
+                result = operation_result
+                payload = _tool_chunk_payload(result)
             if progress is not None and progress.enabled:
                 progress.custom(
                     "cli_parser.tool.result",
@@ -442,7 +553,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
     name = SUBMIT_TEMPLATE_TOOL_NAME
     description = (
         "只提交完整的共享 TTP 模板。系统会使用每份完整命令输出和已冻结的 "
-        "JSON Schema 对它进行验证。"
+        "JSON Schema 对它进行验证，并直接返回按输入索引排列的 TTP 匹配结果。"
     )
     input_schema = TemplateSubmissionInput.model_json_schema()
 
@@ -455,10 +566,9 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             phase="ttp",
         )
 
-    async def _call(self, ttp_template: str) -> ToolChunk:
+    async def _call(self, ttp_template: str) -> _TracedToolResult:
         if not self.session.schema_is_frozen:
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -471,8 +581,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
                 validated_candidate_available=False,
             )
         if self.session.succeeded:
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -490,8 +599,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         ):
             issues = (_already_terminated_issue(),)
             self.session.last_issues = issues
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -501,8 +609,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             )
         if self.session.ttp_submissions >= self.session.max_ttp_submissions:
             self.session.terminal_reason = "ttp_submission_limit"
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -523,8 +630,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             issues = (_safe_boundary_issue(phase="template", failure="input"),)
             self.session.last_issues = issues
             candidate_available = self.session.has_validated_ttp_candidate
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -565,8 +671,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             self.session.last_issues = issues
             if self.session.ttp_submissions >= self.session.max_ttp_submissions:
                 self.session.terminal_reason = "ttp_submission_limit"
-            return _result_chunk(
-                phase="template",
+            return _ttp_result_chunk(
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -660,11 +765,11 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
 
         candidate_available = self.session.has_validated_ttp_candidate
 
-        return _result_chunk(
-            phase="template",
+        return _ttp_result_chunk(
             accepted=accepted,
             capture=capture,
             issues=issues,
+            matched_records=outcome.records,
             validated_candidate_available=candidate_available,
             ttp_submission=self.session.ttp_submissions,
             remaining_submissions=max(

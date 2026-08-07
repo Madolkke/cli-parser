@@ -460,22 +460,9 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert tool_results[0].id == "template-rejected"
     assert len(tool_results[0].output) == 1
     payload = json.loads(tool_results[0].output[0].text)
-    assert payload["accepted"] is False
-    assert payload["issues"] == [issue]
-    assert payload["capture"] == {
-        "available": True,
-        "complete": True,
-        "serialized_bytes": len(
-            json.dumps(
-                [captured_record],
-                ensure_ascii=True,
-                separators=(",", ":"),
-            ).encode("utf-8"),
-        ),
-        "records": [captured_record],
-        "previews": [],
-    }
-    assert payload["next_action"] == "correct_and_resubmit_template"
+    assert payload == [captured_record]
+    assert "accepted" not in tool_results[0].output[0].text
+    assert issue["message"] not in tool_results[0].output[0].text
 
     assert outcome.phase_completed
     assert outcome.stopped_after_terminal_tool
@@ -510,10 +497,7 @@ async def test_valid_template_submission_waits_for_explicit_finish() -> None:
     ]
     assert len(second_request_results) == 1
     accepted_payload = json.loads(second_request_results[0].output[0].text)
-    assert accepted_payload["accepted"] is True
-    assert accepted_payload["next_action"] == (
-        "review_capture_then_finish_or_resubmit"
-    )
+    assert accepted_payload == [{"value": "one"}]
     assert outcome.phase_completed
     assert outcome.stopped_after_terminal_tool
     assert session.ttp_submissions == 1

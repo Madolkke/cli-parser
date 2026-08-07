@@ -37,11 +37,11 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 1. Schema Agent 只拥有 `submit_result_schema`。无效提交及其结构化问题留在 Schema `AgentState` 内，模型可修正后重提。
 2. 第一个通过元模式、白名单和字段证据校验的 Schema 被深拷贝并永久冻结；对应 `ToolResultEndEvent` 是阶段安全暂停点，runner 立即结束 Schema reply。
 3. 若仍有全局轮次和总时长预算，私有 generation workflow 创建新的 TTP 模型、Agent、`AgentState` 和 Toolkit。首次 TTP UserMsg 只含冻结 Schema 与该阶段重新采样的命令输出。
-4. TTP Agent 固定拥有 `submit_ttp_template` 和无参数的 `finish_generation`。有效模板只保存为最新候选并返回 capture，不结束 Agent；模型复核记录数量、异常空容器、表头/分隔线误捕获、字段粒度和多样例一致性后，选择继续提交或 finish。后续无效提交保留先前有效候选，新的有效提交替换它。
+4. TTP Agent 固定拥有 `submit_ttp_template` 和无参数的 `finish_generation`。有效模板只保存为最新候选并向模型返回按输入索引排列的完整 records，不结束 Agent；模型根据 records、冻结 Schema 和原始输入复核记录数量、异常空容器、表头/分隔线误捕获、字段粒度和多样例一致性后，选择继续提交或 finish。后续无效提交保留先前有效候选，新的有效提交替换它。
 5. 如果一轮模型调用正常完成但没有工具调用，runner 不解析其 assistant 文本，只追加固定中文提醒并在当前阶段重试。提醒不引用或摘要模型回复；两个阶段分别受独立重试上限约束。
 6. 只有存在有效候选且 `finish_generation` 调用成功，TTP reply 才以成功结束；无候选的 finish 返回结构化拒绝并允许继续。任一轮次、零工具重试、模板提交或总时长预算耗尽时，即使已经保留有效候选也返回失败。runner 使用 AgentScope 支持的中断清理路径结束 reply，移除清理阶段新增的消息和 usage。
 
-`submit_ttp_template` 的内部 ToolResult 用 `validated_candidate_available` 明确当前是否已有可 finish 的候选，并通过 `review_capture_then_finish_or_resubmit`、`finish_or_correct_and_resubmit_template` 或 `correct_and_resubmit_template` 指示下一步。`finish_generation` 不接收参数、不重复解析候选且不计入模板提交数；无候选时返回 `generation.finish_without_valid_candidate`。
+模型可见的 `submit_ttp_template` ToolResult 只包含 records JSON；无 records 时追加固定中文错误，不暴露 accepted、issues、候选状态、预算或下一步提示。内部 ToolResult 诊断 payload 仍保留 `validated_candidate_available`、issues 和有界 capture，供 Laminar、observer/TUI 与评测使用。`finish_generation` 不接收参数、不重复解析候选且不计入模板提交数；无候选时返回 `generation.finish_without_valid_candidate`。
 
 两个阶段共享同一 deadline、总模型轮次和 TTP 提交预算。Schema 用尽全部轮次后即使恰好被接受，也不会启动 TTP Agent；TTP 失败不会回流 Schema 阶段、解冻 Schema 或重建 Schema Agent。这种协议既不依赖自由文本 JSON 提取，也从结构上消除了跨阶段对话污染。
 
@@ -49,15 +49,15 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。不发送供应商专用的 `extra_body` 覆盖。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
 
-TTP 提示要求每个模型回复最多调用一个工具，并等待提交 ToolResult/capture 出现在后续模型上下文后再调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮 submit/finish 拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
+TTP 提示要求每个模型回复最多调用一个工具，并等待提交 ToolResult/records 出现在后续模型上下文后再调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮 submit/finish 拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
 
 模型构造层不识别供应商主机名，不发送 `thinking.type=disabled` 或其他供应商专用覆盖，也不根据异常正文推断模型是否支持工具。两个独立模型请求都只携带所属 Toolkit 的阶段工具 Schema 并省略 `tool_choice`；正常完成却未调用工具属于可观测的协议行为，而不是供应商能力结论。
 
-默认执行限制是总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。第 `9` 次模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；因此最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
+默认执行限制是总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。达到有效 `max_ttp_submissions` 上限的模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v13-flexible-evidence-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示明确区分机械 accepted 与业务语义合法性，并要求固定宽度表格在提交前建立列映射和预期数据行数、在 capture 后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v15-model-content-acceptance-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -67,7 +67,7 @@ Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预�
 
 根 span、phase span 与 TOOL span 采用显式生命周期管理，使正常返回、结构化失败、异常和协作式取消都能结束并导出；Schema 失败不会创建 `ttp.phase`，强制杀进程仍不保证上传。
 
-Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。TTP 候选只要完成隔离解析，即使无匹配或 Schema 不一致，也会在请求内提交工具反馈中返回最多 `32 KiB` 的完整 records 或结构化 preview；该 capture 同时进入 `submit_ttp_template` TOOL span，但不进入失败的公共结果。`finish_generation` TOOL span 只记录空输入和接受/拒绝反馈，不重复记录模板或 capture。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
+Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。TTP 候选只要完成隔离解析，模型就会收到完整 records（受 `GenerationPolicy.max_parse_result_bytes` 的现有最高 `8 MiB` 限制）；无 records 时追加固定中文错误。内部 `submit_ttp_template` TOOL span 仍保留 accepted、issues、候选状态和最多 `32 KiB` 的有界 capture，不进入失败的公共结果。`finish_generation` TOOL span 只记录空输入和接受/拒绝反馈，不重复记录模板或 capture。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
 
 ### 2.5 可选 observer 与只读 TUI
 
@@ -173,9 +173,9 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `agent/runner.py` | 运行单个阶段，消费事件、统计轮次与零工具回复、发起固定中文提醒，并在终止工具结果后安全中断和清理事件流 | 是 |
 | `agent/session.py` | 阶段类型、最新有效候选、显式完成状态与 validator outcome 协议，以及唯一跨阶段 `GenerationSession` | 否 |
 | `agent/tools.py` | 阶段专属提交/完成工具与有界 TOOL span；通过 session 的窄接口提交候选或显式 finish | 是 |
-| `validation/capture.py` | 将 TTP 候选的实际 records 编码为不超过 `32 KiB` 的完整反馈或结构化 preview，供模型复核或修正 | 否 |
+| `validation/capture.py` | 为 Laminar、observer/TUI 和评测生成不超过 `32 KiB` 的内部诊断 capture；模型可见结果由工具适配层直接编码完整 records | 否 |
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
-| `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema/缺失值终验 | 否 |
+| `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema 终验 | 否 |
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
 | `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
@@ -252,22 +252,21 @@ GenerationRequest
     │      ├─ 首条消息仅含冻结 Schema 与 TTP 阶段样本
     │      ├─ 可调用 submit_ttp_template 或 finish_generation
     │      ├─ 零工具回复触发本阶段有界固定中文提醒
-    │      ├─ 提交工具对所有全文解析并返回 issues/capture
-    │      ├─ 有效候选被保留；后续无效提交不清除它
-    │      ├─ 模型复核 capture 后选择继续提交或 finish
+    │      ├─ 提交工具对所有全文解析并向模型返回 records
+    │      ├─ 内部诊断保留 issues/capture；有效候选被保留，后续无效提交不清除它
+    │      ├─ 模型复核 records 后选择继续提交或 finish
     │      └─ 只有有效候选上的 finish 才成功结束阶段
     │
     ├─ Agent 外重新执行确定性最终验收
     │      ├─ TTP 实例化前安全预检
     │      ├─ 隔离进程逐份全文 parse(one=True)
     │      ├─ 每份恰好一个根 object 且索引不变
-    │      ├─ 所有 records 符合冻结 Schema
-    │      └─ 缺失可选值不以空字符串或 null 占位
+    │      └─ 所有 records 符合冻结 Schema
     │
     └─ GenerationResult(success | failed)
 ```
 
-Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。缺失可选值通过省略键表达，不允许用空字符串或 `null` 占位。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交至少一条真实存在于指定完整输入中的连续原文证据；同一路径允许多条且逐条验证。
+Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交至少一条真实存在于指定完整输入中的连续原文证据；同一路径允许多条且逐条验证。
 
 TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
 
@@ -277,9 +276,9 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 
 - 确定性单元测试覆盖输入边界、采样、Schema 安全子集与字段证据、TTP 标签/参数攻击、解析超时、嵌套记录、一一映射、Schema 回验、最新有效候选保留、显式 finish、失败候选标记和 observer 缺省行为不变。
 - pytest 中的稳定测试不隐式访问网络或模型；仅 Linux `ip address show` 与 Cisco IOS `show inventory` 两组测试直接读取固定 raw 语料，用真实 TTP 0.10.1 回归 `ignore(...)` 子语言，其余 corpus 仍由独立 runner 管理。
-- Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、候选保留、无候选 finish 拒绝、第 `9` 次提交严格失败、零工具提醒、分阶段重试及 metadata 计数。
+- Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、候选保留、无候选 finish 拒绝、达到有效模板提交上限后的严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
-- 黑盒评测单测覆盖 manifest 严格解析、路径逃逸与 SHA-256、target 非空和 Schema 断言闭合、records/数组/类型的严格比较、漏行/表头/空数组诊断、遥测延迟及 Key 排除。`list`/`preflight` 在 Key 仍为占位符时也必须完全离线成功。
+- 黑盒评测单测覆盖 manifest 严格解析、路径逃逸与 SHA-256、target 非空和 Schema 断言闭合、records/数组/类型的严格比较、漏行/表头/空数组诊断、遥测延迟及 Key 排除。系统化评测还要报告 case/input 严格通过率、records/Schema precision-recall-F1、Schema 冻结和 TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按 suite、平台和输入形状的 macro/micro 结果。`list`/`preflight` 在 Key 仍为占位符时也必须完全离线成功。
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
@@ -287,13 +286,13 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 
 `scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
-`scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。模型、预算、Laminar 连接和本地产物目录均由环境变量注入；target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
+`scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。模型、预算、Laminar 连接和本地产物目录均由环境变量注入；target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。需要观察完整修正链时，开发评测入口可以在独立进程、并发 `1` 下临时使用总时长 `7200` 秒、`32` 轮、`24` 次 TTP 提交和单次模型超时 `120` 秒的高预算配置；该配置不改变默认策略。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
 
-真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `11/11`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
+真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `11/11`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。HumanEvaluator 评审仅在显式开发评测入口进行：它读取同一 run 的 Laminar 只读 Trace，覆盖该 run 产生的全部 Schema/TTP 候选，并只记录有界质量标签和数值指标；不修改 Agent、触发重试或进入产品 API。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 
 ## 7. 暂缓事项
 
-长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、生产级监控与告警、Laminar CLI/Debugger/replay、LLM judge、HumanEvaluator、Laminar Dataset 和 `examples/` 均不属于首版。`scripts/run_live_corpus.py`、`scripts/run_agent_tui.py` 与 `scripts/run_agent_evaluation.py` 都是独立开发工具，不扩大产品边界；本地记录只写入忽略版本控制的 `.artifacts/`。`evals/` 仅保存人工真值，不是新的产品用例或运行时依赖。
+长期记忆、多 Agent 编排、Agent Team、HTTP/A2A/MCP 适配、产品 CLI、持久化、部署、消息总线、生产级监控与告警、Laminar CLI/Debugger/replay、LLM judge、Laminar Dataset 和 `examples/` 均不属于首版。HumanEvaluator 作为全量候选的人工质量评审，仅允许由显式开发评测入口读取 Laminar Trace，不属于公共 API、Agent 运行时、产品部署或普通 pytest。`scripts/run_live_corpus.py`、`scripts/run_agent_tui.py` 与 `scripts/run_agent_evaluation.py` 都是独立开发工具，不扩大产品边界；本地记录只写入忽略版本控制的 `.artifacts/`。`evals/` 仅保存人工真值，不是新的产品用例或运行时依赖。
 
 ## 8. 官方依据
 

@@ -575,6 +575,137 @@ def test_key_values_are_excluded_from_configuration_snapshot(
     assert laminar_key not in encoded
 
 
+def test_configuration_snapshot_includes_reasoning_and_tls_settings() -> None:
+    script = _load_script()
+    environment = _evaluation_environment()
+    environment.update(
+        {
+            "CLI_PARSER_MODEL_THINKING_ENABLE": "true",
+            "CLI_PARSER_MODEL_REASONING_EFFORT": "high",
+            "CLI_PARSER_INSECURE_SKIP_TLS_VERIFY": "1",
+        },
+    )
+
+    _, _, _, snapshot = script._configuration(environment)
+
+    assert snapshot["model"]["thinking_enable"] is True
+    assert snapshot["model"]["reasoning_effort"] == "high"
+    assert snapshot["model"]["verify_tls"] is False
+
+
+def test_telemetry_requires_conditional_phase_spans() -> None:
+    script = _load_script()
+    complete = {
+        "evaluation_span_count": 1,
+        "executor_span_count": 1,
+        "generation_span_count": 1,
+        "schema_phase_count": 1,
+        "llm_call_count": 1,
+        "entered_ttp": True,
+        "ttp_phase_count": 0,
+    }
+
+    assert script._telemetry_complete(complete) is False
+    complete["ttp_phase_count"] = 1
+    complete["finish_called"] = True
+    complete["final_acceptance_span_count"] = 0
+    assert script._telemetry_complete(complete) is False
+    complete["final_acceptance_span_count"] = 1
+    assert script._telemetry_complete(complete) is True
+
+
+def test_review_dimensions_are_bounded_and_review_validation_is_local() -> None:
+    script = _load_script()
+
+    assert script._parse_review_dimensions(
+        ["boundary=good", "optionality=repairable"],
+    ) == {"boundary": "good", "optionality": "repairable"}
+    with pytest.raises(script.RunnerError, match="NAME=VALUE"):
+        script._parse_review_dimensions(["malformed"])
+    with pytest.raises(script.RunnerError, match="unsupported"):
+        script.record_human_review(
+            script.EvaluationRuntimeConfig(
+                laminar_project_api_key="local-laminar-test-key",
+                laminar_base_url="http://127.0.0.1",
+                laminar_http_port=8000,
+                laminar_grpc_port=8001,
+                laminar_frontend_port=5667,
+                artifact_root=PROJECT_ROOT / ".artifacts" / "test",
+                telemetry_wait_seconds=1.0,
+            ),
+            trace_id="00000000-0000-0000-0000-000000000001",
+            submission_index=1,
+            label="not-a-label",
+        )
+    with pytest.raises(script.RunnerError, match="phase"):
+        script.record_human_review(
+            script.EvaluationRuntimeConfig(
+                laminar_project_api_key="local-laminar-test-key",
+                laminar_base_url="http://127.0.0.1",
+                laminar_http_port=8000,
+                laminar_grpc_port=8001,
+                laminar_frontend_port=5667,
+                artifact_root=PROJECT_ROOT / ".artifacts" / "test",
+                telemetry_wait_seconds=1.0,
+            ),
+            trace_id="00000000-0000-0000-0000-000000000001",
+            phase="invalid",
+            submission_index=1,
+            label="repairable",
+        )
+
+
+def test_trial_aggregation_reports_wilson_and_input_macro_micro() -> None:
+    script = _load_script()
+    aggregate = script._aggregate_trials(
+        [
+            {
+                "case_id": "case.one",
+                "strict_pass": True,
+                "candidate_pass": True,
+                "issue_codes": [],
+                "metrics": {
+                    "candidate_pass": 1.0,
+                    "input_count": 2.0,
+                    "input_exact_match_count": 2.0,
+                    "input_exact_match_rate": 1.0,
+                },
+                "candidate_trajectory": {
+                    "submission_count": 2,
+                    "accepted_count": 1,
+                    "finish_after_first_accepted": True,
+                },
+            },
+            {
+                "case_id": "case.one",
+                "strict_pass": False,
+                "candidate_pass": False,
+                "issue_codes": ["schema.record_mismatch"],
+                "metrics": {
+                    "candidate_pass": 0.0,
+                    "input_count": 1.0,
+                    "input_exact_match_count": 0.0,
+                    "input_exact_match_rate": 0.0,
+                },
+                "candidate_trajectory": {
+                    "submission_count": 1,
+                    "accepted_count": 0,
+                    "finish_after_first_accepted": False,
+                },
+            },
+        ],
+    )
+
+    case = aggregate["case.one"]
+    assert case["strict_pass_count"] == 1
+    assert case["strict_pass_wilson_95"]["lower"] < 0.5
+    assert case["candidate_quality"]["submission_count"] == 3
+    assert aggregate["__overall__"]["input_exact_match"]["micro"]["rate"] == (
+        2 / 3
+    )
+    assert aggregate["__overall__"]["input_exact_match"]["macro"]["rate"] == 0.5
+
+
 def test_repository_cases_materialize_as_sdk_datapoints() -> None:
     script = _load_script()
     manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
