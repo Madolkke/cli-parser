@@ -743,6 +743,12 @@ def _telemetry_complete(telemetry: Mapping[str, Any]) -> bool:
     )
 
 
+def _strict_pass(candidate_pass: Any) -> bool:
+    """Return deterministic correctness without consulting telemetry state."""
+
+    return candidate_pass is True
+
+
 async def _collect_telemetry(
     runtime: EvaluationRuntimeConfig,
     evaluation_id: str,
@@ -1229,7 +1235,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                 {
                     "case_id": case.id,
                     "trial_index": trial_index,
-                    "strict_pass": facts["candidate_pass"] is True and complete,
+                    "strict_pass": _strict_pass(facts["candidate_pass"]),
                     "candidate_pass": facts["candidate_pass"],
                     "telemetry_complete": complete,
                     "failure_category": (

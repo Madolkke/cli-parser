@@ -62,7 +62,7 @@ uv run python scripts/run_agent_evaluation.py run --suite baseline --trials 1 --
 
 Live run 先验证 `http://127.0.0.1:8000` SQL HTTP 与 `127.0.0.1:8001` gRPC，再创建 Evaluation 和 datapoints。Trace 层级为 `evaluation → executor → ttp.generate → schema.phase/ttp.phase → LLM/TOOL`，只启用 OpenAI instrumentation。运行结束 flush 后，入口通过只读 SQL 查询 `evaluation_datapoints` 和 `spans`，最多等待 `60` 秒处理延迟；超时标记 `telemetry_incomplete`，不重新调用模型。
 
-严格通过同时要求生成成功、Agent 外全文重新验收、records 与 golden 深度全等、Schema 结构全等、公共 issues 无 error，并且 Evaluation、Trace 和必要 spans 完整入库。对象键顺序忽略；数组顺序、标量类型、缺失和 `null` 严格区分。叶子 precision/recall/F1 使用“数组索引归一为 `*` 的 JSON 路径 + 规范化标量值”多重集合；Schema 指标按路径、类型和 required 三元组计算。严格通过是 case 级全量门槛，部分分数只用于诊断，不替代最终验收。
+严格通过同时要求生成成功、Agent 外全文重新验收、records 与 golden 深度全等、Schema 结构全等且公共 issues 无 error。对象键顺序忽略；数组顺序、标量类型、缺失和 `null` 严格区分。叶子 precision/recall/F1 使用“数组索引归一为 `*` 的 JSON 路径 + 规范化标量值”多重集合；Schema 指标按路径、类型和 required 三元组计算。Evaluation、Trace、必要 spans 和 Trace ID 一致性作为独立遥测完整性指标，不参与 `strict_pass` 或严格正确率；遥测不完整仍会使本次评测运行状态为 `telemetry_incomplete` 并返回非零退出码。严格通过是 case 级全量门槛，部分分数只用于诊断，不替代最终验收。
 
 ## 系统化指标
 

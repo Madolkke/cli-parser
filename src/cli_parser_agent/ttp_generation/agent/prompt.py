@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v15-model-content-acceptance-zh-cn"
+PROMPT_VERSION = "ttp-generator-v16-empty-delimited-field-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -107,6 +107,13 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
 - 每个数据捕获 pipeline 都以冻结 Schema 中当前路径的字段名开头。`_exact_` 和
   `_exact_space_` 是真实字段捕获的 modifier，不能作为独立变量名。需要
   `_start_`、`_end_` 或 `_line_` 时，只在该行一个真实字段捕获上附加一次。
+- WORD、PHRASE 和 ORPHRASE 都至少匹配一个非空白字符，绝不能用来捕获空 string，
+  也不要假设 ORPHRASE 可以匹配零字符。字段标签存在、值允许为空且右侧有固定分隔符
+  时，使用允许零长度且受该分隔符约束的 `re`。例如逗号分隔的 PID 字段使用：
+    PID: {{ pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?") }} ,
+    VID: {{ vid | ORPHRASE }}, SN: {{ sn | ORPHRASE }}
+  该表达式让空 PID 得到 `""`，非空 PID 不包含右侧填充空格；其他分隔符按相同原则
+  替换逗号。`_exact_space_` 会要求字面空格精确匹配，不会替你消费可变空白。
 - `ignore` 是 TTP 的特殊变量，不使用 pipeline。只允许三种规范形式：
   `{{ ignore }}` 跳过一个非空白 token；`{{ ignore(ORPHRASE) }}` 使用内置模式；
   `{{ ignore("PID:.*SN:") }}` 使用字符串正则。不要使用空调用、多参数、关键字
@@ -146,6 +153,11 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   和最后一条记录：字段名不能作为值，每个字段值必须位于原文相同行的对应表头列，
   “值能在原文其他位置找到”不算正确。特别核对 status/state/type/name 等容易错列的
   字段，不能把末列 Type 当作中间 Status。
+- 若只有原文字段槽为空的实体缺少该物理行上的多个字段，优先判定为空捕获模式失败：
+  保留已经正确的 group 边界，只把该空字段改为由右侧分隔符约束的零长度 `re`。不要
+  用 `_start_`、`_end_` 或 `_exact_space_` 修复行内空白。若修改后 records 数量接近
+  翻倍，且相邻 object 分别只含多行实体的上下半部分，说明行控制拆开了同一实体；立即
+  回退行控制，不要在其上继续修补。
 - 源文本明显包含业务记录，而 record 是空对象或关键数组为空、仅含空容器或只捕获
   少数行时，必须视为漏解析，不能调用 finish_generation。发现字段错列、表头混入、过宽
   匹配或跨样例不一致时必须提交修正版。若 finish_generation 因内部没有有效候选而被

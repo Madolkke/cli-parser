@@ -420,6 +420,66 @@ PID: {{ ignore(".*?") }}, VID: {{ ignore(".*?") }}, SN: {{ sn | WORD }}
     assert all(item["sn"] for record in result.records for item in record["inventory"])
 
 
+def test_delimiter_bounded_regex_captures_empty_inventory_pid() -> None:
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "testdata"
+        / "real_command_outputs"
+        / "ttp_templates"
+        / "cisco_ios"
+        / "show_inventory"
+        / "show_inventory.txt"
+    ).read_text(encoding="utf-8")
+    item_properties = {
+        "name": {"type": "string"},
+        "descr": {"type": "string"},
+        "pid": {"type": "string"},
+        "vid": {"type": "string"},
+        "sn": {"type": "string"},
+    }
+    schema = {
+        "type": "object",
+        "properties": {
+            "components": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": item_properties,
+                    "required": list(item_properties),
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["components"],
+        "additionalProperties": False,
+    }
+    template = (
+        '<group name="components*">\n'
+        'NAME: "{{ name | PHRASE }}", DESCR: "{{ descr | PHRASE }}"\n'
+        'PID: {{ pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?") }} , '
+        "VID: {{ vid | ORPHRASE }}, SN: {{ sn | ORPHRASE }}\n"
+        "</group>\n"
+    )
+
+    result = validate_ttp_template(template, [source], schema)
+
+    assert result.valid, result.issues
+    components = result.records[0]["components"]
+    assert len(components) == 4
+    assert components[0] == {
+        "name": "3640 chassis",
+        "descr": "3640 chassis",
+        "pid": "",
+        "vid": "0xFF",
+        "sn": "FF1045C5",
+    }
+    assert [component["pid"] for component in components[1:]] == [
+        "NM-1FE-TX=",
+        "NM-1FE-TX=",
+        "NM-1FE-TX=",
+    ]
+
+
 def test_empty_root_record_is_accepted_when_schema_allows_it() -> None:
     result = validate_ttp_template(
         "Value: {{ value | WORD }}",

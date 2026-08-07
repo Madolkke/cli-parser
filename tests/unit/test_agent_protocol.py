@@ -127,7 +127,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v15-model-content-acceptance-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v16-empty-delimited-field-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -168,6 +168,11 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "不要用 `.*`、`\\S.*`" in TTP_SYSTEM_PROMPT
     assert "省略未匹配的可选键" in TTP_SYSTEM_PROMPT
     assert "忠实捕获为空 string" in TTP_SYSTEM_PROMPT
+    assert "ORPHRASE 都至少匹配一个非空白字符" in TTP_SYSTEM_PROMPT
+    assert "绝不能用来捕获空 string" in TTP_SYSTEM_PROMPT
+    assert 'pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?")' in TTP_SYSTEM_PROMPT
+    assert "不会替你消费可变空白" in TTP_SYSTEM_PROMPT
+    assert "说明行控制拆开了同一实体" in TTP_SYSTEM_PROMPT
     assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
     assert "evidence" not in TTP_SYSTEM_PROMPT
     assert "assumptions" not in TTP_SYSTEM_PROMPT

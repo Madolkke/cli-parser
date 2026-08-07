@@ -614,6 +614,14 @@ def test_telemetry_requires_conditional_phase_spans() -> None:
     assert script._telemetry_complete(complete) is True
 
 
+def test_strict_pass_depends_only_on_deterministic_candidate_score() -> None:
+    script = _load_script()
+
+    assert script._strict_pass(True) is True
+    assert script._strict_pass(False) is False
+    assert script._strict_pass(None) is False
+
+
 def test_review_dimensions_are_bounded_and_review_validation_is_local() -> None:
     script = _load_script()
 

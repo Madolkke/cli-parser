@@ -57,7 +57,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v15-model-content-acceptance-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v16-empty-delimited-field-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -278,7 +278,7 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - pytest 中的稳定测试不隐式访问网络或模型；仅 Linux `ip address show` 与 Cisco IOS `show inventory` 两组测试直接读取固定 raw 语料，用真实 TTP 0.10.1 回归 `ignore(...)` 子语言，其余 corpus 仍由独立 runner 管理。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、候选保留、无候选 finish 拒绝、达到有效模板提交上限后的严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
-- 黑盒评测单测覆盖 manifest 严格解析、路径逃逸与 SHA-256、target 非空和 Schema 断言闭合、records/数组/类型的严格比较、漏行/表头/空数组诊断、遥测延迟及 Key 排除。系统化评测还要报告 case/input 严格通过率、records/Schema precision-recall-F1、Schema 冻结和 TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按 suite、平台和输入形状的 macro/micro 结果。`list`/`preflight` 在 Key 仍为占位符时也必须完全离线成功。
+- 黑盒评测单测覆盖 manifest 严格解析、路径逃逸与 SHA-256、target 非空和 Schema 断言闭合、records/数组/类型的严格比较、漏行/表头/空数组诊断、遥测延迟及 Key 排除。系统化评测还要报告 case/input 严格通过率、records/Schema precision-recall-F1、Schema 冻结和 TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按 suite、平台和输入形状的 macro/micro 结果。`strict_pass` 只由确定性 `candidate_pass` 决定；Evaluation/Trace/span 完整性与 Trace ID 一致性独立报告，不参与严格正确率。`list`/`preflight` 在 Key 仍为占位符时也必须完全离线成功。
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
