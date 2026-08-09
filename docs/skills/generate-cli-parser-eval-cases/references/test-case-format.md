@@ -25,7 +25,7 @@ The root has exactly `version` and `cases`; version is currently `1`. Each case 
 }
 ```
 
-Use 1-5 unique ordered inputs. IDs and tags are lowercase stable identifiers. Do not add comments or extra keys. SHA-256 covers the exact bytes on disk, including line endings and final newline.
+Use exactly one input per case. IDs and tags are lowercase stable identifiers. Do not add comments or extra keys. SHA-256 covers the exact bytes on disk, including line endings and final newline.
 
 ## Target
 
@@ -46,7 +46,7 @@ The target root has exactly `records` and `schema_contract`:
 }
 ```
 
-There must be exactly one record per input, in the same order. Records must be non-empty root objects. Objects are closed by the contract: every observed path is declared and every declared path is observed at least once. Optional object properties may be absent from individual parent instances.
+There must be exactly one record for the single input. Records must be non-empty root objects. Objects are closed by the contract: every observed path is declared and every declared path is observed at least once. Optional object properties may be absent from individual parent instances.
 
 Supported node types are `object`, `array`, `string`, `integer`, `number`, and `boolean`. Field names are ASCII `snake_case`. `/` is the root. `*` is permitted only as an array item segment. Array item nodes are never required. An object property is required only when it appears in every instance of its immediate parent object; otherwise it is optional.
 

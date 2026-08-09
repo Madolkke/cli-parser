@@ -1,0 +1,483 @@
+{
+  "records": [
+    {
+      "neighbors": [
+        {
+          "neighbor_address": "10.0.0.1",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe04",
+          "remote_router_id": "10.0.0.1",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "43w0d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.3.3",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "alb1-core1",
+          "remote_router_id": "10.0.3.3",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "49w6d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "192.168.100.1",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe01",
+          "remote_router_id": "192.168.100.1",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "3y44w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.100.2.44",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe02",
+          "remote_router_id": "10.100.2.44",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "3y44w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.12.41",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "ve01",
+          "remote_router_id": "10.0.12.41",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "2y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "192.168.1.142",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "ve02",
+          "remote_router_id": "192.168.1.142",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.100.100.124",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "administrative_state": "Administratively shut down",
+          "description": "Another Router",
+          "remote_router_id": "0.0.0.0",
+          "bgp_state": "Idle (Neighbor is shutdown)",
+          "nsr_state": "None",
+          "bfd_status": "initializing",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "172.16.105.21",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "upstream_router1",
+          "remote_router_id": "172.16.105.21",
+          "bgp_state": "Established",
+          "uptime": "14w5d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "172.16.21.222",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "R13",
+          "remote_router_id": "172.16.21.222",
+          "bgp_state": "Established",
+          "uptime": "48w4d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.0.152",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "agr01",
+          "remote_router_id": "10.0.0.152",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.0.123",
+          "vrf": "MGMT",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "agr01",
+          "remote_router_id": "10.0.0.123",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:e01a:204::1",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe01",
+          "remote_router_id": "192.168.100.1",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::6a",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe02",
+          "remote_router_id": "10.100.2.44",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::6b",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe03",
+          "remote_router_id": "10.0.142.12",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::6c",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "ve01",
+          "remote_router_id": "10.0.12.41",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "2y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::6d",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "ve02",
+          "remote_router_id": "192.168.1.142",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "4y10w",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::7fa",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "administrative_state": "Administratively shut down",
+          "description": "shutdown_router",
+          "remote_router_id": "0.0.0.0",
+          "bgp_state": "Idle (Neighbor is shutdown)",
+          "nsr_state": "None",
+          "bfd_status": "initializing",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::7fb",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "administrative_state": "Administratively shut down",
+          "description": "shut_router-2",
+          "remote_router_id": "0.0.0.0",
+          "bgp_state": "Idle (Neighbor is shutdown)",
+          "nsr_state": "None",
+          "bfd_status": "initializing",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::987",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "upstream_router1",
+          "remote_router_id": "172.16.105.21",
+          "bgp_state": "Established",
+          "uptime": "15w1d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::988",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "R12",
+          "remote_router_id": "172.16.21.222",
+          "bgp_state": "Established",
+          "uptime": "48w4d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "2001:fec0::a0d",
+          "remote_as": "65011",
+          "local_as": "65011",
+          "link_type": "internal",
+          "description": "pe04",
+          "remote_router_id": "10.0.0.1",
+          "cluster_id": "10.0.2.2",
+          "bgp_state": "Established",
+          "uptime": "43w0d",
+          "nsr_state": "NSR Ready",
+          "bfd_status": "session down, BFD not configured on remote neighbor",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        }
+      ]
+    }
+  ],
+  "schema_contract": [
+    {
+      "path": "/",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/neighbors",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/neighbor_address",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/remote_as",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/local_as",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/link_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/description",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/remote_router_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/cluster_id",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/bgp_state",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/uptime",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/nsr_state",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/keepalive_interval",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/configured_hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/configured_keepalive",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/minimum_acceptable_hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/bfd_status",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/administrative_state",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/vrf",
+      "type": "string",
+      "required": false
+    }
+  ]
+}

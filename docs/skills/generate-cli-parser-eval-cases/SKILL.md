@@ -1,6 +1,6 @@
 ---
 name: generate-cli-parser-eval-cases
-description: Create, extend, or correct versioned golden cases for this repository's CLI parser black-box evaluation system from 1-5 raw outputs of one command. Use when authoring expected records, schema structure assertions, or manifest entries under evals/ttp_generation, or when validating those definitions offline.
+description: Create, extend, or correct versioned golden cases for this repository's CLI parser black-box evaluation system from one raw output per case. Use when authoring expected records, schema structure assertions, or manifest entries under evals/ttp_generation, or when validating those definitions offline.
 ---
 
 # Generate CLI Parser Eval Cases
@@ -31,7 +31,7 @@ Never run `scripts/run_agent_evaluation.py run`, a live model request, replay, d
 
 ## Workflow
 
-1. Confirm that there are 1-5 non-empty raw text files for the same command and that their order is intentional. Read every file in full.
+1. Confirm that the case has exactly one non-empty raw text file. Read it in full.
 2. Identify the repeated primary business entity in each capture: for example, one interface, route, neighbor, or inventory item. Ignore headings, separators, prompts, echoes, pager text, prose notices, and other control material.
 3. If two or more primary output structures are equally reasonable and would produce materially different roots or arrays, stop before editing and ask the human to choose. Explain the alternatives using field names only; do not invent a preference.
 4. Apply the maximum evidenced semantic projection in `references/annotation-policy.md`. Preserve all primary entities and their source order, and retain every fine-grained business field that appears non-empty at least once with an unambiguous meaning and boundary.

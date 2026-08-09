@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v16-empty-delimited-field-zh-cn"
+PROMPT_VERSION = "ttp-generator-v18-pattern-arity-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -101,6 +101,13 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   安全的 to_int/to_float/to_str/to_ip/to_net/to_cidr 转换。`column(...)` 不是
   TTP 函数，禁止使用。若 unsafe_variable_attribute issue 包含
   details.attribute，删除或替换其中指出的 attribute。
+- 严格按 TTP 内置模式的实际语义选择 pipeline：WORD 是 `\\S+`，恰好匹配一个
+  非空白 token，token 中的 `/`、`.`、`-`、`?` 等标点不影响匹配；接口名、IP、
+  OK、Method、Protocol 等没有空格的列优先使用 WORD。PHRASE 必须匹配至少两个
+  由单个空格分隔的 token，只要某个合法值可能只有一个 token 就禁止使用 PHRASE。
+  ORPHRASE 才能匹配一个 token 或多个 token，只在字段本身确实可能包含空格且右侧
+  列边界明确时使用，例如 Status 同时存在 `up` 和 `administratively down`。绝不要
+  因为 token 含标点而把 WORD 改成 PHRASE。
 - 不要使用 condition 或任何未列出的变量属性。group 只使用 name；不要把 _start_、
   _end_、_line_ 等行控制写成 group XML 属性。不要捕获 _line_ 等辅助字段来帮助
   匹配，因为冻结 Schema 是封闭的，而且辅助整行会掩盖字段错位。
@@ -121,11 +128,21 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   ttp.invalid_ignore_syntax 后，按 required_action=replace_with_ignore_call 修正。
 - 优先使用普通具名匹配行。不要用 `ignore` 构造空控制行；重复 group 会在第一条
   具名匹配行成功时开始。若 records 中出现空 object，直接对照源文本字面布局判断
-  它是否忠实；需要修正时先简化过滤器和条件，不能因此删除 required 字段捕获。
+  它是否忠实；若单行表格模板返回 `[{}]` 或关键数组为空，首先检查是否把单 token
+  字段误用了 PHRASE，并将其恢复为 WORD。完成这项检查前不要改 XML wrapper、添加
+  行控制或改用 `_headers_`。需要继续修正时先简化过滤器和条件，不能因此删除
+  required 字段捕获。
 - 固定宽度表格先执行以下步骤，再写模板：逐样例识别表头列顺序；排除空行和纯分隔
   线后数出预期数据行；为第一条、中间一条和最后一条数据标出每个冻结字段所在物理
   列。模板必须按该物理顺序捕获字段，并为未建模列保留明确的 ignore 占位，不能跨列
   匹配。只由一条重复数据行构成的表格 group 不使用 _start_、_end_ 或 _line_。
+- 表格 records 比预期恰好多一条，且第一条把表头标签当作字段值时，在一个真实具名
+  捕获上添加判别条件，使表头整行不能匹配。优先排除不可能成为业务值的表头字面量，
+  例如 `{{ interface | WORD | exclude("Interface") }}`；只有所有数据行确实共享稳定值
+  时，才在对应真实字段上使用 `equal`，例如 `{{ ok | WORD | equal("YES") }}`。条件
+  必须附加在冻结字段的捕获 pipeline 上并保留该字段；不要把稳定值改成模板字面量，
+  也不要增加全是 `ignore` 的表头控制行或额外 group pattern。修改后重新核对数组长度、
+  第一条和最后一条数据。
 - 当两个冻结字段之间存在可空或变长的未建模列时，不要用 `.*`、`\\S.*`、ROW、
   ORPHRASE 或其他贪心表达式直接跨过它；贪心回溯通常会把右侧最后一列误当成目标
   字段。应按可见列边界设计不同的具名匹配行或 group 变体，并分别在各样例的代表行

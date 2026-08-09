@@ -289,7 +289,8 @@ def _command_list() -> int:
         )
     print(
         f"cases={len(manifest.cases)} "
-        f"samples={sum(len(case.inputs) for case in manifest.cases)}",
+        f"samples={sum(len(case.inputs) for case in manifest.cases)} "
+        "single_input=true",
     )
     return 0
 
@@ -300,7 +301,7 @@ def _command_preflight() -> int:
         "preflight ok: "
         f"cases={len(manifest.cases)} "
         f"samples={sum(len(case.inputs) for case in manifest.cases)} "
-        f"manifest_sha256={manifest.sha256}",
+        f"manifest_sha256={manifest.sha256} single_input=true",
     )
     return 0
 
@@ -454,6 +455,7 @@ def _materialize_datapoints(
                         "input_sha256": [item.sha256 for item in case.inputs],
                         "target_sha256": case.target.sha256,
                         "config_fingerprint": config_fingerprint,
+                        "single_input": True,
                     },
                 ),
             )
@@ -979,6 +981,7 @@ def _build_local_summary(
             "url": evaluation_url,
         },
         "config_fingerprint": config_fingerprint,
+        "single_input": True,
         "git": _git_facts(),
         "trial_count": len(trials),
         "strict_pass_count": sum(
@@ -1119,6 +1122,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
             "model_name": settings.model_name,
             "case_ids": [case.id for case in cases],
             "trials": args.trials,
+            "single_input": True,
         },
         concurrency_limit=args.concurrency,
         project_api_key=laminar_key,

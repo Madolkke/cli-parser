@@ -186,9 +186,9 @@ def test_versioned_manifest_preflights_smoke_and_baseline_suites() -> None:
     smoke = select_cases(manifest, suite="smoke", case_ids=())
     baseline = select_cases(manifest, suite="baseline", case_ids=())
 
-    assert len(manifest.cases) == 8
+    assert len(manifest.cases) == 15
     assert sum(len(case.inputs) for case in manifest.cases) == 15
-    assert len(smoke) == 5
+    assert len(smoke) == 12
     assert sum(len(case.inputs) for case in smoke) == 12
     assert [case.id for case in baseline] == [
         "ntc.cisco_ios.show_ip_interface_brief",
@@ -201,6 +201,22 @@ def test_versioned_manifest_preflights_smoke_and_baseline_suites() -> None:
         {"baseline", "single-input"}.issubset(case.tags)
         for case in baseline
     )
+    assert all(len(case.inputs) == 1 for case in manifest.cases)
+    assert all(len(case.target.records) == 1 for case in manifest.cases)
+
+
+def test_manifest_rejects_multi_input_case_definition(tmp_path: Path) -> None:
+    manifest_path = _write_minimal_definition(tmp_path)
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload["cases"][0]["inputs"].append(payload["cases"][0]["inputs"][0])
+    manifest_path.write_text(
+        json.dumps(payload),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    with pytest.raises(HarnessError, match="exactly 1 item"):
+        load_evaluation_manifest(tmp_path, manifest_path)
 
 
 def test_sql_query_uses_an_unverified_context_only_when_explicitly_enabled(
@@ -555,7 +571,12 @@ def test_key_placeholders_fail_before_laminar_preflight(
         lambda _: pytest.fail("missing keys must fail before networking"),
     )
 
-    assert script.main(["run", "--case", "ntc.cisco_ios.show_interfaces_status"]) == 2
+    assert (
+        script.main(
+            ["run", "--case", "ntc.cisco_ios.show_interfaces_status.sample_01"],
+        )
+        == 2
+    )
 
 
 def test_key_values_are_excluded_from_configuration_snapshot(
@@ -767,6 +788,7 @@ def test_local_summary_uses_the_redacted_field_whitelist(
         "status",
         "evaluation",
         "config_fingerprint",
+        "single_input",
         "git",
         "trial_count",
         "strict_pass_count",

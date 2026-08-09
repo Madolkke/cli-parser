@@ -19,7 +19,7 @@ from cli_parser_agent.ttp_generation.validation import (
 )
 
 MANIFEST_VERSION = 1
-MAX_INPUTS = 5
+MAX_INPUTS = 1
 MAX_INPUT_BYTES = 1024 * 1024
 SUPPORTED_NODE_TYPES = frozenset(
     {"object", "array", "string", "integer", "number", "boolean"},
@@ -501,8 +501,8 @@ def load_evaluation_manifest(
         suites = _string_list(raw_case["suites"], f"{label}.suites", pattern=_TAG_RE)
         tags = _string_list(raw_case["tags"], f"{label}.tags", pattern=_TAG_RE)
         raw_inputs = raw_case["inputs"]
-        if not isinstance(raw_inputs, list) or not 1 <= len(raw_inputs) <= MAX_INPUTS:
-            raise HarnessError(f"{label}.inputs must contain 1 to {MAX_INPUTS} items")
+        if not isinstance(raw_inputs, list) or len(raw_inputs) != MAX_INPUTS:
+            raise HarnessError(f"{label}.inputs must contain exactly {MAX_INPUTS} item")
         inputs: list[EvaluationInput] = []
         input_paths: set[str] = set()
         for input_index, raw_input in enumerate(raw_inputs):

@@ -127,7 +127,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v16-empty-delimited-field-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v18-pattern-arity-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -157,6 +157,14 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "`{{ ignore }}`" in TTP_SYSTEM_PROMPT
     assert "`{{ ignore(ORPHRASE) }}`" in TTP_SYSTEM_PROMPT
     assert '`{{ ignore("PID:.*SN:") }}`' in TTP_SYSTEM_PROMPT
+    assert '{{ interface | WORD | exclude("Interface") }}' in TTP_SYSTEM_PROMPT
+    assert '{{ ok | WORD | equal("YES") }}' in TTP_SYSTEM_PROMPT
+    assert "不要增加全是 `ignore` 的表头控制行" in TTP_SYSTEM_PROMPT
+    assert "WORD 是 `\\S+`" in TTP_SYSTEM_PROMPT
+    assert "只要某个合法值可能只有一个 token 就禁止使用 PHRASE" in TTP_SYSTEM_PROMPT
+    assert "ORPHRASE 才能匹配一个 token 或多个 token" in TTP_SYSTEM_PROMPT
+    assert "首先检查是否把单 token" in TTP_SYSTEM_PROMPT
+    assert "完成这项检查前不要改 XML wrapper" in TTP_SYSTEM_PROMPT
     assert "ignore |" not in TTP_SYSTEM_PROMPT
     assert "直接给出当前模板" in TTP_SYSTEM_PROMPT
     assert "records JSON" in TTP_SYSTEM_PROMPT

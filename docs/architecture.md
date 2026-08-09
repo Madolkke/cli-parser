@@ -8,7 +8,7 @@
 
 ## 1. 目标与边界
 
-项目提供一个可组合的异步 Python Agent：调用方提交 `1-5` 份同一命令的纯输出，Agent 在一次外部请求内生成一份可解析所有完整输入的安全 TTP 模板，以及描述每份解析结果的 JSON Schema。
+项目提供一个可组合的异步 Python Agent：运行时仍兼容调用方提交 `1-5` 份同一命令的纯输出；当前官方测试资产将每份 raw 作为独立单输入 case，生成该输入的安全 TTP 模板和 JSON Schema。
 
 首版只实现这一条生成用例。它不提供产品 CLI、HTTP 服务、通用多 Agent/Agent Team 编排、持久化或 `examples/`；两个顺序阶段 Agent 只是该垂直用例的内部实现。仓库中的脚本、只读 Textual TUI 和 `evals/ttp_generation/` 黑盒评测都是开发工具。公共 API 不假定调用方是人、CLI 或 Agent，因此未来上下游 Agent 可以直接复用同一契约。
 
@@ -57,7 +57,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v16-empty-delimited-field-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v18-pattern-arity-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -282,13 +282,13 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 
-此外，仓库保留独立于 pytest 的公开真实命令输出语料：`networktocode/ntc-templates` `v9.2.0` 和 `dmulyalin/ttp_templates` `0.5.9` 中选取的 `11` 个 case、`31` 份文本。`corpus.json` 固定文件顺序、suite、来源版本和 SHA-256；不复制上游 YAML、解析模板、mock 数据或 JSON 输出。两份第三方许可证与版本说明随语料保存，本项目自身使用根目录 Apache-2.0 `LICENSE`。
+此外，仓库保留独立于 pytest 的公开真实命令输出语料：`networktocode/ntc-templates` `v9.2.0` 和 `dmulyalin/ttp_templates` `0.5.9` 中选取的 `31` 个单输入 case、`31` 份文本。该语料测量单输入解析质量，不测量跨样本共享模板泛化。`corpus.json` 固定文件顺序、suite、来源版本和 SHA-256；不复制上游 YAML、解析模板、mock 数据或 JSON 输出。两份第三方许可证与版本说明随语料保存，本项目自身使用根目录 Apache-2.0 `LICENSE`。
 
 `scripts/run_live_corpus.py` 提供三种开发操作：`list` 查看选择结果；`preflight` 在无模型或 Laminar 凭据、无网络请求的条件下检查数量、UTF-8、大小、终端噪声、凭据模式和哈希；`run` 通过公共 API 逐 case 调用真实模型，并把结果写入忽略版本控制的 `.artifacts/live-corpus/`，结束时 flush 已初始化的 Laminar。flush 失败只写有界警告，不替换生成退出码。成功结果还要在 Agent 外重新执行安全检查、全文解析、records 顺序/内容和冻结 Schema 验证。
 
 `scripts/run_agent_evaluation.py` 将 `evals/ttp_generation/manifest.json` 物化为内存 `Datapoint`，使用 Laminar `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` 层级。模型、预算、Laminar 连接和本地产物目录均由环境变量注入；target 只在 executor 完成后交给确定性 evaluator，Agent 上下文始终只含原始输入。live run 前同时检查 SQL HTTP 和 gRPC；Evaluation 或 datapoint 创建失败不进入 executor。运行结束 flush 后，以只读 SQL 最多等待 `60` 秒确认 `evaluation_datapoints` 和必要 spans；缺失遥测时返回配置/归档错误且不重跑模型。本地仅写 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 脱敏摘要，完整输入、target、模型回复、模板和 capture 只保留在显式 Laminar 通道。需要观察完整修正链时，开发评测入口可以在独立进程、并发 `1` 下临时使用总时长 `7200` 秒、`32` 轮、`24` 次 TTP 提交和单次模型超时 `120` 秒的高预算配置；该配置不改变默认策略。定义、评分、入口和 Skill 的详细边界见 [Agent 黑盒评测](agent-evaluation.md)。
 
-真实语料验收先运行固定 smoke suite（`5` 个 case、`12` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `11/11`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。HumanEvaluator 评审仅在显式开发评测入口进行：它读取同一 run 的 Laminar 只读 Trace，覆盖该 run 产生的全部 Schema/TTP 候选，并只记录有界质量标签和数值指标；不修改 Agent、触发重试或进入产品 API。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
+真实语料验收先运行固定 smoke suite（`5` 个单输入 case、`5` 份文本）并达到 `5/5`，再通过 `--resume` 扩展到完整 suite 并达到 `31/31`。Resume 只复用语料哈希和 `prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功 case。HumanEvaluator 评审仅在显式开发评测入口进行：它读取同一 run 的 Laminar 只读 Trace，覆盖该 run 产生的全部 Schema/TTP 候选，并只记录有界质量标签和数值指标；不修改 Agent、触发重试或进入产品 API。完整命令、失败分类、隐私说明和恢复流程见 [真实命令输出语料测试计划](live-corpus-test-plan.md)。公开夹具可能已由上游整理，不能声称是未经处理的生产采集；未来加入私有数据前必须脱敏。
 
 ## 7. 暂缓事项
 

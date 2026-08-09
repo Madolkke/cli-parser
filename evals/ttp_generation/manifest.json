@@ -2,118 +2,293 @@
   "version": 1,
   "cases": [
     {
-      "id": "ntc.cisco_ios.show_interfaces_status",
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_01",
       "command": "show interfaces status",
-      "suites": ["smoke"],
-      "tags": ["cisco-ios", "fixed-width-table", "optional-columns"],
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "fixed-width-table",
+        "optional-columns",
+        "single-input"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status.raw",
           "sha256": "bea3ff9aa7321fbac39583b3deb5e671c6926b1d7d36e0c4abafabbccbb08814"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_interfaces_status.sample_01.json",
+        "sha256": "d46630992df781da7c54498136904d3b37567e9c0ae60cdd6dc2fcebd238b23f"
+      }
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_02",
+      "command": "show interfaces status",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "fixed-width-table",
+        "optional-columns",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status2.raw",
           "sha256": "84c7fbb2d461727a43a3076c549e912930afae15ff3ae89f841bcf7f8166248e"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_interfaces_status.sample_02.json",
+        "sha256": "ba49d05616c94b4d7069b13de7b478c4f931a77acdab08f84fb8519b7ad2a373"
+      }
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_03",
+      "command": "show interfaces status",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "fixed-width-table",
+        "optional-columns",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status_pvlan.raw",
           "sha256": "4b47d43f6e38f6d7f9ce1123c0789ad3a2ec6173b2b50b6ec48b823cc5c527d5"
         }
       ],
       "target": {
-        "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_interfaces_status.json",
-        "sha256": "6660a1a9e113693e1ff85496d4262c295b953f74ac3c2897bd61c7e7de8f55ac"
+        "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_interfaces_status.sample_03.json",
+        "sha256": "22574e288677eba1f74de5cfec3dba6a4c5c42d5cbb35424df6234bd7a401348"
       }
     },
     {
-      "id": "ttp.linux.ip_address_show",
+      "id": "ttp.linux.ip_address_show.sample_01",
       "command": "ip address show",
-      "suites": ["smoke"],
-      "tags": ["linux", "nested-sections", "multiple-addresses"],
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "linux",
+        "nested-sections",
+        "multiple-addresses",
+        "single-input"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/linux/ip_address_show/ip_address_show.txt",
           "sha256": "54d6b4b42b9eec43a294436c9181a7a20321bbe893fd592185f8a2b7682c9ef7"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.linux.ip_address_show.sample_01.json",
+        "sha256": "3fb68251fe5c4c7fd9fea30cdfa49c01187fa278339aefffe65d2a41037319c0"
+      }
+    },
+    {
+      "id": "ttp.linux.ip_address_show.sample_02",
+      "command": "ip address show",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "linux",
+        "nested-sections",
+        "multiple-addresses",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/linux/ip_address_show/ip_address_show_multiple_addresses.txt",
           "sha256": "fa096c7734b7bfa9f100ea93d0acafc721d68ffa97d914d6260f0f44414ea12f"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.linux.ip_address_show.sample_02.json",
+        "sha256": "567393da53f91743c61ab9a8b2b5264559bfc8da52eb26650794583d61b65e05"
+      }
+    },
+    {
+      "id": "ttp.linux.ip_address_show.sample_03",
+      "command": "ip address show",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "linux",
+        "nested-sections",
+        "multiple-addresses",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/linux/ip_address_show/ip_address_show_short_header.txt",
           "sha256": "5ce29650232a6c2eb5244648658d9f5f16910c8968990c11e85c0c6eb3484c78"
         }
       ],
       "target": {
-        "path": "evals/ttp_generation/targets/ttp.linux.ip_address_show.json",
-        "sha256": "ec7b7371f438096d52d019aa4224d430e1f04e00172ee4ec1b2d01ddb607e742"
+        "path": "evals/ttp_generation/targets/ttp.linux.ip_address_show.sample_03.json",
+        "sha256": "bf2272c118e933d6c962207a92b43b817b72a9ecd609480cca38e5dc03d8fa7f"
       }
     },
     {
-      "id": "ttp.cisco_ios.show_inventory",
+      "id": "ttp.cisco_ios.show_inventory.sample_01",
       "command": "show inventory",
-      "suites": ["smoke"],
-      "tags": ["cisco-ios", "repeated-detail-blocks", "optional-fields"],
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "repeated-detail-blocks",
+        "optional-fields",
+        "single-input"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_inventory/show_inventory.txt",
           "sha256": "4bf487ad8160c0e20a01ed91470b0fc90db259ec4fc953c3ac99d81ac8995cc6"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.sample_01.json",
+        "sha256": "c362edffc95840519ae791154f7dc9b2414d93b6dfa2e2b9f6ec4e621b618954"
+      }
+    },
+    {
+      "id": "ttp.cisco_ios.show_inventory.sample_02",
+      "command": "show inventory",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "repeated-detail-blocks",
+        "optional-fields",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_inventory/show_inventory_modular_router.txt",
           "sha256": "14fbc461539703890687b3404ed062b7d704e358cad02e2f36f5fe99b6883a94"
         }
       ],
       "target": {
-        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.json",
-        "sha256": "4c6415e940708cf54e48bcc2a0a3339aefab9b9ea514de98e0aa2a82d1de60bb"
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.sample_02.json",
+        "sha256": "361c2f53c4f143c61387fee352da1c5d7d07d53e3daeec2dc6e385035d0e9bd7"
       }
     },
     {
-      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface",
+      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.sample_01",
       "command": "show running-config | section interface",
-      "suites": ["smoke"],
-      "tags": ["cisco-ios", "hierarchical-configuration", "optional-lines"],
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "hierarchical-configuration",
+        "optional-lines",
+        "single-input"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface.txt",
           "sha256": "0a3939972c996628d5dc862c299757cc46f6fb024bd5da4b07cd70dc0215b544"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.sample_01.json",
+        "sha256": "3e2430c8b4814a113d348e5a2471e309e95cdb8db5f15b7d59fb295686ae5d3f"
+      }
+    },
+    {
+      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.sample_02",
+      "command": "show running-config | section interface",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-ios",
+        "hierarchical-configuration",
+        "optional-lines",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface_qinq.txt",
           "sha256": "16c4ea6d3d36e178e23cfeaf1b9e999c7bc7b3adc56a943c467aefdf157226b0"
         }
       ],
       "target": {
-        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.json",
-        "sha256": "c2177a270505849b3f0742198e7950ce6c59208ef7b69a52fa52bd08c50cc482"
+        "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.sample_02.json",
+        "sha256": "cabecda49ad2d53fe40793f77b40ec9749f935a54f633bcae36a5ccd8d545243"
       }
     },
     {
-      "id": "ttp.cisco_xr.show_bgp_neighbors",
+      "id": "ttp.cisco_xr.show_bgp_neighbors.sample_01",
       "command": "show bgp neighbors",
-      "suites": ["smoke"],
-      "tags": ["cisco-xr", "large-output", "repeated-detail-blocks"],
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-xr",
+        "large-output",
+        "repeated-detail-blocks",
+        "single-input"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors.txt",
           "sha256": "bd9f2db57cddcdc92e28ff7d12d6c906d8dd1dba360b09062815f92fc5976165"
-        },
+        }
+      ],
+      "target": {
+        "path": "evals/ttp_generation/targets/ttp.cisco_xr.show_bgp_neighbors.sample_01.json",
+        "sha256": "52b7fe3260e957de4cfb189cb7669e1f346ecc012ab396ff175ee88082c08232"
+      }
+    },
+    {
+      "id": "ttp.cisco_xr.show_bgp_neighbors.sample_02",
+      "command": "show bgp neighbors",
+      "suites": [
+        "smoke"
+      ],
+      "tags": [
+        "cisco-xr",
+        "large-output",
+        "repeated-detail-blocks",
+        "single-input"
+      ],
+      "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors1.txt",
           "sha256": "7fbcd75cb7f10858efb2ef3381f95cd85a7450305734998616d70f6b13d3f70d"
         }
       ],
       "target": {
-        "path": "evals/ttp_generation/targets/ttp.cisco_xr.show_bgp_neighbors.json",
-        "sha256": "126da54eb9d659ca6d516575b83fee7959eb61b35aef53c79a0717a586f76826"
+        "path": "evals/ttp_generation/targets/ttp.cisco_xr.show_bgp_neighbors.sample_02.json",
+        "sha256": "bb113545e3d7a8ce0bc168a30b01c0c1a5b2cd56f5348a094b03364a3984981d"
       }
     },
     {
       "id": "ntc.cisco_ios.show_ip_interface_brief",
       "command": "show ip interface brief",
-      "suites": ["baseline"],
-      "tags": ["baseline", "single-input", "cisco-ios", "fixed-width-table"],
+      "suites": [
+        "baseline"
+      ],
+      "tags": [
+        "baseline",
+        "single-input",
+        "cisco-ios",
+        "fixed-width-table"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_ip_interface_brief/cisco_ios_show_ip_interface_brief.raw",
@@ -122,14 +297,21 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ntc.cisco_ios.show_ip_interface_brief.json",
-        "sha256": "85e7d6d0cbfc9667a084aef614e56043bb397fcc1baca73900e01697192ce0e3"
+        "sha256": "dd0af31577e0614fa44be5f2db6cd3e2fc87df5422313d94664486d39c71f81e"
       }
     },
     {
       "id": "ttp.cisco_ios.show_inventory.single_basic",
       "command": "show inventory",
-      "suites": ["baseline"],
-      "tags": ["baseline", "single-input", "cisco-ios", "repeated-detail-blocks"],
+      "suites": [
+        "baseline"
+      ],
+      "tags": [
+        "baseline",
+        "single-input",
+        "cisco-ios",
+        "repeated-detail-blocks"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_inventory/show_inventory.txt",
@@ -138,14 +320,21 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_inventory.single_basic.json",
-        "sha256": "0631925839a7396109f2d096f80896848605d90a5f07a38eaa03631b358888fd"
+        "sha256": "c362edffc95840519ae791154f7dc9b2414d93b6dfa2e2b9f6ec4e621b618954"
       }
     },
     {
       "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq",
       "command": "show running-config | section interface",
-      "suites": ["baseline"],
-      "tags": ["baseline", "single-input", "cisco-ios", "hierarchical-configuration"],
+      "suites": [
+        "baseline"
+      ],
+      "tags": [
+        "baseline",
+        "single-input",
+        "cisco-ios",
+        "hierarchical-configuration"
+      ],
       "inputs": [
         {
           "path": "testdata/real_command_outputs/ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface_qinq.txt",
@@ -154,7 +343,7 @@
       ],
       "target": {
         "path": "evals/ttp_generation/targets/ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq.json",
-        "sha256": "00eccb1af1130f1a8c7d7c4e92d8d0efa53aa1be38169c2d7ab5292b13644ca3"
+        "sha256": "cabecda49ad2d53fe40793f77b40ec9749f935a54f633bcae36a5ccd8d545243"
       }
     }
   ]

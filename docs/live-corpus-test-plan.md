@@ -4,7 +4,7 @@
 
 ## 1. 目的与边界
 
-`testdata/real_command_outputs/` 保存公开项目中的真实命令输出夹具，用于检验同一 TTP 模板能否解析同一命令的多份完整输出。语料是开发期验收资产，不属于 `evals/` 或 `examples/`，不进入 pytest，也不随 `cli_parser_agent` Python 包发布。
+`testdata/real_command_outputs/` 保存公开项目中的真实命令输出夹具，用于检验 Agent 对单份完整输出生成的 TTP 模板和 Schema。每个 case 只有一个 sample，不测量跨样本共享模板泛化。语料是开发期验收资产，不属于 `evals/` 或 `examples/`，不进入 pytest，也不随 `cli_parser_agent` Python 包发布。
 
 独立脚本 `scripts/run_live_corpus.py` 负责语料检查和真实模型闭环。它不是产品 CLI，不改变 `TtpGenerator` 的公共 Python API，也不会执行夹具中出现的任何命令。
 
@@ -17,29 +17,29 @@
 | `networktocode/ntc-templates` | `v9.2.0` | `891746e659e3a25d5065ee9dac29e7de5760bdf7` | Apache-2.0 |
 | `dmulyalin/ttp_templates` | `0.5.9` | `307f16812503f3470897020c2267101bcf7af5d5` | MIT |
 
-完整语料包含 `11` 个 case、`31` 份文本：
+完整语料包含 `31` 个单输入 case、`31` 份文本：
 
-| Case ID | Command | Samples |
+| 原始命令组 | Command | 单输入 case 数 |
 | --- | --- | ---: |
-| `ntc.cisco_ios.show_interfaces_status` | `show interfaces status` | 3 |
-| `ntc.cisco_ios.show_ip_interface_brief` | `show ip interface brief` | 1 |
-| `ntc.cisco_ios.show_cdp_neighbors_detail` | `show cdp neighbors detail` | 2 |
-| `ntc.cisco_ios.show_interfaces` | `show interfaces` | 5 |
-| `ntc.linux.ip_route_show` | `ip route show` | 3 |
-| `ntc.fortinet.get_system_status` | `get system status` | 5 |
-| `ntc.juniper_junos.show_interfaces` | `show interfaces` | 3 |
-| `ttp.linux.ip_address_show` | `ip address show` | 3 |
-| `ttp.cisco_ios.show_inventory` | `show inventory` | 2 |
-| `ttp.cisco_ios.show_running_config_pipe_section_interface` | `show running-config \| section interface` | 2 |
-| `ttp.cisco_xr.show_bgp_neighbors` | `show bgp neighbors` | 2 |
+| `ntc.cisco_ios.show_interfaces_status.sample_01..03` | `show interfaces status` | 3 |
+| `ntc.cisco_ios.show_ip_interface_brief.sample_01` | `show ip interface brief` | 1 |
+| `ntc.cisco_ios.show_cdp_neighbors_detail.sample_01..02` | `show cdp neighbors detail` | 2 |
+| `ntc.cisco_ios.show_interfaces.sample_01..05` | `show interfaces` | 5 |
+| `ntc.linux.ip_route_show.sample_01..03` | `ip route show` | 3 |
+| `ntc.fortinet.get_system_status.sample_01..05` | `get system status` | 5 |
+| `ntc.juniper_junos.show_interfaces.sample_01..03` | `show interfaces` | 3 |
+| `ttp.linux.ip_address_show.sample_01..03` | `ip address show` | 3 |
+| `ttp.cisco_ios.show_inventory.sample_01..02` | `show inventory` | 2 |
+| `ttp.cisco_ios.show_running_config_pipe_section_interface.sample_01..02` | `show running-config \| section interface` | 2 |
+| `ttp.cisco_xr.show_bgp_neighbors.sample_01..02` | `show bgp neighbors` | 2 |
 
-`smoke` suite 是固定的快速闭环，共 `5` 个 case、`12` 份文本：
+`smoke` suite 是固定的快速闭环，共 `5` 个单输入 case、`5` 份文本：
 
-- `ntc.cisco_ios.show_interfaces_status`：3 份；
-- `ttp.linux.ip_address_show`：3 份；
-- `ttp.cisco_ios.show_inventory`：2 份；
-- `ttp.cisco_ios.show_running_config_pipe_section_interface`：2 份；
-- `ttp.cisco_xr.show_bgp_neighbors`：2 份。
+- `ntc.cisco_ios.show_interfaces_status.sample_01`；
+- `ttp.linux.ip_address_show.sample_01`；
+- `ttp.cisco_ios.show_inventory.sample_01`；
+- `ttp.cisco_ios.show_running_config_pipe_section_interface.sample_01`；
+- `ttp.cisco_xr.show_bgp_neighbors.sample_01`。
 
 ## 3. 无模型凭据检查
 
@@ -57,7 +57,7 @@ uv run pytest -m "not live" -q
 uv run ruff check .
 ```
 
-`list` 和 `preflight` 不读取模型配置，也不产生网络请求。Preflight 必须确认 manifest 恰好包含 `11` 个 case 和 `31` 份文件，并逐份检查：
+`list` 和 `preflight` 不读取模型配置，也不产生网络请求。Preflight 必须确认 manifest 恰好包含 `31` 个 case 和 `31` 份文件，并逐份检查：
 
 - 文件存在、非空、严格 UTF-8、LF 换行且无 BOM；
 - UTF-8 编码后小于 `1 MiB`；
@@ -90,14 +90,14 @@ uv run python scripts/run_live_corpus.py run --suite all --resume <smoke-run-dir
 默认 suite 为 `smoke`、并发为 `1`。需要诊断或控制成本时可筛选运行：
 
 ```powershell
-uv run python scripts/run_live_corpus.py run --case ntc.cisco_ios.show_interfaces_status
+uv run python scripts/run_live_corpus.py run --case ntc.cisco_ios.show_interfaces_status.sample_01
 uv run python scripts/run_live_corpus.py run --suite all --source ntc --platform cisco_ios --max-cases 2
 uv run python scripts/run_live_corpus.py run --suite all --concurrency 2 --output-dir .artifacts/live-corpus/manual-run
 ```
 
 `--case` 覆盖 suite 选择，之后仍应用 `--source` 和 `--platform` 过滤；`--concurrency` 只允许 `1-4`。`--output-dir` 与 `--resume` 互斥。`--resume` 只跳过语料哈希和 `GenerationResult.metadata.prompt_version` 均与当前运行一致、且再次通过独立全文验收的成功结果；旧提示版本、失败或缺失的 case 都会重新执行。
 
-每个 case 只调用一次 `TtpGenerator.generate`，并按 manifest 顺序把该 case 的全部样例放进一个 `GenerationRequest`。运行结果默认写入 `.artifacts/live-corpus/<run-id>/`，每个 case 保存完整 `GenerationResult` 和独立验收结果，根目录保存 `summary.json`。
+每个 case 只调用一次 `TtpGenerator.generate`，并把该 case 唯一的 sample 放进一个单元素 `GenerationRequest`。运行结果默认写入 `.artifacts/live-corpus/<run-id>/`，每个 case 保存完整 `GenerationResult` 和独立验收结果，根目录保存 `summary.json`。
 
 退出码约定：
 
@@ -114,7 +114,7 @@ uv run python scripts/run_live_corpus.py run --suite all --concurrency 2 --outpu
 - 每个 record 都符合冻结的 Draft 2020-12 JSON Schema；
 - 失败可归类为 `model`、`generation`、`schema`、`ttp` 或最终验收问题。
 
-Smoke 阶段必须达到 `5/5` case 成功；完整代表集最终必须达到 `11/11` case 成功。修复问题后使用 `--resume` 仅重跑失败或缺失项。完成这两项前，不能把公开语料闭环声明为通过。
+Smoke 阶段必须达到 `5/5` case 成功；完整代表集最终必须达到 `31/31` case 成功。修复问题后使用 `--resume` 仅重跑失败或缺失项。完成这两项前，不能把公开语料闭环声明为通过。
 
 ## 6. 隐私与第三方内容
 

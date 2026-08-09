@@ -122,6 +122,18 @@ def test_live_corpus_artifact_root_is_environment_configurable(tmp_path: Path) -
     ) == tmp_path
 
 
+def test_live_corpus_preflight_requires_single_sample_cases() -> None:
+    script = _load_script()
+    manifest = script.load_and_preflight_corpus()
+
+    assert len(manifest.cases) == 31
+    assert sum(len(case.samples) for case in manifest.cases) == 31
+    assert all(len(case.samples) == 1 for case in manifest.cases)
+    smoke = [case for case in manifest.cases if "smoke" in case.suites]
+    assert len(smoke) == 5
+    assert sum(len(case.samples) for case in smoke) == 5
+
+
 @pytest.mark.parametrize(
     "argv",
     [

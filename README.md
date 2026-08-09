@@ -1,6 +1,6 @@
 # CLI Parser Agent
 
-Generate a validated [TTP](https://ttp.readthedocs.io/) template and JSON Schema from `1-5` outputs of the same command. Inputs are treated only as data; the project never executes commands.
+Generate a validated [TTP](https://ttp.readthedocs.io/) template and JSON Schema from command output. The runtime remains compatible with `1-5` outputs of the same command, while the official evaluation assets use one raw output per case. Inputs are treated only as data; the project never executes commands.
 
 ## Installation
 

@@ -22,10 +22,10 @@ from typing import Any
 
 MANIFEST_VERSION = 1
 RUNNER_VERSION = 1
-EXPECTED_CASE_COUNT = 11
+EXPECTED_CASE_COUNT = 31
 EXPECTED_SAMPLE_COUNT = 31
 EXPECTED_SMOKE_CASE_COUNT = 5
-EXPECTED_SMOKE_SAMPLE_COUNT = 12
+EXPECTED_SMOKE_SAMPLE_COUNT = 5
 MAX_SAMPLE_BYTES = 1024 * 1024
 CORPUS_ROOT = Path(__file__).resolve().parents[1] / "testdata" / "real_command_outputs"
 MANIFEST_PATH = CORPUS_ROOT / "corpus.json"
@@ -436,8 +436,8 @@ def load_and_preflight_corpus() -> CorpusManifest:
                 f"{location}.suites must contain 'all' and may also contain 'smoke'",
             )
         raw_samples = raw_case["samples"]
-        if not isinstance(raw_samples, list) or not 1 <= len(raw_samples) <= 5:
-            raise CorpusError(f"{location}.samples must contain 1 to 5 entries")
+        if not isinstance(raw_samples, list) or len(raw_samples) != 1:
+            raise CorpusError(f"{location}.samples must contain exactly one entry")
         samples: list[CorpusSample] = []
         for sample_index, raw_sample in enumerate(raw_samples):
             sample_location = f"{location}.samples[{sample_index}]"

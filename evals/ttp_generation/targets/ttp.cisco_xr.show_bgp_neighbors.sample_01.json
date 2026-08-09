@@ -1,0 +1,227 @@
+{
+  "records": [
+    {
+      "neighbors": [
+        {
+          "neighbor_address": "192.168.100.1",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "RouteReflector_1",
+          "remote_router_id": "192.168.100.1",
+          "bgp_state": "Established",
+          "uptime": "2w3d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "192.168.100.2",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "RouteReflector_2",
+          "remote_router_id": "192.168.100.2",
+          "bgp_state": "Established",
+          "uptime": "2w3d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "192.168.0.1",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "VPN_RouteReflector_1",
+          "remote_router_id": "192.168.0.1",
+          "bgp_state": "Established",
+          "uptime": "2w4d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "192.168.0.2",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "VPN_RouteReflector_2",
+          "remote_router_id": "192.168.0.2",
+          "bgp_state": "Established",
+          "uptime": "3w2d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.0.42",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "iBGP_Neighbor",
+          "remote_router_id": "0.0.0.0",
+          "cluster_id": "10.0.0.1",
+          "bgp_state": "OpenSent",
+          "nsr_state": "None",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "10.0.0.124",
+          "remote_as": "65012",
+          "local_as": "65001",
+          "link_type": "external",
+          "remote_router_id": "10.1.2.3",
+          "bgp_state": "Established",
+          "uptime": "3w1d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "180",
+          "keepalive_interval": "60",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "1:1:1::1",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "rs01.lsan01-ca",
+          "remote_router_id": "192.168.100.1",
+          "bgp_state": "Established",
+          "uptime": "2w3d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        },
+        {
+          "neighbor_address": "1:1:34::242",
+          "remote_as": "65001",
+          "local_as": "65001",
+          "link_type": "internal",
+          "description": "RouteReflector_2",
+          "remote_router_id": "192.168.100.2",
+          "bgp_state": "Established",
+          "uptime": "2w3d",
+          "nsr_state": "NSR Ready",
+          "hold_time": "90",
+          "keepalive_interval": "30",
+          "configured_hold_time": "180",
+          "configured_keepalive": "60",
+          "minimum_acceptable_hold_time": "3"
+        }
+      ]
+    }
+  ],
+  "schema_contract": [
+    {
+      "path": "/",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/neighbors",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/neighbor_address",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/remote_as",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/local_as",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/link_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/description",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/remote_router_id",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/bgp_state",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/uptime",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/nsr_state",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/keepalive_interval",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/configured_hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/configured_keepalive",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/minimum_acceptable_hold_time",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/cluster_id",
+      "type": "string",
+      "required": false
+    }
+  ]
+}

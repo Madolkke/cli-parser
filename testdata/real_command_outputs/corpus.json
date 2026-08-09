@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "expected_case_count": 11,
+  "expected_case_count": 31,
   "expected_sample_count": 31,
   "sources": {
     "ntc": {
@@ -22,7 +22,7 @@
   },
   "cases": [
     {
-      "id": "ntc.cisco_ios.show_interfaces_status",
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_01",
       "source": "ntc",
       "platform": "cisco_ios",
       "command": "show interfaces status",
@@ -38,11 +38,41 @@
         {
           "path": "ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status.raw",
           "sha256": "bea3ff9aa7321fbac39583b3deb5e671c6926b1d7d36e0c4abafabbccbb08814"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_02",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces status",
+      "shapes": [
+        "fixed_width_table",
+        "optional_columns"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status2.raw",
           "sha256": "84c7fbb2d461727a43a3076c549e912930afae15ff3ae89f841bcf7f8166248e"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces_status.sample_03",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces status",
+      "shapes": [
+        "fixed_width_table",
+        "optional_columns"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status_pvlan.raw",
           "sha256": "4b47d43f6e38f6d7f9ce1123c0789ad3a2ec6173b2b50b6ec48b823cc5c527d5"
@@ -50,7 +80,7 @@
       ]
     },
     {
-      "id": "ntc.cisco_ios.show_ip_interface_brief",
+      "id": "ntc.cisco_ios.show_ip_interface_brief.sample_01",
       "source": "ntc",
       "platform": "cisco_ios",
       "command": "show ip interface brief",
@@ -69,7 +99,7 @@
       ]
     },
     {
-      "id": "ntc.cisco_ios.show_cdp_neighbors_detail",
+      "id": "ntc.cisco_ios.show_cdp_neighbors_detail.sample_01",
       "source": "ntc",
       "platform": "cisco_ios",
       "command": "show cdp neighbors detail",
@@ -84,7 +114,22 @@
         {
           "path": "ntc_templates/cisco_ios/show_cdp_neighbors_detail/cisco_ios_show_cdp_neighbors_detail.raw",
           "sha256": "e286d988255ed1c723287e7e129c4307d9e90825c4571604e52238bdf37d4081"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_cdp_neighbors_detail.sample_02",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show cdp neighbors detail",
+      "shapes": [
+        "repeated_detail_blocks",
+        "multiline_values"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_cdp_neighbors_detail/cisco_ios_show_cdp_neighbors_detail2.raw",
           "sha256": "3f15d0e53fc856be2110663d94e5f11803f8c433d2e8ee83e4fa388dc2d048dc"
@@ -92,7 +137,7 @@
       ]
     },
     {
-      "id": "ntc.cisco_ios.show_interfaces",
+      "id": "ntc.cisco_ios.show_interfaces.sample_01",
       "source": "ntc",
       "platform": "cisco_ios",
       "command": "show interfaces",
@@ -108,19 +153,83 @@
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces_01.raw",
           "sha256": "2161c2770367f7245f5e00ff5808bf7196cc8b4bb1c343405993d6590a3d463a"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces.sample_02",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "large_output",
+        "numeric_counters"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces.raw",
           "sha256": "8df62097736298e6a4179506f8943a402f508ec60272990cd32964faed3d33ce"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces.sample_03",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "large_output",
+        "numeric_counters"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces2.raw",
           "sha256": "cc8a38c9b1a5075e2a5c41cde1868018be4ceaefeaa54e63d33f86bc316f6e2c"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces.sample_04",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "large_output",
+        "numeric_counters"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces5.raw",
           "sha256": "a8a4993a49fbfbc6948d71487bb1a0fc55e36303428397ba425c83aa1db6c73b"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.cisco_ios.show_interfaces.sample_05",
+      "source": "ntc",
+      "platform": "cisco_ios",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "large_output",
+        "numeric_counters"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/cisco_ios/show_interfaces/cisco_ios_show_interfaces6.raw",
           "sha256": "0dd4f864c9308e8636a851dd4196e1a4d0faffa3dff94940e21fdbbd2a482f13"
@@ -128,7 +237,7 @@
       ]
     },
     {
-      "id": "ntc.linux.ip_route_show",
+      "id": "ntc.linux.ip_route_show.sample_01",
       "source": "ntc",
       "platform": "linux",
       "command": "ip route show",
@@ -143,11 +252,41 @@
         {
           "path": "ntc_templates/linux/ip_route_show/linux_ip_route_show.raw",
           "sha256": "62c957f2d7b67ae808f2037c5b22dc2ae67fd3da0b60b3e7df27ce9e178ccda5"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.linux.ip_route_show.sample_02",
+      "source": "ntc",
+      "platform": "linux",
+      "command": "ip route show",
+      "shapes": [
+        "line_table",
+        "optional_fields"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/linux/ip_route_show/linux_ip_route_show2.raw",
           "sha256": "a80736df1c01895d38b4044d3fb48228ec645c3c7370117b2d6b2376c5667ced"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.linux.ip_route_show.sample_03",
+      "source": "ntc",
+      "platform": "linux",
+      "command": "ip route show",
+      "shapes": [
+        "line_table",
+        "optional_fields"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/linux/ip_route_show/linux_ip_route_show_linkdown.raw",
           "sha256": "8e36eafb4bbc3df08930d25d7197a09180092f99e1e07eb75f683f0c015fcf7c"
@@ -155,7 +294,7 @@
       ]
     },
     {
-      "id": "ntc.fortinet.get_system_status",
+      "id": "ntc.fortinet.get_system_status.sample_01",
       "source": "ntc",
       "platform": "fortinet",
       "command": "get system status",
@@ -170,19 +309,79 @@
         {
           "path": "ntc_templates/fortinet/get_system_status/fortinet_get_system_status.raw",
           "sha256": "3cae513ef070c8822a53ef7a3f0513def54aa640b5b6d6623cd3be02d83a7ef9"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.fortinet.get_system_status.sample_02",
+      "source": "ntc",
+      "platform": "fortinet",
+      "command": "get system status",
+      "shapes": [
+        "key_value_lines",
+        "version_variants"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/fortinet/get_system_status/fortinet_get_system_status_6.2.raw",
           "sha256": "0a1114c7f6f108b7901c9ab519aeecf24b6cad13e05d6b66778ecc1bf0917fce"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.fortinet.get_system_status.sample_03",
+      "source": "ntc",
+      "platform": "fortinet",
+      "command": "get system status",
+      "shapes": [
+        "key_value_lines",
+        "version_variants"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/fortinet/get_system_status/fortinet_get_system_status_7.0.raw",
           "sha256": "4d4f10f8582a136d9492c538e94c6a3f4906a5b8b2a6281ea0ac931598ab1980"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.fortinet.get_system_status.sample_04",
+      "source": "ntc",
+      "platform": "fortinet",
+      "command": "get system status",
+      "shapes": [
+        "key_value_lines",
+        "version_variants"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/fortinet/get_system_status/fortinet_get_system_status_7.0_eval.raw",
           "sha256": "9fcadcbc867602503810d1aca5f00d809bc52f37d42f42dec6149beaa7b867de"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.fortinet.get_system_status.sample_05",
+      "source": "ntc",
+      "platform": "fortinet",
+      "command": "get system status",
+      "shapes": [
+        "key_value_lines",
+        "version_variants"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/fortinet/get_system_status/fortinet_get_system_status_7.4.8.raw",
           "sha256": "9751f2ecaf5122c870534cb28686b664a7b83aaee13872da90b2a598b2b3e19a"
@@ -190,7 +389,7 @@
       ]
     },
     {
-      "id": "ntc.juniper_junos.show_interfaces",
+      "id": "ntc.juniper_junos.show_interfaces.sample_01",
       "source": "ntc",
       "platform": "juniper_junos",
       "command": "show interfaces",
@@ -205,11 +404,41 @@
         {
           "path": "ntc_templates/juniper_junos/show_interfaces/juniper_junos_show_interfaces.raw",
           "sha256": "21895f28e6eb66199676dced0fc0582bdc20773f7d79859ed5679686e27e1835"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.juniper_junos.show_interfaces.sample_02",
+      "source": "ntc",
+      "platform": "juniper_junos",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "optional_fields"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/juniper_junos/show_interfaces/juniper_junos_show_interfaces2.raw",
           "sha256": "68b2ce02991c718f9aea69eb7e9289cbf9b9610f1b9369b3ac4c48116e760398"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ntc.juniper_junos.show_interfaces.sample_03",
+      "source": "ntc",
+      "platform": "juniper_junos",
+      "command": "show interfaces",
+      "shapes": [
+        "repeated_detail_blocks",
+        "optional_fields"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ntc_templates/juniper_junos/show_interfaces/juniper_junos_show_interfaces_irb.raw",
           "sha256": "a3213ca1f8da14ab439b2fcafe5f79df3bc832d92c61a1b259eef2a665710cd9"
@@ -217,7 +446,7 @@
       ]
     },
     {
-      "id": "ttp.linux.ip_address_show",
+      "id": "ttp.linux.ip_address_show.sample_01",
       "source": "ttp",
       "platform": "linux",
       "command": "ip address show",
@@ -234,11 +463,43 @@
         {
           "path": "ttp_templates/linux/ip_address_show/ip_address_show.txt",
           "sha256": "54d6b4b42b9eec43a294436c9181a7a20321bbe893fd592185f8a2b7682c9ef7"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ttp.linux.ip_address_show.sample_02",
+      "source": "ttp",
+      "platform": "linux",
+      "command": "ip address show",
+      "shapes": [
+        "nested_sections",
+        "ipv4_ipv6",
+        "multiple_addresses"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ttp_templates/linux/ip_address_show/ip_address_show_multiple_addresses.txt",
           "sha256": "fa096c7734b7bfa9f100ea93d0acafc721d68ffa97d914d6260f0f44414ea12f"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ttp.linux.ip_address_show.sample_03",
+      "source": "ttp",
+      "platform": "linux",
+      "command": "ip address show",
+      "shapes": [
+        "nested_sections",
+        "ipv4_ipv6",
+        "multiple_addresses"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ttp_templates/linux/ip_address_show/ip_address_show_short_header.txt",
           "sha256": "5ce29650232a6c2eb5244648658d9f5f16910c8968990c11e85c0c6eb3484c78"
@@ -246,7 +507,7 @@
       ]
     },
     {
-      "id": "ttp.cisco_ios.show_inventory",
+      "id": "ttp.cisco_ios.show_inventory.sample_01",
       "source": "ttp",
       "platform": "cisco_ios",
       "command": "show inventory",
@@ -262,7 +523,22 @@
         {
           "path": "ttp_templates/cisco_ios/show_inventory/show_inventory.txt",
           "sha256": "4bf487ad8160c0e20a01ed91470b0fc90db259ec4fc953c3ac99d81ac8995cc6"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ttp.cisco_ios.show_inventory.sample_02",
+      "source": "ttp",
+      "platform": "cisco_ios",
+      "command": "show inventory",
+      "shapes": [
+        "repeated_detail_blocks",
+        "optional_fields"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ttp_templates/cisco_ios/show_inventory/show_inventory_modular_router.txt",
           "sha256": "14fbc461539703890687b3404ed062b7d704e358cad02e2f36f5fe99b6883a94"
@@ -270,7 +546,7 @@
       ]
     },
     {
-      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface",
+      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.sample_01",
       "source": "ttp",
       "platform": "cisco_ios",
       "command": "show running-config | section interface",
@@ -286,7 +562,22 @@
         {
           "path": "ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface.txt",
           "sha256": "0a3939972c996628d5dc862c299757cc46f6fb024bd5da4b07cd70dc0215b544"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ttp.cisco_ios.show_running_config_pipe_section_interface.sample_02",
+      "source": "ttp",
+      "platform": "cisco_ios",
+      "command": "show running-config | section interface",
+      "shapes": [
+        "hierarchical_configuration",
+        "optional_lines"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ttp_templates/cisco_ios/show_running_config_pipe_section_interface/show_running_config_pipe_section_interface_qinq.txt",
           "sha256": "16c4ea6d3d36e178e23cfeaf1b9e999c7bc7b3adc56a943c467aefdf157226b0"
@@ -294,7 +585,7 @@
       ]
     },
     {
-      "id": "ttp.cisco_xr.show_bgp_neighbors",
+      "id": "ttp.cisco_xr.show_bgp_neighbors.sample_01",
       "source": "ttp",
       "platform": "cisco_xr",
       "command": "show bgp neighbors",
@@ -311,7 +602,23 @@
         {
           "path": "ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors.txt",
           "sha256": "bd9f2db57cddcdc92e28ff7d12d6c906d8dd1dba360b09062815f92fc5976165"
-        },
+        }
+      ]
+    },
+    {
+      "id": "ttp.cisco_xr.show_bgp_neighbors.sample_02",
+      "source": "ttp",
+      "platform": "cisco_xr",
+      "command": "show bgp neighbors",
+      "shapes": [
+        "repeated_detail_blocks",
+        "large_output",
+        "nested_address_families"
+      ],
+      "suites": [
+        "all"
+      ],
+      "samples": [
         {
           "path": "ttp_templates/cisco_xr/show_bgp_neighbors/cisco_xr_show_bgp_neighbors1.txt",
           "sha256": "7fbcd75cb7f10858efb2ef3381f95cd85a7450305734998616d70f6b13d3f70d"

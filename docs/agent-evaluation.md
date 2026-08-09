@@ -10,7 +10,7 @@
 
 ## Golden 定义
 
-Manifest version `1` 的每个 case 包含 ID、命令说明、suite/tags、1-5 个有序输入路径及 SHA-256，以及 target 路径和 SHA-256。Target 为同序 expected records 和由 `path/type/required` 三元组构成的封闭 Schema 结构断言。当前 smoke suite 固定 `5` 个 case、`12` 份输入；baseline suite 固定 `3` 个 case、`3` 份输入，分别覆盖固定宽表、重复详情块和层级配置。baseline 的每个 case 只有一份格式明确的输入，用于低歧义的严格正确性基准，不替代多样例 smoke 验收。
+Manifest version `1` 的每个 case 包含 ID、命令说明、suite/tags、恰好一个输入路径及 SHA-256，以及 target 路径和 SHA-256。Target 为单条 expected record 和由 `path/type/required` 三元组构成的封闭 Schema 结构断言。当前 smoke suite 固定 `12` 个单输入 case、`12` 份输入；baseline suite 固定 `3` 个单输入 case、`3` 份输入，分别覆盖固定宽表、重复详情块和层级配置。评测不测量跨样本共享模板泛化。
 
 Golden 采用“最大有证据语义投影”：保留每份输入中的所有主实体和源顺序，并保留至少在一个同类实体中非空出现、语义与边界明确的细粒度业务字段。只在部分父对象实例中出现的字段标记为可选并在缺失实例中省略；在每个父对象实例中都存在的字段才标记为 required。排除表头、分隔线、控制文本和空值，不使用空字符串或 `null` 占位。值默认保持字符串。禁止从被测 Agent 产物、Laminar、历史 artifact、上游模板、参考 YAML/JSON 或模型生成结果复制答案。
 
@@ -39,7 +39,7 @@ Live run 必须显式选择 suite 或 case：
 ```text
 uv run python scripts/run_agent_evaluation.py run --suite smoke
 uv run python scripts/run_agent_evaluation.py run --suite baseline --trials 1 --concurrency 1
-uv run python scripts/run_agent_evaluation.py run --case ntc.cisco_ios.show_interfaces_status
+uv run python scripts/run_agent_evaluation.py run --case ntc.cisco_ios.show_interfaces_status.sample_01
 ```
 
 `--trials` 范围 `1-10`、默认 `1`；`--concurrency` 范围 `1-4`、默认 `1`；`--name` 可覆盖 Evaluation 显示名。Harness 不 resume，也不重试失败 trial。退出码 `0` 表示全部 trial 严格通过且遥测完整，`1` 表示正常完成但至少一个 trial 未通过，`2` 表示定义、配置、Laminar 或归档错误，`130` 表示人工取消。
@@ -56,7 +56,7 @@ $env:CLI_PARSER_MODEL_TIMEOUT_SECONDS = "120"
 uv run python scripts/run_agent_evaluation.py run --suite baseline --trials 1 --concurrency 1
 ```
 
-高预算值只属于开发诊断，不改变默认 `GenerationPolicy`，每次运行必须通过配置指纹记录有效模型、推理、预算和 Laminar 配置。先运行 `baseline` 建立低歧义基线，再运行 `smoke`；完整公开语料仍按 [真实命令输出语料测试计划](live-corpus-test-plan.md) 先 `5/5` smoke、再以 `--resume` 达到 `11/11`。高预算运行不自动重试失败 trial，取消或重新运行必须使用新的 run 目录并保留旧 Trace。
+高预算值只属于开发诊断，不改变默认 `GenerationPolicy`，每次运行必须通过配置指纹记录有效模型、推理、预算和 Laminar 配置。先运行 `baseline` 建立低歧义基线，再运行 `smoke`；完整公开语料仍按 [真实命令输出语料测试计划](live-corpus-test-plan.md) 先 `5/5` smoke、再以 `--resume` 达到 `31/31`。高预算运行不自动重试失败 trial，取消或重新运行必须使用新的 run 目录并保留旧 Trace。
 
 ## Trace、评分与本地产物
 
@@ -77,7 +77,7 @@ case 汇总至少包含 trial 数、严格通过数/率、均值、p50、p95 和
 
 ### 开发期 HumanEvaluator
 
-HumanEvaluator 只属于 `scripts/run_agent_evaluation.py` 等显式开发评测入口，不属于 `TtpGenerator.generate()`、产品 API、普通 pytest 或生产部署。评审人员在 Laminar Trace 的只读调试通道中检查一次 run 产生的**全部** Schema/TTP 候选（包括被拒绝候选、有效候选、capture 复核和最终候选），使用固定标签记录：解析边界、主实体/字段粒度、可选字段表达、多输入一致性、fixture-specific 过拟合和可维护性。
+HumanEvaluator 只属于 `scripts/run_agent_evaluation.py` 等显式开发评测入口，不属于 `TtpGenerator.generate()`、产品 API、普通 pytest 或生产部署。评审人员在 Laminar Trace 的只读调试通道中检查一次 run 产生的**全部** Schema/TTP 候选（包括被拒绝候选、有效候选、capture 复核和最终候选），使用固定标签记录：解析边界、主实体/字段粒度、可选字段表达、同一输入内实体一致性、fixture-specific 过拟合和可维护性。
 
 HumanEvaluator 不修改 Agent 状态、不触发重试、不向模型回灌评审内容，也不把模板、records、capture、原始输入或模型文本写入本地脱敏摘要；本地只允许保存有界的评审标签、issue-code、Trace ID 和数值指标。未启用 Laminar 时不执行全量候选人工评审。
 

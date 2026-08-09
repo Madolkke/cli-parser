@@ -2,25 +2,110 @@
   "records": [
     {
       "interfaces": [
-        {"name": "Ethernet0/0", "ip_address": "unassigned", "ok": "YES", "method": "NVRAM", "status": "up", "protocol": "up"},
-        {"name": "Ethernet0/0.11", "ip_address": "10.0.1.38", "ok": "YES", "method": "NVRAM", "status": "up", "protocol": "up"},
-        {"name": "Ethernet0/0.100", "ip_address": "unassigned", "ok": "YES", "method": "NVRAM", "status": "deleted", "protocol": "down"},
-        {"name": "Ethernet0/1", "ip_address": "1.1.1.1", "ok": "YES", "method": "NVRAM", "status": "up", "protocol": "up"},
-        {"name": "Ethernet0/2", "ip_address": "unassigned", "ok": "YES", "method": "NVRAM", "status": "administratively down", "protocol": "down"},
-        {"name": "Ethernet0/3", "ip_address": "unassigned", "ok": "YES", "method": "NVRAM", "status": "administratively down", "protocol": "down"},
-        {"name": "Loopback0", "ip_address": "10.0.1.2", "ok": "YES", "method": "NVRAM", "status": "up", "protocol": "up"}
+        {
+          "name": "Ethernet0/0",
+          "ip_address": "unassigned",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "up",
+          "protocol": "up"
+        },
+        {
+          "name": "Ethernet0/0.11",
+          "ip_address": "10.0.1.38",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "up",
+          "protocol": "up"
+        },
+        {
+          "name": "Ethernet0/0.100",
+          "ip_address": "unassigned",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "deleted",
+          "protocol": "down"
+        },
+        {
+          "name": "Ethernet0/1",
+          "ip_address": "1.1.1.1",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "up",
+          "protocol": "up"
+        },
+        {
+          "name": "Ethernet0/2",
+          "ip_address": "unassigned",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "administratively down",
+          "protocol": "down"
+        },
+        {
+          "name": "Ethernet0/3",
+          "ip_address": "unassigned",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "administratively down",
+          "protocol": "down"
+        },
+        {
+          "name": "Loopback0",
+          "ip_address": "10.0.1.2",
+          "ok": "YES",
+          "method": "NVRAM",
+          "status": "up",
+          "protocol": "up"
+        }
       ]
     }
   ],
   "schema_contract": [
-    {"path": "/", "type": "object", "required": false},
-    {"path": "/interfaces", "type": "array", "required": true},
-    {"path": "/interfaces/*", "type": "object", "required": false},
-    {"path": "/interfaces/*/name", "type": "string", "required": true},
-    {"path": "/interfaces/*/ip_address", "type": "string", "required": true},
-    {"path": "/interfaces/*/ok", "type": "string", "required": true},
-    {"path": "/interfaces/*/method", "type": "string", "required": true},
-    {"path": "/interfaces/*/status", "type": "string", "required": true},
-    {"path": "/interfaces/*/protocol", "type": "string", "required": true}
+    {
+      "path": "/",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/interfaces",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/interfaces/*/name",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/ip_address",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/ok",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/method",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/status",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/protocol",
+      "type": "string",
+      "required": true
+    }
   ]
 }
