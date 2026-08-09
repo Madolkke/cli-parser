@@ -1,0 +1,4 @@
+interface:
+  display_name: "Run TTP Agent Evaluation"
+  short_description: "Run configured TTP evals and analyze Laminar"
+  default_prompt: "Use $run-ttp-agent-evaluation to run a controlled TTP Agent evaluation with my configuration and analyze the Laminar results."

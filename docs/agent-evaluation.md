@@ -6,7 +6,7 @@
 
 评测系统从人工维护的 raw CLI 与 golden 出发，经 Laminar `evaluate(...)` 对现有 `TtpGenerator.generate()` 做非侵入式黑盒调用。它不修改公共 API、提示词、工具协议、AgentState 或默认策略；executor 不传 observer，每个 datapoint 只调用一次 `generate()`，target 在调用结束后才由 evaluator 读取。
 
-版本化定义位于 `evals/ttp_generation/`，确定性加载与评分位于 `src/cli_parser_agent/evaluation.py`，人工入口为 `scripts/run_agent_evaluation.py`。`docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只用于从 raw capture 制作 golden。
+版本化定义位于 `evals/ttp_generation/`，确定性加载与评分位于 `src/cli_parser_agent/evaluation.py`，人工入口为 `scripts/run_agent_evaluation.py`。`docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只用于从 raw capture 制作 golden；`docs/skills/run-ttp-agent-evaluation/` 则将指定配置的真实评测与 Laminar 只读分析流程固化为开发期 Skill。
 
 ## Golden 定义
 

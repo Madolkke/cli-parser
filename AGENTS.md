@@ -43,6 +43,7 @@
 - HumanEvaluator 仅限显式开发评测入口：在 Laminar 只读 Trace 中评审该 run 产生的全部 Schema/TTP 候选、capture 复核和最终候选，并记录有界的解析边界、字段粒度、可选字段、同一输入内实体一致性、过拟合和可维护性标签；写入时显式区分 `phase=schema|ttp`。它不得进入 `TtpGenerator.generate()`、产品部署或普通 pytest，不修改 Agent 状态、不触发重试、不向模型回灌内容，本地摘要不得保存模板、records、capture、原始输入或模型文本。
 - `src/cli_parser_agent/evaluation.py` 只实现测试定义的安全加载、Agent 外终验、严格评分和脱敏投影；`evals/ttp_generation/` 保存版本化 manifest、expected records 和 Schema 结构断言。Golden 采用最大有证据语义投影，可选属性在缺失实例中省略；只能从 raw capture 人工生成，不能读取被测产物、Trace、历史 artifact、上游模板、参考 YAML/JSON 或使用被测模型生成答案。
 - `docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只指导离线 golden 制作和 preflight，不得读取或修改评测入口脚本，也不得运行 live evaluation。
+- `docs/skills/run-ttp-agent-evaluation/` 是可手动安装的开发评测 Skill 源码，只能通过现有评测入口以指定环境配置运行，并以 Laminar 的只读 Trace/SQL 数据分析；不得修改产品行为、评测资产或本地脱敏边界。
 - `scripts/run_agent_tui.py` 是零参数、只读的 Textual 开发调试脚本：只观察一次公共 `generate()` 调用，键盘操作只能导航、滚动、折叠 Thinking、退出或取消整个请求，不得编辑产物、重试阶段、调用工具或改变生成协议。它可以为本次运行单独启用 `stream=True`；库默认值、普通 API 和其他脚本仍保持 `stream=False`。该脚本要求交互式 stdin/stdout，并把完整事件转录写入忽略版本控制的 `.artifacts/agent-tui/`，不属于产品 CLI。
 
 ## 安全约束
