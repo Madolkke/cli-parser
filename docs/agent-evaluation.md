@@ -73,7 +73,7 @@ Live run 先验证 `http://127.0.0.1:8000` SQL HTTP 与 `127.0.0.1:8001` gRPC，
 - **流程可靠性**：Agent 总轮次和分阶段轮次、工具调用及错误、Schema/TTP 提交、无工具回复/重试、模型重试、终止原因、故障域和 issue-code 分布；重复 trial 报告通过率、样本数和置信区间。
 - **资源效率**：根、phase、`context.fit`、`agent.round`、`generation.deadline_cleanup`、`final.acceptance`、LLM 和 TOOL 的耗时及其 p50/p95/p99，LLM input/output tokens、cost、每轮上下文 token 增长斜率/峰值、分段解释时长比例及每个成功 case 的归一化成本。正常运行要求分段覆盖端到端时长至少 `98%`；Laminar 入库不完整时该 trial 只能标记为 `telemetry_incomplete`，不得用缺失数据补零来宣称通过。
 
-case 汇总至少包含 trial 数、严格通过数/率、均值、p50、p95 和 p99；低 trial 数时明确注明尾部分位数的不确定性。报告同时保留 macro（按 case）和 micro（按输入）视角，避免多输入 case 以样本数量掩盖单输入 case 的失败。配置指纹必须绑定实际模型、prompt version、推理开关/强度、预算、采样和安全限制；Key 和原始输入不进入指纹。
+case 汇总至少包含 trial 数、严格通过数/率、均值、p50、p95 和 p99；低 trial 数时明确注明尾部分位数的不确定性。报告同时保留 macro（按 case）和 micro（按输入）视角，避免多输入 case 以样本数量掩盖单输入 case 的失败。配置指纹必须绑定实际模型、prompt version、推理开关/强度、程序化 `extra_body` 的规范化 SHA-256、预算、采样和安全限制；`extra_body` 正文、Key 和原始输入不进入评测配置快照或本地摘要。
 
 ### 开发期 HumanEvaluator
 

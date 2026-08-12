@@ -29,6 +29,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from cli_parser_agent.config import (  # noqa: E402
+    model_extra_body_sha256,
     tls_ssl_context,
     tls_verification_enabled,
 )
@@ -155,20 +156,7 @@ def _configuration(
         ) from None
     runtime = _runtime_configuration(source)
     snapshot = {
-        "model": {
-            "name": settings.model_name,
-            "base_url": settings.base_url,
-            "stream": settings.stream,
-            "temperature": settings.temperature,
-            "parallel_tool_calls": settings.parallel_tool_calls,
-            "max_tokens": settings.max_tokens,
-            "context_size": settings.context_size,
-            "model_max_retries": settings.model_max_retries,
-            "model_timeout_seconds": settings.model_timeout_seconds,
-            "verify_tls": settings.verify_tls,
-            "thinking_enable": settings.thinking_enable,
-            "reasoning_effort": settings.reasoning_effort,
-        },
+        "model": _model_configuration_snapshot(settings),
         "policy": policy.model_dump(mode="json"),
         "laminar": {
             "base_url": runtime.laminar_base_url,
@@ -178,6 +166,27 @@ def _configuration(
         },
     }
     return settings, policy, runtime, snapshot
+
+
+def _model_configuration_snapshot(settings: Any) -> dict[str, Any]:
+    """Project model settings without credentials or extra-body content."""
+
+    return {
+        "name": settings.model_name,
+        "base_url": settings.base_url,
+        "stream": settings.stream,
+        "temperature": settings.temperature,
+        "parallel_tool_calls": settings.parallel_tool_calls,
+        "max_tokens": settings.max_tokens,
+        "context_size": settings.context_size,
+        "model_max_retries": settings.model_max_retries,
+        "model_timeout_seconds": settings.model_timeout_seconds,
+        "verify_tls": settings.verify_tls,
+        "thinking_enable": settings.thinking_enable,
+        "reasoning_effort": settings.reasoning_effort,
+        "extra_body_configured": settings.extra_body is not None,
+        "extra_body_sha256": model_extra_body_sha256(settings.extra_body),
+    }
 
 
 def _fingerprint(value: Any) -> str:

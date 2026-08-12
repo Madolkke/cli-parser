@@ -46,6 +46,20 @@ def test_constructor_attempts_optional_laminar_initialization(
     assert calls == [None]
 
 
+def test_constructor_snapshots_nested_extra_body() -> None:
+    extra_body = {"thinking": {"effort": "high"}}
+    settings = TtpGeneratorSettings(
+        api_key="secret",
+        model_name="test-model",
+        extra_body=extra_body,
+    )
+
+    generator = TtpGenerator(settings=settings)
+    extra_body["thinking"]["effort"] = "low"
+
+    assert generator.settings.extra_body == {"thinking": {"effort": "high"}}
+
+
 def test_from_env_passes_the_same_mapping_to_laminar(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

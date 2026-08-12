@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 from collections.abc import Mapping
 from uuid import uuid4
 
-from ..config import GenerationPolicy, TtpGeneratorSettings
+from ..config import (
+    GenerationPolicy,
+    TtpGeneratorSettings,
+    model_extra_body_sha256,
+)
 from ..observability import (
     finish_laminar_span,
     initialize_laminar_from_env,
@@ -28,7 +33,9 @@ class TtpGenerator:
         policy: GenerationPolicy | None = None,
         _laminar_environ: Mapping[str, str] | None = None,
     ) -> None:
-        self.settings = TtpGeneratorSettings.model_validate(settings)
+        self.settings = TtpGeneratorSettings.model_validate(
+            copy.deepcopy(settings.model_dump()),
+        )
         self.policy = (
             GenerationPolicy()
             if policy is None
@@ -69,6 +76,10 @@ class TtpGenerator:
         base_attributes = {
             "request_id": request_id,
             "model_name": self.settings.model_name,
+            "model_extra_body_configured": self.settings.extra_body is not None,
+            "model_extra_body_sha256": model_extra_body_sha256(
+                self.settings.extra_body,
+            ),
             "prompt_version": PROMPT_VERSION,
             "command_output_count": len(request.command_outputs),
             "input_char_count": sum(
@@ -190,6 +201,12 @@ class TtpGenerator:
             final_attributes = {
                 "request_id": result_metadata.request_id,
                 "model_name": result_metadata.model_name,
+                "model_extra_body_configured": (
+                    self.settings.extra_body is not None
+                ),
+                "model_extra_body_sha256": model_extra_body_sha256(
+                    self.settings.extra_body,
+                ),
                 "prompt_version": result_metadata.prompt_version,
                 "command_output_count": result_metadata.command_output_count,
                 "schema_sampled_char_count": (

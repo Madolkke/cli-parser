@@ -94,6 +94,7 @@ class SettingsLike(Protocol):
     parallel_tool_calls: bool
     thinking_enable: bool | None
     reasoning_effort: str | None
+    extra_body: dict[str, Any] | None
     max_tokens: int
     context_size: int
     model_max_retries: int
@@ -170,6 +171,7 @@ def build_agent(
         max_retries=settings.model_max_retries,
         context_size=settings.context_size,
         client_kwargs=client_kwargs,
+        extra_body=settings.extra_body,
     )
 
     return Agent(

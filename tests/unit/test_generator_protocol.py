@@ -361,6 +361,8 @@ async def test_generation_result_captures_the_active_laminar_trace(
     assert finishes[-1]["trace_metadata"] == {
         "request_id": result.metadata.request_id,
         "model_name": "test-model",
+        "model_extra_body_configured": False,
+        "model_extra_body_sha256": "",
         "prompt_version": result.metadata.prompt_version,
         "command_output_count": 1,
         "schema_sampled_char_count": len("value: one"),
@@ -1097,6 +1099,58 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
     assert finishes[0]["outcome"] == "success"
     assert finishes[0]["output"] == result.model_dump(mode="json")
     assert finishes[0]["trace_metadata"]["status"] == "success"
+
+
+async def test_root_trace_records_only_extra_body_hash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    private_value = "provider-private-configuration"
+    generator = TtpGenerator(
+        settings=TtpGeneratorSettings(
+            api_key="secret",
+            model_name="test-model",
+            extra_body={"thinking": {"mode": private_value}},
+        ),
+    )
+    starts: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        starts.append({"name": name, **kwargs})
+        yield SimpleNamespace(enabled=True, creates_trace=True)
+
+    async def fail(
+        request: GenerationRequest,
+        *,
+        request_id: str,
+    ) -> GenerationResult:
+        return GenerationResult(
+            status="failed",
+            metadata=GenerationMetadata(
+                request_id=request_id,
+                model_name="test-model",
+                command_output_count=len(request.command_outputs),
+                termination_reason="agent_stopped",
+            ),
+            issues=[
+                ValidationIssue(
+                    code="model.stopped",
+                    message="stopped",
+                    path="model",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(generator_module, "start_laminar_span", start)
+    monkeypatch.setattr(generator_module, "finish_laminar_span", lambda **_: None)
+    monkeypatch.setattr(generator, "_generate", fail)
+
+    await generator.generate(GenerationRequest(command_outputs=["value: one"]))
+
+    attributes = starts[0]["attributes"]
+    assert attributes["model_extra_body_configured"] is True
+    assert len(attributes["model_extra_body_sha256"]) == 64
+    assert private_value not in str(attributes)
 
 
 @pytest.mark.parametrize(

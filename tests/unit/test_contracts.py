@@ -231,6 +231,7 @@ def test_settings_from_env_requires_credentials_and_uses_model_defaults() -> Non
     assert settings.parallel_tool_calls is False
     assert settings.thinking_enable is None
     assert settings.reasoning_effort is None
+    assert settings.extra_body is None
     assert settings.max_tokens == 8192
     assert settings.context_size == 128000
     assert settings.model_max_retries == 2
@@ -276,6 +277,45 @@ def test_settings_reject_invalid_reasoning_effort(value: str) -> None:
             api_key="secret",
             model_name="test-model",
             reasoning_effort=value,
+        )
+
+
+def test_settings_accepts_json_extra_body_and_stable_hash() -> None:
+    from cli_parser_agent.config import model_extra_body_sha256
+
+    first = {"thinking": {"budget": 512, "enabled": True}, "modes": ["a", None]}
+    second = {"modes": ["a", None], "thinking": {"enabled": True, "budget": 512}}
+    settings = TtpGeneratorSettings(
+        api_key="secret",
+        model_name="test-model",
+        extra_body=first,
+    )
+
+    assert settings.extra_body == first
+    assert model_extra_body_sha256(first) == model_extra_body_sha256(second)
+    assert model_extra_body_sha256(first) != model_extra_body_sha256({})
+    assert model_extra_body_sha256(None) == ""
+
+
+@pytest.mark.parametrize(
+    "extra_body",
+    [
+        [],
+        {"value": object()},
+        {"value": float("nan")},
+        {"value": float("inf")},
+        {1: "value"},
+        {"nested": {"api_key": "private"}},
+        {"nested": {"access-token": "private"}},
+        {"authorization": "Bearer private"},
+    ],
+)
+def test_settings_rejects_unsafe_extra_body(extra_body: object) -> None:
+    with pytest.raises(ValidationError):
+        TtpGeneratorSettings(
+            api_key="secret",
+            model_name="test-model",
+            extra_body=extra_body,  # type: ignore[arg-type]
         )
 
 

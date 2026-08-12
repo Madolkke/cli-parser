@@ -47,7 +47,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 ### 2.3 模型与预算
 
-首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。不发送供应商专用的 `extra_body` 覆盖。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
+首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。程序化构造还可设置 `TtpGeneratorSettings.extra_body`，以一份冻结快照统一作用于该生成器创建的 Schema/TTP Agent；该字段不从环境读取，允许依照 OpenAI Client 语义覆盖标准请求字段，因此属于低层供应商兼容入口。它只接受不含凭据型键的 JSON 对象；项目 Trace metadata 和评测指纹只保留配置事实与稳定 SHA-256，显式 Laminar 自动模型追踪仍可能包含实际请求体。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
 
 TTP 提示要求每个模型回复最多调用一个工具，并等待提交 ToolResult/records 出现在后续模型上下文后再调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮 submit/finish 拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
 

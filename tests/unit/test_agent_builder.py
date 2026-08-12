@@ -79,6 +79,27 @@ def test_builder_constructs_openai_model_without_extra_body() -> None:
     assert agent.model.extra_body is None
 
 
+@pytest.mark.parametrize("phase", ["schema", "ttp"])
+def test_builder_passes_extra_body_to_both_phase_models(
+    phase: GenerationPhase,
+) -> None:
+    extra_body = {
+        "reasoning_effort": "provider-high",
+        "max_tokens": 321,
+        "thinking": {"enabled": True},
+    }
+    agent = _build_test_agent(
+        phase,
+        settings=TtpGeneratorSettings(
+            api_key="test-key",
+            model_name="test-model",
+            extra_body=extra_body,
+        ),
+    )
+
+    assert agent.model.extra_body == extra_body
+
+
 def test_builder_injects_an_unverified_http_client_only_when_opted_in(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -372,6 +393,77 @@ async def test_builder_maps_reasoning_settings_to_openai_request(
         assert "reasoning_effort" not in request
     else:
         assert request["reasoning_effort"] == expected_effort
+
+
+@pytest.mark.parametrize("phase", ["schema", "ttp"])
+async def test_builder_sends_complete_extra_body_on_every_model_request(
+    monkeypatch: pytest.MonkeyPatch,
+    phase: GenerationPhase,
+) -> None:
+    captured_requests: list[dict[str, Any]] = []
+    extra_body = {
+        "reasoning_effort": "provider-high",
+        "max_tokens": 321,
+        "thinking": {"enabled": True},
+    }
+
+    async def create_completion(**kwargs: Any) -> ChatCompletion:
+        captured_requests.append(kwargs)
+        return ChatCompletion.model_validate(
+            {
+                "id": "chatcmpl-test",
+                "object": "chat.completion",
+                "created": 0,
+                "model": "test-model",
+                "choices": [
+                    {
+                        "index": 0,
+                        "finish_reason": "stop",
+                        "message": {"role": "assistant", "content": "done"},
+                    },
+                ],
+                "usage": {
+                    "prompt_tokens": 1,
+                    "completion_tokens": 1,
+                    "total_tokens": 2,
+                },
+            },
+        )
+
+    def build_fake_client(**kwargs: Any) -> SimpleNamespace:
+        del kwargs
+        return SimpleNamespace(
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=create_completion),
+            ),
+        )
+
+    monkeypatch.setattr(openai, "AsyncClient", build_fake_client)
+    agent = _build_test_agent(
+        phase,
+        settings=TtpGeneratorSettings(
+            api_key="test-key",
+            model_name="test-model",
+            reasoning_effort="high",
+            thinking_enable=True,
+            extra_body=extra_body,
+        ),
+    )
+    message = (
+        build_schema_task_message(["value: one"])
+        if phase == "schema"
+        else build_ttp_task_message(["value: one"], _schema())
+    )
+
+    for _ in range(2):
+        async for _event in agent.reply_stream(message):
+            pass
+
+    assert len(captured_requests) == 2
+    for request in captured_requests:
+        assert request["extra_body"] == extra_body
+        assert request["reasoning_effort"] == "high"
+        assert "tool_choice" not in request
 
 
 def test_retry_log_filter_scrubs_text_and_counts_against_current_session() -> None:

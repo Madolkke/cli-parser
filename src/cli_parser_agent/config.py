@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import math
 import os
 import ssl
 from collections.abc import Mapping
-from typing import Literal, Self
+from typing import Any, Literal, Self
 from urllib.parse import urlparse
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    JsonValue,
     SecretStr,
     field_validator,
     model_validator,
@@ -20,6 +24,61 @@ from pydantic import (
 INSECURE_SKIP_TLS_VERIFY_ENV = "CLI_PARSER_INSECURE_SKIP_TLS_VERIFY"
 _TRUE_ENV_VALUES = frozenset({"1", "true", "yes", "on"})
 _FALSE_ENV_VALUES = frozenset({"0", "false", "no", "off"})
+_SENSITIVE_EXTRA_BODY_KEYS = frozenset(
+    {
+        "api_key",
+        "authorization",
+        "client_secret",
+        "credential",
+        "password",
+        "private_key",
+        "secret",
+        "token",
+    },
+)
+
+
+def _validate_extra_body_value(value: Any, *, path: str = "extra_body") -> None:
+    """Reject non-JSON values and credential-shaped keys recursively."""
+
+    if value is None or isinstance(value, str | bool | int):
+        return
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            raise ValueError(f"{path} must not contain non-finite numbers")
+        return
+    if isinstance(value, list):
+        for index, item in enumerate(value):
+            _validate_extra_body_value(item, path=f"{path}[{index}]")
+        return
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if not isinstance(key, str):
+                raise ValueError(f"{path} keys must be strings")
+            normalized_key = key.casefold().replace("-", "_")
+            if normalized_key in _SENSITIVE_EXTRA_BODY_KEYS or any(
+                normalized_key.endswith(f"_{suffix}")
+                for suffix in ("api_key", "credential", "password", "secret", "token")
+            ):
+                raise ValueError(f"{path} must not contain credential fields")
+            _validate_extra_body_value(item, path=f"{path}.{key}")
+        return
+    raise ValueError(f"{path} must contain only JSON-compatible values")
+
+
+def model_extra_body_sha256(extra_body: Mapping[str, JsonValue] | None) -> str:
+    """Return a stable, content-free fingerprint for a model extra body."""
+
+    if extra_body is None:
+        return ""
+    encoded = json.dumps(
+        extra_body,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def tls_verification_enabled(environ: Mapping[str, str] | None = None) -> bool:
@@ -151,6 +210,7 @@ class TtpGeneratorSettings(BaseModel):
         "high",
         "xhigh",
     ] | None = None
+    extra_body: dict[str, JsonValue] | None = None
     max_tokens: int = Field(default=8_192, ge=1)
     context_size: int = Field(default=128_000, ge=1)
     model_max_retries: int = Field(default=2, ge=0)
@@ -183,6 +243,16 @@ class TtpGeneratorSettings(BaseModel):
         if parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("base_url must be an absolute HTTP(S) URL")
         return value.rstrip("/")
+
+    @field_validator("extra_body", mode="before")
+    @classmethod
+    def extra_body_is_safe_json_object(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if not isinstance(value, dict):
+            raise ValueError("extra_body must be a JSON object")
+        _validate_extra_body_value(value)
+        return value
 
     @model_validator(mode="after")
     def completion_fits_context(self) -> Self:

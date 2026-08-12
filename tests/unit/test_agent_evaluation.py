@@ -612,6 +612,40 @@ def test_configuration_snapshot_includes_reasoning_and_tls_settings() -> None:
     assert snapshot["model"]["thinking_enable"] is True
     assert snapshot["model"]["reasoning_effort"] == "high"
     assert snapshot["model"]["verify_tls"] is False
+    assert snapshot["model"]["extra_body_configured"] is False
+    assert snapshot["model"]["extra_body_sha256"] == ""
+
+
+def test_configuration_snapshot_hashes_extra_body_without_storing_content() -> None:
+    from cli_parser_agent import TtpGeneratorSettings
+
+    script = _load_script()
+    private_value = "provider-private-configuration"
+    first = TtpGeneratorSettings(
+        api_key="secret",
+        model_name="test-model",
+        extra_body={"thinking": {"mode": private_value, "budget": 512}},
+    )
+    reordered = TtpGeneratorSettings(
+        api_key="secret",
+        model_name="test-model",
+        extra_body={"thinking": {"budget": 512, "mode": private_value}},
+    )
+    changed = TtpGeneratorSettings(
+        api_key="secret",
+        model_name="test-model",
+        extra_body={"thinking": {"mode": private_value, "budget": 1024}},
+    )
+
+    snapshot = script._model_configuration_snapshot(first)
+    reordered_snapshot = script._model_configuration_snapshot(reordered)
+    changed_snapshot = script._model_configuration_snapshot(changed)
+
+    assert snapshot["extra_body_configured"] is True
+    assert len(snapshot["extra_body_sha256"]) == 64
+    assert snapshot["extra_body_sha256"] == reordered_snapshot["extra_body_sha256"]
+    assert snapshot["extra_body_sha256"] != changed_snapshot["extra_body_sha256"]
+    assert private_value not in json.dumps(snapshot)
 
 
 def test_telemetry_requires_conditional_phase_spans() -> None:
