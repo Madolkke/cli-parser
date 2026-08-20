@@ -156,11 +156,26 @@ def build_agent(
         thinking_enable=bool(thinking_enable),
         reasoning_effort=reasoning_effort,
     )
-    client_kwargs: dict[str, Any] = {"timeout": settings.model_timeout_seconds}
+    # ``model_timeout_seconds`` must cap one model call, so it is applied to
+    # every httpx phase rather than left as a per-event read timeout.  The
+    # OpenAI SDK also retries internally (``DEFAULT_MAX_RETRIES``), which would
+    # multiply with AgentScope's own ``max_retries + 1`` loop; forwarding
+    # ``max_retries=0`` keeps retry accounting in a single place.
+    request_timeout = httpx.Timeout(
+        settings.model_timeout_seconds,
+        connect=settings.model_timeout_seconds,
+        read=settings.model_timeout_seconds,
+        write=settings.model_timeout_seconds,
+        pool=settings.model_timeout_seconds,
+    )
+    client_kwargs: dict[str, Any] = {
+        "timeout": request_timeout,
+        "max_retries": 0,
+    }
     if not settings.verify_tls:
         client_kwargs["http_client"] = httpx.AsyncClient(
             verify=False,
-            timeout=settings.model_timeout_seconds,
+            timeout=request_timeout,
         )
 
     model = OpenAIChatModel(

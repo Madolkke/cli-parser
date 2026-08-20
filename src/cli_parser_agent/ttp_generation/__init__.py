@@ -9,6 +9,7 @@ from .contracts import (
     LastAttempt,
     Metadata,
     SchemaSubmission,
+    TemplateRequest,
     ValidationIssue,
 )
 from .generator import TtpGenerator
@@ -24,6 +25,7 @@ __all__ = [
     "Metadata",
     "ProgressObserver",
     "SchemaSubmission",
+    "TemplateRequest",
     "TtpGenerator",
     "ValidationIssue",
 ]

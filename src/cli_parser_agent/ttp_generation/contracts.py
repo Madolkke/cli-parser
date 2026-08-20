@@ -31,35 +31,51 @@ class ContractModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class GenerationRequest(ContractModel):
-    """One to five full outputs produced by the same command."""
-
-    command_outputs: list[str] = Field(min_length=1, max_length=MAX_COMMAND_OUTPUTS)
-
-    @field_validator("command_outputs")
-    @classmethod
-    def outputs_are_nonempty_and_bounded(cls, values: list[str]) -> list[str]:
-        for index, value in enumerate(values):
-            if not value.strip():
-                raise ValueError(f"command_outputs[{index}] must not be empty")
-            try:
-                encoded_size = len(value.encode("utf-8"))
-            except UnicodeEncodeError as exc:
-                raise ValueError(
-                    f"command_outputs[{index}] is not valid UTF-8 text",
-                ) from exc
-            if encoded_size > MAX_COMMAND_OUTPUT_BYTES:
-                raise ValueError(
-                    f"command_outputs[{index}] exceeds "
-                    f"{MAX_COMMAND_OUTPUT_BYTES} UTF-8 bytes",
-                )
-        return values
+def _validate_command_outputs(values: list[str]) -> list[str]:
+    for index, value in enumerate(values):
+        if not value.strip():
+            raise ValueError(f"command_outputs[{index}] must not be empty")
+        try:
+            encoded_size = len(value.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise ValueError(
+                f"command_outputs[{index}] is not valid UTF-8 text",
+            ) from exc
+        if encoded_size > MAX_COMMAND_OUTPUT_BYTES:
+            raise ValueError(
+                f"command_outputs[{index}] exceeds "
+                f"{MAX_COMMAND_OUTPUT_BYTES} UTF-8 bytes",
+            )
+    return values
 
 
 def _validate_root_object_schema(schema: dict[str, JsonValue]) -> dict[str, JsonValue]:
     if schema.get("type") != "object":
         raise ValueError("result_schema root type must be 'object'")
     return schema
+
+
+class GenerationRequest(ContractModel):
+    """One to five full outputs produced by the same command."""
+
+    command_outputs: list[str] = Field(min_length=1, max_length=MAX_COMMAND_OUTPUTS)
+
+    _outputs = field_validator("command_outputs")(_validate_command_outputs)
+
+
+class TemplateRequest(ContractModel):
+    """Command outputs plus a caller-supplied schema for template-only runs.
+
+    The root-object check here is a cheap early rejection; the full closed
+    Draft 2020-12 subset check runs in the workflow, which is the only layer
+    allowed to import the validation package.
+    """
+
+    command_outputs: list[str] = Field(min_length=1, max_length=MAX_COMMAND_OUTPUTS)
+    result_schema: dict[str, JsonValue]
+
+    _outputs = field_validator("command_outputs")(_validate_command_outputs)
+    _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
 
 class FieldEvidence(ContractModel):

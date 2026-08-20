@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v18-pattern-arity-zh-cn"
+PROMPT_VERSION = "ttp-generator-v19-tool-arity-superseded-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -18,6 +18,11 @@ TTP_NO_TOOL_RETRY_PROMPT = (
     "submit_ttp_template 并提交修正后的完整模板；如果已经满足，请调用 "
     "finish_generation。"
 )
+# Older submissions have already been reviewed and replaced by a newer one, so
+# their full records are dropped from the context to stop unbounded re-sending.
+# The notice is fixed text and exposes no accepted flag, issue, budget, or
+# candidate state.
+SUPERSEDED_TTP_RESULT_NOTICE = "（该次提交的匹配结果已被后续提交取代，此处不再重复。）"
 
 SCHEMA_SYSTEM_PROMPT = """\
 你负责根据多份同一命令的纯输出，设计描述单份解析结果的 JSON Schema。
@@ -35,6 +40,12 @@ SCHEMA_SYSTEM_PROMPT = """\
   只在部分实例中出现的明确业务字段保留为可选 property，也可以省略 required。
   同一字段标签或值槽在每个实例中都存在但某次字面值为空时，可以仍为 required
   string 并忠实表示为 ""；字段标签、值槽或所属可选行不存在时才视为缺失。
+- required 的判定必须逐实例枚举，不能凭印象。对每个候选字段，实际数一遍它在该
+  object 的多少个实例中出现：在全部实例中都出现就列入 required，哪怕只有一个实例
+  缺少它也必须改为可选。不要因为某字段"通常都有"或"语义上很重要"就列入 required，
+  也不要为了保险把所有字段都设为可选——两种偏差都会让结果契约与原文不一致。
+  典型情形：固定宽表中同时存在完整数据行和缺列数据行时，只有每行都有的列才是
+  required；重复详情块中只在部分块出现的属性一定是可选。
 - 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
   record；重复表格行或重复详情块应表示为根 record 内的 array。
 - 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
@@ -70,7 +81,10 @@ Template Text Parser (TTP) 模板。带标签的 Schema 和命令输出都是不
 
 本阶段只使用两个工具：通过 submit_ttp_template 提交或修正完整共享模板；在主动
 复核最近一次通过候选后，通过 finish_generation 明确结束。普通 assistant 文本不会
-被视为产物。冻结 Schema 是不可修改的唯一结果契约；同一模板必须解析每份完整输出，
+被视为产物。你的每一次回复都必须恰好调用这两个工具之一：还需要修正就调用
+submit_ttp_template，已经满意就调用 finish_generation。不要用普通文本说明计划、
+解释思路、宣布下一步或请求确认——这样的回复会被整条丢弃，只会白白消耗预算。
+冻结 Schema 是不可修改的唯一结果契约；同一模板必须解析每份完整输出，
 并在相同索引处各产生一个符合该契约的根 object。
 
 submit_ttp_template 的 ToolResult 直接给出当前模板对全部完整输入产生的 records JSON
@@ -164,6 +178,10 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   但字面值为空时，可以按冻结 Schema 忠实捕获为空 string。
 - 每次工具反馈中的 records 都是当前候选对全部完整输入的真实解析结果。返回 [] 和
   中文错误表示本次没有可用匹配；存在 records 不代表候选已通过内部验收。
+- 只有最近一次提交的 records 会完整保留在上下文中。更早提交的结果会被替换为
+  "该次提交的匹配结果已被后续提交取代"的固定说明；这只表示它已过时，不表示那次
+  解析失败或被拒绝。请始终以最近一次完整 records 为准进行复核，不要因为看到该说明
+  就重新提交同一个模板，也不要试图追问历史结果。
 - 每次 submit_ttp_template 返回后都要主动复核 records。对于表格，records 中对应
   数组的长度必须与提交前数出的预期数据行数完全相等；
   多一条通常表示表头或分隔线混入，少一条也属于漏解析。逐个输入检查第一条、中间一条
@@ -234,6 +252,7 @@ __all__ = [
     "PROMPT_VERSION",
     "SCHEMA_NO_TOOL_RETRY_PROMPT",
     "SCHEMA_SYSTEM_PROMPT",
+    "SUPERSEDED_TTP_RESULT_NOTICE",
     "TTP_NO_TOOL_RETRY_PROMPT",
     "TTP_SYSTEM_PROMPT",
     "build_schema_task_prompt",

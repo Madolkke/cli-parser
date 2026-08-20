@@ -79,6 +79,9 @@ class GenerationSession:
     max_schema_no_tool_retries: int = 3
     max_ttp_no_tool_retries: int = 3
     deadline_monotonic: float | None = None
+    # Minimum wall clock a new model round needs before it is worth starting.
+    # ``0.0`` keeps the historical rounds-only behaviour.
+    min_round_seconds: float = 0.0
 
     frozen_schema: dict[str, Any] | None = None
     field_evidence: tuple[dict[str, Any], ...] = ()
@@ -127,7 +130,7 @@ class GenerationSession:
         command_outputs: Sequence[str],
         schema_validator: SchemaValidator,
         template_validator: TemplateValidator,
-        total_timeout_seconds: float = 360,
+        total_timeout_seconds: float = 900,
         max_ttp_submissions: int = 9,
     ) -> GenerationSession:
         """Create a session and start its wall-clock budget."""
@@ -147,6 +150,24 @@ class GenerationSession:
         """Whether a valid schema has been accepted permanently."""
 
         return self.frozen_schema is not None
+
+    def remaining_seconds(self) -> float:
+        """Return the wall clock left before the shared deadline."""
+
+        if self.deadline_monotonic is None:
+            return 0.0
+        return max(0.0, self.deadline_monotonic - time.monotonic())
+
+    def has_time_for_another_round(self) -> bool:
+        """Whether enough budget remains to be worth another model round.
+
+        A round begun with less than one model call's worth of budget cannot
+        finish inside the deadline; starting it only overruns the request.
+        """
+
+        if self.deadline_monotonic is None or self.min_round_seconds <= 0:
+            return True
+        return self.remaining_seconds() >= self.min_round_seconds
 
     @property
     def has_validated_ttp_candidate(self) -> bool:

@@ -17,6 +17,8 @@ from lmnr import Laminar
 from cli_parser_agent.evaluation import (
     HarnessError,
     load_evaluation_manifest,
+    schema_from_contract,
+    schema_signature,
     score_executor_output,
     select_cases,
 )
@@ -823,6 +825,7 @@ def test_local_summary_uses_the_redacted_field_whitelist(
         "evaluation",
         "config_fingerprint",
         "single_input",
+        "template_only",
         "git",
         "trial_count",
         "strict_pass_count",
@@ -848,6 +851,71 @@ def test_telemetry_requires_root_executor_generation_schema_and_llm() -> None:
     assert script._telemetry_complete(complete) is True
     complete["generation_span_count"] = 0
     assert script._telemetry_complete(complete) is False
+
+
+def test_span_projections_are_read_from_the_nested_spans_mapping() -> None:
+    """Regression: segment/token/coverage reports lived one level too deep.
+
+    ``_telemetry_for_trace`` merges ``summarize_span_metrics`` into the mapping
+    stored under ``trace["spans"]``, so reading them from the trace top level
+    silently produced empty reports while the same values were present as
+    scalars inside ``metrics``.
+    """
+
+    script = _load_script()
+    trace = {
+        "trace_id": "3f1d0f2c-0000-4000-8000-00000000abcd",
+        "complete": True,
+        "spans": {
+            "llm_call_count": 11,
+            "generation_duration_seconds": 445.1,
+            "reported_trace_id": "3f1d0f2c-0000-4000-8000-00000000abcd",
+            "segment_stats": {
+                "ttp.generate": {"count": 1, "total_seconds": 445.1},
+                "LLM": {"count": 11, "total_seconds": 400.0},
+            },
+            "token_growth": {
+                "observations": 11,
+                "first_input_tokens": 3871.0,
+                "last_input_tokens": 92202.0,
+                "growth_slope_tokens_per_call": 8833.1,
+            },
+            "explained_duration_seconds": 445.0,
+            "unexplained_duration_seconds": 0.1,
+            "explained_duration_ratio": 0.9998,
+            "unexplained_duration_ratio": 0.0002,
+        },
+    }
+
+    projection = script._project_trace_telemetry(trace)
+
+    assert projection["segment_stats"]["ttp.generate"]["total_seconds"] == 445.1
+    assert projection["token_growth"]["last_input_tokens"] == 92202.0
+    assert projection["duration_coverage"]["explained_duration_ratio"] == 0.9998
+    assert projection["reported_trace_id"] == trace["spans"]["reported_trace_id"]
+
+    # ``metrics`` feeds ``_aggregate_metrics``, which skips non-scalars.
+    scalars = projection["scalar_metrics"]
+    assert scalars["llm_call_count"] == 11
+    assert scalars["explained_duration_ratio"] == 0.9998
+    assert scalars["growth_slope_tokens_per_call"] == 8833.1
+    assert not any(
+        isinstance(value, (dict, list)) for value in scalars.values()
+    ), "aggregate metrics must stay scalar-only"
+
+
+def test_span_projections_tolerate_a_missing_or_malformed_spans_mapping() -> None:
+    script = _load_script()
+
+    for trace in ({}, {"spans": None}, {"spans": {"segment_stats": "broken"}}):
+        projection = script._project_trace_telemetry(trace)
+        assert projection["segment_stats"] == {}
+        assert projection["token_growth"] == {}
+        assert projection["duration_coverage"]["explained_duration_ratio"] == 0.0
+        assert projection["scalar_metrics"] == {} or all(
+            not isinstance(value, (dict, list))
+            for value in projection["scalar_metrics"].values()
+        )
 
 
 async def test_telemetry_polling_tolerates_ingestion_delay(
@@ -918,3 +986,72 @@ async def test_telemetry_polling_tolerates_ingestion_delay(
     assert complete is True
     assert query_count == 2
     assert by_trial["case#0"]["complete"] is True
+
+
+def test_schema_from_contract_round_trips_every_golden_case() -> None:
+    """Every golden contract must rebuild into a schema the product accepts.
+
+    The rebuilt schema is what template-only mode pins, so it has to be an
+    exact inverse of ``schema_signature``; otherwise the injected schema would
+    differ from the golden and ``schema_contract_match`` could never be 1.
+    """
+
+    from cli_parser_agent.ttp_generation.validation import validate_result_schema
+
+    manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
+    assert manifest.cases
+
+    for case in manifest.cases:
+        contract = case.target.schema_contract
+        schema = schema_from_contract(contract)
+
+        assert validate_result_schema(schema) == [], case.id
+        assert schema_signature(schema) == {
+            node.path: node for node in contract
+        }, case.id
+
+
+def test_schema_from_contract_closes_objects_and_sorts_required() -> None:
+    from cli_parser_agent.evaluation import SchemaNode
+
+    schema = schema_from_contract(
+        (
+            SchemaNode("/", "object", False),
+            SchemaNode("/rows", "array", True),
+            SchemaNode("/rows/*", "object", False),
+            SchemaNode("/rows/*/name", "string", True),
+            SchemaNode("/rows/*/note", "string", False),
+            SchemaNode("/rows/*/count", "integer", True),
+        ),
+    )
+
+    assert schema["additionalProperties"] is False
+    assert schema["required"] == ["rows"]
+    item = schema["properties"]["rows"]["items"]
+    assert item["additionalProperties"] is False
+    # Sorted so the rebuilt schema is deterministic across runs.
+    assert item["required"] == ["count", "name"]
+    assert "note" not in item["required"]
+    assert item["properties"]["count"] == {"type": "integer"}
+
+
+def test_schema_from_contract_rejects_malformed_contracts() -> None:
+    from cli_parser_agent.evaluation import SchemaNode
+
+    with pytest.raises(HarnessError, match="object root"):
+        schema_from_contract((SchemaNode("/", "array", False),))
+
+    with pytest.raises(HarnessError, match="duplicate"):
+        schema_from_contract(
+            (SchemaNode("/", "object", False), SchemaNode("/", "object", False)),
+        )
+
+    with pytest.raises(HarnessError, match="no parent"):
+        schema_from_contract(
+            (SchemaNode("/", "object", False), SchemaNode("/a/b", "string", True)),
+        )
+
+    with pytest.raises(HarnessError, match="exactly one items"):
+        schema_from_contract(
+            (SchemaNode("/", "object", False), SchemaNode("/rows", "array", True)),
+        )

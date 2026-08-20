@@ -127,7 +127,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v18-pattern-arity-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v19-tool-arity-superseded-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -181,6 +181,17 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert 'pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?")' in TTP_SYSTEM_PROMPT
     assert "不会替你消费可变空白" in TTP_SYSTEM_PROMPT
     assert "说明行控制拆开了同一实体" in TTP_SYSTEM_PROMPT
+    # Every reply must call exactly one tool; plain text is discarded and only
+    # burns budget (0.67 mean no-tool TTP responses observed per trial).
+    assert "必须恰好调用这两个工具之一" in TTP_SYSTEM_PROMPT
+    assert "会被整条丢弃" in TTP_SYSTEM_PROMPT
+    # Superseded results are collapsed in context, so the model must not read
+    # the placeholder as a parse failure or resubmit the same template.
+    assert "只有最近一次提交的 records 会完整保留" in TTP_SYSTEM_PROMPT
+    assert "不表示那次" in TTP_SYSTEM_PROMPT
+    # required is the weakest measured schema dimension; force enumeration.
+    assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
+    assert "只有每行都有的列才是" in SCHEMA_SYSTEM_PROMPT
     assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
     assert "evidence" not in TTP_SYSTEM_PROMPT
     assert "assumptions" not in TTP_SYSTEM_PROMPT

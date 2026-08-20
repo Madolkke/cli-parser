@@ -4,7 +4,7 @@
 
 ## 边界
 
-评测系统从人工维护的 raw CLI 与 golden 出发，经 Laminar `evaluate(...)` 对现有 `TtpGenerator.generate()` 做非侵入式黑盒调用。它不修改公共 API、提示词、工具协议、AgentState 或默认策略；executor 不传 observer，每个 datapoint 只调用一次 `generate()`，target 在调用结束后才由 evaluator 读取。
+评测系统从人工维护的 raw CLI 与 golden 出发，经 Laminar `evaluate(...)` 对现有公共 API 做非侵入式黑盒调用。它不修改公共 API、提示词、工具协议、AgentState 或默认策略；executor 不传 observer，每个 datapoint 只调用一次生成入口，target 在调用结束后才由 evaluator 读取。默认调用 `TtpGenerator.generate()`；`--template-only` 改调 `TtpGenerator.generate_from_schema()` 并注入由 golden 重建的 Schema，两者都是公共 API。
 
 版本化定义位于 `evals/ttp_generation/`，确定性加载与评分位于 `src/cli_parser_agent/evaluation.py`，人工入口为 `scripts/run_agent_evaluation.py`。`docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只用于从 raw capture 制作 golden；`docs/skills/run-ttp-agent-evaluation/` 则将指定配置的真实评测与 Laminar 只读分析流程固化为开发期 Skill。
 
@@ -44,9 +44,21 @@ uv run python scripts/run_agent_evaluation.py run --case ntc.cisco_ios.show_inte
 
 `--trials` 范围 `1-10`、默认 `1`；`--concurrency` 范围 `1-4`、默认 `1`；`--name` 可覆盖 Evaluation 显示名。Harness 不 resume，也不重试失败 trial。退出码 `0` 表示全部 trial 严格通过且遥测完整，`1` 表示正常完成但至少一个 trial 未通过，`2` 表示定义、配置、Laminar 或归档错误，`130` 表示人工取消。
 
+### Template-only 模式
+
+`--template-only` 把每个 case 的 golden `schema_contract` 机械重建为闭合 Draft 2020-12 Schema 并注入，executor 改调 `generate_from_schema()`：
+
+```text
+uv run python scripts/run_agent_evaluation.py run --suite baseline --template-only
+```
+
+重建是 `schema_signature` 的精确逆（对全部 15 个 case 验证 `schema_signature(schema_from_contract(c)) == c`），因此 `schema_contract_match` 恒为 `1`，评分 target 与默认模式完全一致。它的用途是**排除 Schema 阶段字段命名差异后单独衡量 TTP 质量**：实测中曾出现模板逻辑合理、仅因模型把字段命名为 `interface` 而 golden 为 `name`（或数组命名 `entries` 而 golden 为 `inventory`）就整例判 0 的情况。
+
+该模式在本地摘要中记为 `template_only: true`。它的分数只与同模式运行可比，不能与两阶段结果直接比较，也不替代两阶段的最终验收。默认仍是两阶段模式。
+
 ### 高预算诊断运行
 
-默认 `360` 秒、`13` 轮和 `9` 次 TTP 提交用于常规验收。需要观察完整修正链时，使用独立进程和单并发的高预算配置；诊断主运行固定为总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交和单次模型超时 `120` 秒，避免时间预算放大后仍被较小的阶段预算截断：
+默认 `900` 秒、`13` 轮和 `9` 次 TTP 提交用于常规验收。需要观察完整修正链时，使用独立进程和单并发的高预算配置；诊断主运行固定为总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交和单次模型超时 `120` 秒，避免时间预算放大后仍被较小的阶段预算截断：
 
 ```powershell
 $env:CLI_PARSER_GENERATION_TIMEOUT_SECONDS = "7200"

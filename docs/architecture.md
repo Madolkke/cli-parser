@@ -53,11 +53,11 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 模型构造层不识别供应商主机名，不发送 `thinking.type=disabled` 或其他供应商专用覆盖，也不根据异常正文推断模型是否支持工具。两个独立模型请求都只携带所属 Toolkit 的阶段工具 Schema 并省略 `tool_choice`；正常完成却未调用工具属于可观测的协议行为，而不是供应商能力结论。
 
-默认执行限制是总时长 `360` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。达到有效 `max_ttp_submissions` 上限的模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
+默认执行限制是总时长 `900` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。剩余时长不足以完成一次模型调用时不再开启新轮次，请求直接以 `generation_timeout` 结束；超时后的取消清理有固定宽限期，不会让被取消的阶段再发起一次模型请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。达到有效 `max_ttp_submissions` 上限的模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v18-pattern-arity-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v19-tool-arity-superseded-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在 records 返回后逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。Schema 提示要求逐实例枚举判定 `required`。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -191,13 +191,20 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 
 ```python
 result = await generator.generate(request, observer=observer)
+result = await generator.generate_from_schema(template_request, observer=observer)
 ```
+
+`generate` 运行完整的两阶段流程。`generate_from_schema` 接受调用方给定的结果 Schema，跳过 Schema 阶段并只运行 TTP 阶段，返回同一个 `GenerationResult`；它用于固定 Schema 以单独验证模板生成质量。
 
 `ProgressObserver` 是从包顶层导出的 `Callable[[agentscope.event.AgentEvent], None]`。`observer` 是可选的仅关键字调试回调：省略时不创建额外事件转录，现有性能、控制流和公共结果契约保持不变；传入时回调同步接收原始 AgentScope `AgentEvent` 和项目 `CustomEvent`。调用方不得阻塞回调或用它控制生成，业务代码也不得依赖调试事件作为稳定结果格式。
 
 ```text
 GenerationRequest
   command_outputs: list[str]          # 1-5，每项非空白且 <= 1 MiB UTF-8
+
+TemplateRequest                       # 仅 generate_from_schema 使用
+  command_outputs: list[str]          # 约束同 GenerationRequest
+  result_schema: dict                 # Draft 2020-12，根 type=object；直接冻结
 
 ArtifactBundle
   ttp_template: str

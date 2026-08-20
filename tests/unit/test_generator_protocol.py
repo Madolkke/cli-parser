@@ -1056,7 +1056,9 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
         request: GenerationRequest,
         *,
         request_id: str,
+        injected_schema: Any = None,
     ) -> GenerationResult:
+        del injected_schema
         return GenerationResult(
             status="success",
             artifact=ArtifactBundle(
@@ -1123,7 +1125,9 @@ async def test_root_trace_records_only_extra_body_hash(
         request: GenerationRequest,
         *,
         request_id: str,
+        injected_schema: Any = None,
     ) -> GenerationResult:
+        del injected_schema
         return GenerationResult(
             status="failed",
             metadata=GenerationMetadata(

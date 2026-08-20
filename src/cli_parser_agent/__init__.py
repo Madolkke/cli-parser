@@ -8,6 +8,7 @@ from .ttp_generation.contracts import (
     GenerationRequest,
     GenerationResult,
     LastAttempt,
+    TemplateRequest,
     ValidationIssue,
 )
 from .ttp_generation.generator import TtpGenerator
@@ -21,6 +22,7 @@ __all__ = [
     "GenerationResult",
     "LastAttempt",
     "ProgressObserver",
+    "TemplateRequest",
     "TtpGeneratorSettings",
     "TtpGenerator",
     "ValidationIssue",

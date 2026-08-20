@@ -116,7 +116,7 @@ class GenerationPolicy(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
 
-    total_timeout_seconds: float = Field(default=360.0, gt=0)
+    total_timeout_seconds: float = Field(default=900.0, gt=0)
     max_agent_rounds: int = Field(default=13, ge=1)
     max_ttp_submissions: int = Field(default=9, ge=1)
     max_schema_no_tool_retries: int = Field(default=3, ge=0)

@@ -44,6 +44,7 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     project_candidate_trajectory,
     project_human_reviews,
     safe_trial_facts,
+    schema_from_contract,
     score_executor_output,
     score_executor_output_details,
     select_cases,
@@ -238,6 +239,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--trials", type=_trials, default=1)
     run.add_argument("--concurrency", type=_concurrency, default=1)
     run.add_argument("--name")
+    run.add_argument(
+        "--template-only",
+        action="store_true",
+        help=(
+            "pin each case's golden schema and run the TTP phase alone, "
+            "isolating template quality from schema field naming"
+        ),
+    )
     review = commands.add_parser(
         "review",
         help="write one bounded HumanEvaluator label to an existing Trace",
@@ -439,21 +448,31 @@ def _materialize_datapoints(
     *,
     trials: int,
     config_fingerprint: str,
+    template_only: bool = False,
 ) -> list[Any]:
     from lmnr.sdk.types import Datapoint
 
     datapoints: list[Any] = []
     for case in cases:
+        # In template-only mode the golden contract is rebuilt into a concrete
+        # schema and pinned, so the run measures TTP quality alone instead of
+        # also measuring whether the Schema phase guessed the same field names.
+        injected_schema = (
+            schema_from_contract(case.target.schema_contract) if template_only else None
+        )
         for trial_index in range(trials):
             key = _trial_key(case.id, trial_index)
+            data: dict[str, Any] = {
+                "case_id": case.id,
+                "trial_index": trial_index,
+                "trial_key": key,
+                "command_outputs": [item.text for item in case.inputs],
+            }
+            if injected_schema is not None:
+                data["result_schema"] = injected_schema
             datapoints.append(
                 Datapoint(
-                    data={
-                        "case_id": case.id,
-                        "trial_index": trial_index,
-                        "trial_key": key,
-                        "command_outputs": [item.text for item in case.inputs],
-                    },
+                    data=data,
                     target=case.target.as_datapoint_target(),
                     metadata={
                         "case_id": case.id,
@@ -465,6 +484,7 @@ def _materialize_datapoints(
                         "target_sha256": case.target.sha256,
                         "config_fingerprint": config_fingerprint,
                         "single_input": True,
+                        "template_only": template_only,
                     },
                 ),
             )
@@ -731,6 +751,55 @@ def record_human_review(
     Laminar.flush()
 
 
+def _project_trace_telemetry(trace: Mapping[str, Any]) -> dict[str, Any]:
+    """Split one trace projection into scalar metrics and nested reports.
+
+    ``_telemetry_for_trace`` merges ``summarize_span_metrics`` into the mapping
+    it stores under ``trace["spans"]``, so the structural projections live one
+    level below the trace itself.  ``metrics`` feeds ``_aggregate_metrics``,
+    which only consumes finite scalars, so nested projections are reported
+    beside it rather than inside it.
+    """
+
+    span_metrics = trace.get("spans", {})
+    if not isinstance(span_metrics, Mapping):
+        span_metrics = {}
+    segment_stats = span_metrics.get("segment_stats", {})
+    if not isinstance(segment_stats, Mapping):
+        segment_stats = {}
+    token_growth = span_metrics.get("token_growth", {})
+    if not isinstance(token_growth, Mapping):
+        token_growth = {}
+
+    scalar_metrics = {
+        name: value
+        for name, value in span_metrics.items()
+        if not isinstance(value, Mapping | list)
+    }
+    scalar_metrics.update(
+        {
+            name: value
+            for name, value in token_growth.items()
+            if isinstance(value, int | float) and not isinstance(value, bool)
+        },
+    )
+    return {
+        "scalar_metrics": scalar_metrics,
+        "segment_stats": dict(segment_stats),
+        "token_growth": dict(token_growth),
+        "duration_coverage": {
+            name: span_metrics.get(name, 0.0)
+            for name in (
+                "explained_duration_seconds",
+                "unexplained_duration_seconds",
+                "explained_duration_ratio",
+                "unexplained_duration_ratio",
+            )
+        },
+        "reported_trace_id": span_metrics.get("reported_trace_id"),
+    }
+
+
 def _telemetry_complete(telemetry: Mapping[str, Any]) -> bool:
     base_complete = all(
         int(telemetry.get(name, 0) or 0) >= 1
@@ -977,6 +1046,7 @@ def _build_local_summary(
     evaluation_url: str,
     config_fingerprint: str,
     telemetry_complete: bool,
+    template_only: bool = False,
 ) -> dict[str, Any]:
     all_passed = all(trial.get("strict_pass") is True for trial in trials)
     return {
@@ -991,6 +1061,9 @@ def _build_local_summary(
         },
         "config_fingerprint": config_fingerprint,
         "single_input": True,
+        # Template-only runs pin the golden schema, so their scores are only
+        # comparable to other template-only runs.
+        "template_only": template_only,
         "git": _git_facts(),
         "trial_count": len(trials),
         "strict_pass_count": sum(
@@ -1005,7 +1078,7 @@ def _build_local_summary(
 async def _run_evaluation(args: argparse.Namespace) -> int:
     from lmnr import HumanEvaluator, Instruments, Laminar, evaluate
 
-    from cli_parser_agent import GenerationRequest, TtpGenerator
+    from cli_parser_agent import GenerationRequest, TemplateRequest, TtpGenerator
     from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION
 
     manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
@@ -1030,6 +1103,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
         cases,
         trials=args.trials,
         config_fingerprint=config_fingerprint,
+        template_only=args.template_only,
     )
     generator = TtpGenerator(settings=settings, policy=policy)
     trial_facts: dict[str, dict[str, Any]] = {}
@@ -1050,12 +1124,22 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
             },
         )
         try:
-            request = GenerationRequest(command_outputs=outputs)
-            result = await generator.generate(request)
+            injected_schema = data.get("result_schema")
+            if injected_schema is None:
+                request = GenerationRequest(command_outputs=outputs)
+                result = await generator.generate(request)
+                command_outputs = request.command_outputs
+            else:
+                template_request = TemplateRequest(
+                    command_outputs=outputs,
+                    result_schema=injected_schema,
+                )
+                result = await generator.generate_from_schema(template_request)
+                command_outputs = template_request.command_outputs
             acceptance = await asyncio.to_thread(
                 independent_acceptance,
                 result,
-                request.command_outputs,
+                command_outputs,
                 policy,
             )
             return {
@@ -1220,21 +1304,16 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                 },
             )
             trace = telemetry.get(key, {})
-            span_metrics = trace.get("spans", {})
-            combined_metrics = {**facts["metrics"], **span_metrics}
-            token_growth = trace.get("token_growth", {})
-            if isinstance(token_growth, Mapping):
-                combined_metrics.update(
-                    {
-                        key: value
-                        for key, value in token_growth.items()
-                        if isinstance(value, int | float)
-                        and not isinstance(value, bool)
-                    },
-                )
+            projection = _project_trace_telemetry(trace)
+            segment_stats = projection["segment_stats"]
+            token_growth = projection["token_growth"]
+            combined_metrics = {
+                **facts["metrics"],
+                **projection["scalar_metrics"],
+            }
             complete = trace.get("complete") is True
-            reported_trace_id = facts["reported_trace_id"] or span_metrics.get(
-                "reported_trace_id",
+            reported_trace_id = (
+                facts["reported_trace_id"] or projection["reported_trace_id"]
             )
             trace_id_consistent = not reported_trace_id or (
                 reported_trace_id == trace.get("trace_id")
@@ -1270,17 +1349,9 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
                         "issue_taxonomy",
                         issue_taxonomy(()),
                     ),
-                    "segment_stats": trace.get("segment_stats", {}),
-                    "token_growth": trace.get("token_growth", {}),
-                    "duration_coverage": {
-                        key: trace.get(key, 0.0)
-                        for key in (
-                            "explained_duration_seconds",
-                            "unexplained_duration_seconds",
-                            "explained_duration_ratio",
-                            "unexplained_duration_ratio",
-                        )
-                    },
+                    "segment_stats": segment_stats,
+                    "token_growth": token_growth,
+                    "duration_coverage": projection["duration_coverage"],
                     "candidate_trajectory": trace.get(
                         "candidate_trajectory",
                         {
@@ -1300,6 +1371,7 @@ async def _run_evaluation(args: argparse.Namespace) -> int:
         evaluation_url=evaluation_result["url"],
         config_fingerprint=config_fingerprint,
         telemetry_complete=telemetry_complete,
+        template_only=args.template_only,
     )
     result_path = run_directory / "summary.json"
     _write_json(result_path, summary)

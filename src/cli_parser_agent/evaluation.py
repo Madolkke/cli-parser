@@ -612,6 +612,62 @@ def schema_signature(schema: Mapping[str, Any]) -> dict[str, SchemaNode]:
     return collected
 
 
+def schema_from_contract(nodes: Sequence[SchemaNode]) -> dict[str, Any]:
+    """Rebuild a closed Draft 2020-12 schema from a golden structural contract.
+
+    This is the inverse of :func:`schema_signature` and lets the template-only
+    mode pin each case's golden schema, so TTP quality can be measured without
+    the field-naming noise the Schema phase would otherwise introduce.
+    """
+
+    by_path = {node.path: node for node in nodes}
+    if len(by_path) != len(nodes):
+        raise HarnessError("schema contract contains duplicate paths")
+    root = by_path.get("/")
+    if root is None or root.type != "object":
+        raise HarnessError("schema contract must declare an object root")
+
+    children: dict[str, list[SchemaNode]] = {path: [] for path in by_path}
+    for node in nodes:
+        if node.path == "/":
+            continue
+        parent = _parent_path(node.path)
+        if parent is None or parent not in children:
+            raise HarnessError(f"schema contract node has no parent at {node.path}")
+        children[parent].append(node)
+
+    def build(path: str) -> dict[str, Any]:
+        node = by_path[path]
+        if node.type == "object":
+            properties: dict[str, Any] = {}
+            required: list[str] = []
+            for child in children[path]:
+                name = child.path.rsplit("/", 1)[-1]
+                if name == "*":
+                    raise HarnessError(f"object schema has an array child at {path}")
+                properties[name] = build(child.path)
+                if child.required:
+                    required.append(name)
+            schema: dict[str, Any] = {
+                "type": "object",
+                "properties": properties,
+                "additionalProperties": False,
+            }
+            if required:
+                schema["required"] = sorted(required)
+            return schema
+        if node.type == "array":
+            items = [child for child in children[path] if child.path.endswith("/*")]
+            if len(items) != 1:
+                raise HarnessError(
+                    f"array schema needs exactly one items node at {path}",
+                )
+            return {"type": "array", "items": build(items[0].path)}
+        return {"type": node.type}
+
+    return build("/")
+
+
 def _canonical_json(value: Any) -> str:
     return json.dumps(
         value,

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import json
+import time
 from contextlib import contextmanager
 from copy import deepcopy
 from types import SimpleNamespace
@@ -27,6 +28,7 @@ from agentscope.tool import Toolkit
 from cli_parser_agent.ttp_generation.agent import runner as runner_module
 from cli_parser_agent.ttp_generation.agent.prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
+    SUPERSEDED_TTP_RESULT_NOTICE,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
 from cli_parser_agent.ttp_generation.agent.runner import run_generation_phase
@@ -475,6 +477,78 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert session.records == ({"value": "one"},)
 
 
+async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() -> None:
+    """Only the newest submission keeps its records.
+
+    Every ``submit_ttp_template`` result carries the full records JSON for all
+    inputs and AgentScope only appends to the context, so superseded results
+    were re-sent on every later round (3.9k to 92k input tokens observed).
+    The review contract only requires the current result to be complete.
+    """
+
+    records_by_submission = [
+        ({"value": "first-attempt"},),
+        ({"value": "second-attempt"},),
+        ({"value": "one"},),
+    ]
+    submissions: list[str] = []
+
+    def validate_template(candidate: Any) -> ValidatorOutcome:
+        index = len(submissions)
+        submissions.append(candidate.ttp_template)
+        return ValidatorOutcome(
+            valid=index == len(records_by_submission) - 1,
+            records=records_by_submission[index],
+        )
+
+    model = _ScriptedModel(
+        [
+            _template_call("t1", "first: {{ value }}"),
+            _template_call("t2", "second: {{ value }}"),
+            _template_call("t3", "value: {{ value }}"),
+            _finish_call(),
+        ],
+    )
+    session = _session(max_agent_rounds=6)
+    session.template_validator = validate_template
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+
+    await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    # The final request shows two superseded results and one intact result.
+    final_messages = model.calls[-1]["messages"]
+    tool_results = [
+        block
+        for message in final_messages
+        for block in message.content
+        if isinstance(block, ToolResultBlock)
+        and block.name == SUBMIT_TEMPLATE_TOOL_NAME
+    ]
+    assert len(tool_results) == 3
+
+    for superseded in tool_results[:-1]:
+        assert len(superseded.output) == 1
+        assert superseded.output[0].text == SUPERSEDED_TTP_RESULT_NOTICE
+
+    newest = tool_results[-1]
+    assert json.loads(newest.output[0].text) == [{"value": "one"}]
+
+    # Superseded bodies must not leak diagnostics, and source data is untouched.
+    collapsed_text = "\n".join(
+        block.output[0].text for block in tool_results[:-1]
+    )
+    for forbidden in ("accepted", "issues", "remaining_submissions", "next_action"):
+        assert forbidden not in collapsed_text
+    assert "first-attempt" not in collapsed_text
+    assert "second-attempt" not in collapsed_text
+
+
 async def test_valid_template_submission_waits_for_explicit_finish() -> None:
     model = _ScriptedModel([_template_call(), _finish_call()])
     session = _session(max_agent_rounds=3)
@@ -693,6 +767,115 @@ async def test_no_tool_retry_cannot_exceed_global_round_budget() -> None:
     assert session.schema_no_tool_responses == 1
     assert session.schema_no_tool_retries == 0
     assert session.agent_rounds == 1
+
+
+async def test_round_is_not_started_without_time_to_finish_it() -> None:
+    """A round that cannot fit one model call must not be started.
+
+    Observed live runs overran a 360s budget by up to 374s because the loop
+    only checked the round count, so a round beginning near the deadline ran
+    to completion well past it.
+    """
+
+    model = _ScriptedModel([_response(TextBlock(text="never requested"))])
+    session = _session(max_agent_rounds=12)
+    session.deadline_monotonic = time.monotonic() + 1.0
+    session.min_round_seconds = 60.0
+    agent = _agent(model, session, "schema")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "schema",
+    )
+
+    assert session.agent_rounds == 0
+    assert model.calls == []
+    assert session.terminal_reason == "generation_timeout"
+    assert not outcome.phase_completed
+
+
+async def test_round_still_starts_when_enough_budget_remains() -> None:
+    model = _ScriptedModel([_schema_call()])
+    session = _session(max_agent_rounds=12)
+    session.deadline_monotonic = time.monotonic() + 600.0
+    session.min_round_seconds = 60.0
+    agent = _agent(model, session, "schema")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "schema",
+    )
+
+    assert session.agent_rounds == 1
+    assert session.terminal_reason != "generation_timeout"
+    assert outcome.phase_completed
+
+
+async def test_missing_deadline_keeps_rounds_only_behaviour() -> None:
+    model = _ScriptedModel([_schema_call()])
+    session = _session(max_agent_rounds=12)
+    session.deadline_monotonic = None
+    session.min_round_seconds = 60.0
+    agent = _agent(model, session, "schema")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "schema",
+    )
+
+    assert outcome.phase_completed
+    assert session.agent_rounds == 1
+
+
+async def test_deadline_stops_agentscope_inner_react_loop_at_a_tool_result() -> None:
+    """The budget must also bind inside a single ``reply_stream``.
+
+    AgentScope's own ReAct loop (`_agent.py` ``while cur_iter < max_iters``)
+    issues further model calls within one reply, so a guard that only runs
+    between outer iterations never fires during the common timeout path.
+    """
+
+    model = _ScriptedModel(
+        [
+            _template_call("t1", "a: {{ value }}"),
+            # Any further call means the deadline was ignored.
+            _template_call("t2", "b: {{ value }}"),
+            _template_call("t3", "c: {{ value }}"),
+        ],
+    )
+    session = _session(max_agent_rounds=8)
+
+    def slow_validator(candidate: Any) -> ValidatorOutcome:
+        # Burn the remaining budget while the first submission is validated.
+        time.sleep(0.8)
+        return ValidatorOutcome(valid=False, records=({"value": "x"},))
+
+    session.template_validator = slow_validator
+    _freeze_schema(session)
+    # Wide margins on both sides: the first round must comfortably start
+    # (remaining 2.0 >= 0.5) and the second must comfortably be refused
+    # (remaining ~1.2 - 0.8 < 0.5) even on a loaded machine.
+    session.min_round_seconds = 0.5
+    session.deadline_monotonic = time.monotonic() + 1.2
+    agent = _agent(model, session, "ttp")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    assert len(model.calls) == 1
+    assert session.ttp_submissions == 1
+    assert session.terminal_reason == "generation_timeout"
+    assert not outcome.phase_completed
 
 
 async def test_malformed_submission_tool_call_is_counted_separately() -> None:

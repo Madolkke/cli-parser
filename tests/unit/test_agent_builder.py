@@ -4,6 +4,7 @@ import logging
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import openai
 import pytest
 from agentscope.model import OpenAIChatModel
@@ -125,8 +126,44 @@ def test_builder_injects_an_unverified_http_client_only_when_opted_in(
         phase="schema",
     )
 
-    assert captured == {"verify": False, "timeout": 60.0}
+    assert captured == {"verify": False, "timeout": httpx.Timeout(60.0)}
     assert agent.model.client_kwargs["http_client"] is http_client
+
+
+def test_model_timeout_applies_to_every_phase_and_retries_stay_single_layer() -> None:
+    """Timeout reaches every httpx phase and retry accounting is not doubled.
+
+    This does NOT make ``model_timeout_seconds`` a total per-call cap: httpx
+    has no total-request timeout, and ``read`` only bounds the gap between
+    reads, so a steadily streaming slow response is never cut off (a 599s call
+    was observed live under a 120s setting).  The real per-call backstop is the
+    generation deadline plus the pre-round guard, not this value.
+    """
+
+    settings = TtpGeneratorSettings(
+        api_key="test-key",
+        model_name="test-model",
+        model_timeout_seconds=45.0,
+        model_max_retries=2,
+    )
+
+    agent = build_agent(
+        settings=settings,
+        policy=GenerationPolicy(),
+        session=_build_session(),
+        phase="schema",
+    )
+
+    timeout = agent.model.client_kwargs["timeout"]
+    assert isinstance(timeout, httpx.Timeout)
+    assert timeout.connect == 45.0
+    assert timeout.read == 45.0
+    assert timeout.write == 45.0
+    assert timeout.pool == 45.0
+
+    # Retry accounting stays with AgentScope only.
+    assert agent.model.client_kwargs["max_retries"] == 0
+    assert agent.model.max_retries == settings.model_max_retries
 
 
 def test_builder_does_not_reconfigure_request_session_policy() -> None:

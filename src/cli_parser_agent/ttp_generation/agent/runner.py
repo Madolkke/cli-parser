@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import time
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -25,12 +24,21 @@ from agentscope.event import (
     ToolResultEndEvent,
     ToolResultStartEvent,
 )
-from agentscope.message import ToolResultState, UserMsg
+from agentscope.message import (
+    TextBlock,
+    ToolResultBlock,
+    ToolResultState,
+    UserMsg,
+)
 from agentscope.model import FinishedReason
 
 from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
-from .prompt import SCHEMA_NO_TOOL_RETRY_PROMPT, TTP_NO_TOOL_RETRY_PROMPT
+from .prompt import (
+    SCHEMA_NO_TOOL_RETRY_PROMPT,
+    SUPERSEDED_TTP_RESULT_NOTICE,
+    TTP_NO_TOOL_RETRY_PROMPT,
+)
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -104,6 +112,48 @@ def _submission_count(session: GenerationSession, tool_name: str) -> int:
     if tool_name == SUBMIT_TEMPLATE_TOOL_NAME:
         return session.ttp_submissions
     return 0
+
+
+def _collapse_superseded_ttp_results(agent: Any) -> int:
+    """Replace every TTP result body except the newest with a fixed notice.
+
+    Each ``submit_ttp_template`` result carries the full records JSON for all
+    inputs, and AgentScope only appends to the context, so every superseded
+    submission is re-sent and re-billed on each later round.  Live runs grew
+    from 3.9k to 92k input tokens across TTP rounds this way.
+
+    Only results the model has already acted on are collapsed; the newest one
+    keeps its complete records, so the review contract is unchanged.  The
+    notice is a fixed string and carries no accepted flag, issue, budget, or
+    candidate state.
+    """
+
+    results: list[Any] = []
+    for message in agent.state.context:
+        content = getattr(message, "content", None)
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, ToolResultBlock):
+                continue
+            if block.name != SUBMIT_TEMPLATE_TOOL_NAME:
+                continue
+            results.append(block)
+
+    collapsed = 0
+    # Keep the newest submission intact; collapse everything before it.
+    for block in results[:-1]:
+        output = block.output
+        if not isinstance(output, list) or not output:
+            continue
+        if (
+            len(output) == 1
+            and getattr(output[0], "text", None) == SUPERSEDED_TTP_RESULT_NOTICE
+        ):
+            continue
+        block.output = [TextBlock(text=SUPERSEDED_TTP_RESULT_NOTICE)]
+        collapsed += 1
+    return collapsed
 
 
 def _retry_message(phase: GenerationPhase) -> UserMsg:
@@ -241,9 +291,25 @@ async def run_generation_phase(
     round_outcome: str = "success"
 
     def remaining_seconds() -> float:
-        if session.deadline_monotonic is None:
-            return 0.0
-        return max(0.0, session.deadline_monotonic - time.monotonic())
+        return session.remaining_seconds()
+
+    def stop_for_deadline() -> bool:
+        """Refuse a new round that cannot finish before the shared deadline."""
+
+        if session.has_time_for_another_round():
+            return False
+        session.terminal_reason = "generation_timeout"
+        if progress is not None:
+            progress.custom(
+                "cli_parser.round.skipped",
+                {
+                    "reason": "insufficient_remaining_time",
+                    "remaining_seconds": remaining_seconds(),
+                },
+                phase=phase,
+                sensitive=False,
+            )
+        return True
 
     def close_round() -> None:
         nonlocal round_span_manager
@@ -282,6 +348,8 @@ async def run_generation_phase(
         )
 
     while session.agent_rounds < session.max_agent_rounds:
+        if stop_for_deadline():
+            break
         remaining_rounds = session.max_agent_rounds - session.agent_rounds
         agent.react_config.max_iters = remaining_rounds
 
@@ -402,6 +470,43 @@ async def run_generation_phase(
                                 last_model_call_invalid = True
                     elif pending_expected:
                         last_model_call_invalid = False
+
+                    if (
+                        pending is not None
+                        and pending[0] == SUBMIT_TEMPLATE_TOOL_NAME
+                    ):
+                        # The newest result is already in context, so every
+                        # earlier submission has been superseded.  Collapse
+                        # them before the next round re-sends them.
+                        collapsed = _collapse_superseded_ttp_results(agent)
+                        if collapsed and progress is not None:
+                            progress.custom(
+                                "cli_parser.context.superseded_results_collapsed",
+                                {"collapsed_count": collapsed},
+                                phase=phase,
+                                sensitive=False,
+                            )
+
+                    # AgentScope's own ReAct loop issues further model calls
+                    # inside this single reply, so the budget must also be
+                    # enforced here.  A tool result is the safe suspension
+                    # point; ``_terminal_tool_observed`` stops the reply once
+                    # the timeout reason is set.
+                    if (
+                        session.terminal_reason is None
+                        and not session.has_time_for_another_round()
+                    ):
+                        session.terminal_reason = "generation_timeout"
+                        if progress is not None:
+                            progress.custom(
+                                "cli_parser.round.skipped",
+                                {
+                                    "reason": "insufficient_remaining_time",
+                                    "remaining_seconds": remaining_seconds(),
+                                },
+                                phase=phase,
+                                sensitive=False,
+                            )
 
                     if (
                         _terminal_tool_observed(

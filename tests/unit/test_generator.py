@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from types import SimpleNamespace
 
 import pytest
@@ -174,6 +174,90 @@ async def test_deadline_watchdog_cancels_and_drains_its_child() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deadline_drain_is_bounded_when_the_child_swallows_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """AgentScope converts cancellation into an ordinary INTERRUPTED return.
+
+    An unresponsive phase task must therefore be abandoned after the grace
+    period instead of being awaited indefinitely, otherwise the post-deadline
+    drain absorbs a whole extra model round.
+    """
+
+    monkeypatch.setattr(workflow_module, "_DRAIN_GRACE_SECONDS", 0.06)
+    swallowed: list[int] = []
+    released = asyncio.Event()
+
+    async def operation() -> None:
+        # Absorb every cancellation the drain delivers, then keep running.
+        while not released.is_set():
+            try:
+                await asyncio.sleep(3600)
+            except asyncio.CancelledError:
+                swallowed.append(1)
+
+    started = time.monotonic()
+    completed, result = await _run_before_deadline(
+        operation,
+        deadline_monotonic=time.monotonic() + 0.01,
+    )
+    elapsed = time.monotonic() - started
+
+    assert completed is False
+    assert result is None
+    assert swallowed, "the child must have absorbed at least one cancellation"
+    # Without the bound this await would never return on its own.
+    assert elapsed < 1.0
+
+    # Let the abandoned task retire so it cannot outlive the event loop.
+    released.set()
+    await asyncio.sleep(0.05)
+
+
+@pytest.mark.asyncio
+async def test_deadline_drain_reports_whether_the_child_actually_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    finishes: list[dict[str, object]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: object):
+        yield SimpleNamespace(enabled=True, creates_trace=False)
+
+    def finish(**kwargs: object) -> None:
+        finishes.append(kwargs)
+
+    monkeypatch.setattr(workflow_module, "start_laminar_span", start)
+    monkeypatch.setattr(workflow_module, "finish_laminar_span", finish)
+    monkeypatch.setattr(workflow_module, "_DRAIN_GRACE_SECONDS", 0.06)
+
+    async def cooperative() -> None:
+        await asyncio.Event().wait()
+
+    await _run_before_deadline(
+        cooperative,
+        deadline_monotonic=time.monotonic() + 0.01,
+    )
+    assert finishes[-1]["attributes"]["drained"] is True
+
+    released = asyncio.Event()
+
+    async def stubborn() -> None:
+        while not released.is_set():
+            with suppress(asyncio.CancelledError):
+                await asyncio.sleep(3600)
+
+    await _run_before_deadline(
+        stubborn,
+        deadline_monotonic=time.monotonic() + 0.01,
+    )
+    assert finishes[-1]["attributes"]["drained"] is False
+
+    released.set()
+    await asyncio.sleep(0.05)
+
+
+@pytest.mark.asyncio
 async def test_deadline_cleanup_span_is_emitted_without_operation_content(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -283,3 +367,89 @@ async def test_sampling_rejects_marker_only_or_missing_input_views() -> None:
 
     assert fits is False
     assert any(not item.text for item in sampled)
+
+
+def _template_only_workflow(
+    schema: dict[str, object],
+    *,
+    outputs: list[str] | None = None,
+) -> workflow_module._GenerationWorkflow:
+    from cli_parser_agent.ttp_generation.contracts import GenerationRequest
+    from cli_parser_agent.ttp_generation.progress import ProgressEmitter
+
+    return workflow_module._GenerationWorkflow(
+        settings=_settings(),
+        policy=workflow_module.GenerationPolicy(),
+        request=GenerationRequest(command_outputs=outputs or ["value: one"]),
+        request_id="request-1",
+        progress=ProgressEmitter(request_id="request-1"),
+        injected_schema=schema,
+    )
+
+
+def _closed_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": {"value": {"type": "string"}},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+
+
+def test_injected_schema_is_frozen_without_running_the_schema_phase() -> None:
+    schema = _closed_schema()
+    workflow = _template_only_workflow(schema)
+
+    assert workflow.session.frozen_schema is None
+    assert workflow._freeze_injected_schema(workflow.injected_schema) is None
+    assert workflow.session.schema_is_frozen
+    assert workflow.session.frozen_schema == schema
+    # Defensive copy: later mutation of the caller's dict must not leak in.
+    assert workflow.session.frozen_schema is not schema
+    # The Schema phase never ran, so its counters stay at zero.
+    assert workflow.session.schema_agent_rounds == 0
+    assert workflow.session.schema_submissions == 0
+
+
+def test_injected_schema_still_enforces_the_closed_subset() -> None:
+    # additionalProperties is absent, so the object is open.
+    workflow = _template_only_workflow(
+        {"type": "object", "properties": {"value": {"type": "string"}}},
+    )
+
+    result = workflow._freeze_injected_schema(workflow.injected_schema)
+
+    assert result is not None
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "invalid_injected_schema"
+    assert [issue.code for issue in result.issues] == ["schema.object_not_closed"]
+    assert workflow.session.frozen_schema is None
+
+
+def test_template_only_acceptance_does_not_require_field_evidence() -> None:
+    """Regression guard for the one deliberate validation difference.
+
+    A caller-supplied schema has no per-leaf evidence, so acceptance must run
+    the schema-only check.  Restoring ``validate_schema_proposal`` here would
+    fail every leaf with ``schema.evidence_missing``.
+    """
+
+    workflow = _template_only_workflow(_closed_schema())
+    assert workflow._freeze_injected_schema(workflow.injected_schema) is None
+    assert workflow.session.field_evidence == ()
+
+    assert workflow._validate_frozen_schema() == []
+
+
+def test_metadata_round_counts_stay_consistent_without_a_schema_phase() -> None:
+    workflow = _template_only_workflow(_closed_schema())
+    workflow._freeze_injected_schema(workflow.injected_schema)
+    workflow.session.record_agent_round("ttp")
+    workflow.session.record_agent_round("ttp")
+
+    metadata = workflow._metadata("success")
+
+    assert metadata.schema_agent_rounds == 0
+    assert metadata.ttp_agent_rounds == 2
+    assert metadata.agent_rounds == 2
+    assert metadata.schema_sampled_char_count == 0

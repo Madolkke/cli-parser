@@ -18,7 +18,7 @@ from ..observability import (
     start_laminar_span,
 )
 from .agent import PROMPT_VERSION
-from .contracts import GenerationRequest, GenerationResult
+from .contracts import GenerationRequest, GenerationResult, TemplateRequest
 from .progress import ProgressEmitter, ProgressObserver
 from .workflow import _GenerationWorkflow
 
@@ -70,7 +70,40 @@ class TtpGenerator:
     ) -> GenerationResult:
         """Trace one request and preserve the framework-neutral public API."""
 
-        request = GenerationRequest.model_validate(request)
+        return await self._traced_generate(
+            GenerationRequest.model_validate(request),
+            observer=observer,
+        )
+
+    async def generate_from_schema(
+        self,
+        request: TemplateRequest,
+        *,
+        observer: ProgressObserver | None = None,
+    ) -> GenerationResult:
+        """Run the TTP phase alone against a caller-supplied result schema.
+
+        The schema is frozen as given instead of being inferred, so the Schema
+        phase is skipped entirely.  Acceptance and TTP validation are identical
+        to :meth:`generate`, which keeps the two paths comparable in evaluation.
+        """
+
+        request = TemplateRequest.model_validate(request)
+        return await self._traced_generate(
+            GenerationRequest(command_outputs=request.command_outputs),
+            observer=observer,
+            injected_schema=request.result_schema,
+        )
+
+    async def _traced_generate(
+        self,
+        request: GenerationRequest,
+        *,
+        observer: ProgressObserver | None,
+        injected_schema: Mapping[str, object] | None = None,
+    ) -> GenerationResult:
+        """Trace one request, whether its schema is inferred or injected."""
+
         request_id = str(uuid4())
         progress = ProgressEmitter(request_id=request_id, observer=observer)
         base_attributes = {
@@ -93,6 +126,7 @@ class TtpGenerator:
             ),
             "policy_model_input_char_budget": self.policy.model_input_char_budget,
             "policy_max_schema_evidence": self.policy.max_schema_evidence,
+            "schema_injected": injected_schema is not None,
         }
         if progress.enabled:
             progress.custom(
@@ -117,12 +151,14 @@ class TtpGenerator:
                     result = await self._generate(
                         request,
                         request_id=request_id,
+                        injected_schema=injected_schema,
                     )
                 else:
                     result = await self._generate(
                         request,
                         request_id=request_id,
                         progress=progress,
+                        injected_schema=injected_schema,
                     )
             except asyncio.CancelledError as error:
                 if progress.enabled:
@@ -252,6 +288,7 @@ class TtpGenerator:
         *,
         request_id: str,
         progress: ProgressEmitter | None = None,
+        injected_schema: Mapping[str, object] | None = None,
     ) -> GenerationResult:
         """Delegate one validated request to its private workflow."""
 
@@ -260,6 +297,9 @@ class TtpGenerator:
             policy=self.policy,
             request=request,
             request_id=request_id,
+            injected_schema=(
+                None if injected_schema is None else dict(injected_schema)
+            ),
             progress=(
                 progress
                 if progress is not None

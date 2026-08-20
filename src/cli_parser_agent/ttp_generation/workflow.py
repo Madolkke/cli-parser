@@ -49,12 +49,24 @@ from .sampling import (
     SampledCommandOutput,
     sample_command_outputs,
 )
-from .validation import validate_schema_proposal, validate_ttp_template
+from .validation import (
+    validate_result_schema,
+    validate_schema_proposal,
+    validate_ttp_template,
+)
 
 _T = TypeVar("_T")
 # Leave room for the model completion and tokenizer variance beyond
 # AgentScope's byte-based estimate.
 _INITIAL_CONTEXT_RATIO = 0.5
+# AgentScope converts cancellation into an ordinary INTERRUPTED return inside
+# its model retry loop and calls ``uncancel()`` around concurrent tool calls, so
+# a single delivered cancellation only unwinds the current await point and the
+# ReAct loop can issue another model request after the deadline.  Draining is
+# therefore bounded and re-delivered rather than awaited indefinitely; the
+# request must return near its deadline even when a phase task refuses to stop.
+_DRAIN_GRACE_SECONDS = 10.0
+_DRAIN_CANCEL_ATTEMPTS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -430,6 +442,9 @@ _FAULT_DOMAIN_BY_TERMINATION_REASON: dict[str, str] = {
     "internal_error": "agent",
     "final_validation_failed": "agent",
     "agent_stopped": "agent",
+    # Caller-supplied schema rejected before the TTP phase.  Reachable only in
+    # template-only mode, so it never appears in end-to-end eval aggregates.
+    "invalid_injected_schema": "agent",
 }
 
 
@@ -439,8 +454,44 @@ def _classify_fault_domain(termination_reason: str) -> str | None:
     return _FAULT_DOMAIN_BY_TERMINATION_REASON.get(termination_reason, "agent")
 
 
-async def _cancel_and_drain(task: asyncio.Task[Any]) -> None:
-    task.cancel()
+async def _cancel_and_drain(
+    task: asyncio.Task[Any],
+    *,
+    grace_seconds: float | None = None,
+) -> bool:
+    """Cancel a phase task and wait for it under a bounded grace period.
+
+    Returns whether the task actually finished.  AgentScope swallows
+    ``CancelledError`` in its model retry loop, so one cancellation can leave
+    the ReAct loop free to start another model call.  Cancellation is
+    re-delivered on each grace slice, and an unresponsive task is abandoned
+    rather than awaited forever -- otherwise the post-deadline drain silently
+    absorbs a full extra model round.
+    """
+
+    if grace_seconds is None:
+        # Resolved per call so the module constant stays the single source of
+        # truth for tests and future policy wiring.
+        grace_seconds = _DRAIN_GRACE_SECONDS
+    slice_seconds = max(0.0, grace_seconds) / _DRAIN_CANCEL_ATTEMPTS
+    for _ in range(_DRAIN_CANCEL_ATTEMPTS):
+        if task.done():
+            break
+        task.cancel()
+        try:
+            await asyncio.wait({task}, timeout=slice_seconds)
+        except asyncio.CancelledError:
+            # An external cancellation arriving mid-drain must not leave the
+            # task unobserved; the caller re-raises after this returns.
+            break
+
+    if not task.done():
+        # The task outlived its grace period.  Consume its eventual result so
+        # an abandoned phase cannot surface as an unretrieved task exception
+        # after the request has already returned.
+        task.add_done_callback(lambda finished: finished.exception())
+        return False
+
     try:
         await task
     except asyncio.CancelledError:
@@ -449,6 +500,7 @@ async def _cancel_and_drain(task: asyncio.Task[Any]) -> None:
         # The caller is already handling timeout/cancellation; draining only
         # prevents an unobserved task exception.
         pass
+    return True
 
 
 async def _run_before_deadline(
@@ -478,16 +530,16 @@ async def _run_before_deadline(
                 "remaining_seconds": max(0.0, deadline_monotonic - started),
             },
         ):
-            await _cancel_and_drain(task)
+            drained = await _cancel_and_drain(task)
             finish_laminar_span(
-                output={"status": "cancelled", "drained": True},
+                output={"status": "cancelled", "drained": drained},
                 outcome="cancelled",
                 attributes={
                     "cleanup_duration_ms": round(
                         (time.monotonic() - started) * 1000,
                         3,
                     ),
-                    "drained": True,
+                    "drained": drained,
                 },
             )
         raise
@@ -504,16 +556,16 @@ async def _run_before_deadline(
                 "remaining_seconds": 0.0,
             },
         ):
-            await _cancel_and_drain(task)
+            drained = await _cancel_and_drain(task)
             finish_laminar_span(
-                output={"status": "failed", "drained": True},
+                output={"status": "failed", "drained": drained},
                 outcome="failed",
                 attributes={
                     "cleanup_duration_ms": round(
                         (time.monotonic() - started) * 1000,
                         3,
                     ),
-                    "drained": True,
+                    "drained": drained,
                 },
             )
         return False, None
@@ -531,9 +583,14 @@ class _GenerationWorkflow:
         request: GenerationRequest,
         request_id: str,
         progress: ProgressEmitter,
+        injected_schema: dict[str, Any] | None = None,
     ) -> None:
         self.settings = settings
         self.policy = policy
+        # When set, the Schema phase is skipped and this schema is frozen as
+        # given.  Acceptance, TTP validation, and record re-verification are
+        # unchanged; only schema *inference* is bypassed.
+        self.injected_schema = injected_schema
         self.request = request
         self.request_id = request_id
         self.progress = progress
@@ -551,6 +608,9 @@ class _GenerationWorkflow:
             max_schema_no_tool_retries=policy.max_schema_no_tool_retries,
             max_ttp_no_tool_retries=policy.max_ttp_no_tool_retries,
             deadline_monotonic=self.deadline,
+            # A round that cannot fit one model call cannot finish inside the
+            # deadline; starting it only overruns the request.
+            min_round_seconds=settings.model_timeout_seconds,
         )
 
     def _validate_schema_candidate(
@@ -680,6 +740,29 @@ class _GenerationWorkflow:
             model_retries_observed=self.session.model_retries_observed,
             laminar_trace_id=current_laminar_trace_id(),
         )
+
+    def _freeze_injected_schema(
+        self,
+        schema: dict[str, Any],
+    ) -> GenerationResult | None:
+        """Validate and freeze a caller-supplied schema, or fail the request.
+
+        Evidence is absent by construction here, so this runs the schema-only
+        closed-subset check rather than ``validate_schema_proposal``.  Every
+        later gate (TTP AST allowlist, record re-verification, acceptance) is
+        untouched.
+        """
+
+        issues = validate_result_schema(
+            schema,
+            max_schema_bytes=self.policy.max_schema_bytes,
+            max_schema_depth=self.policy.max_schema_depth,
+            max_schema_properties=self.policy.max_schema_properties,
+        )
+        if issues:
+            return self._failure("invalid_injected_schema", issues)
+        self.session.frozen_schema = deepcopy(schema)
+        return None
 
     def _failure(
         self,
@@ -1086,6 +1169,17 @@ class _GenerationWorkflow:
         )
 
     def _validate_frozen_schema(self) -> list[ValidationIssue]:
+        if self.injected_schema is not None:
+            # A caller-supplied schema has no per-leaf evidence by construction,
+            # so acceptance re-runs the schema-only closed-subset check.  Every
+            # other gate (TTP allowlist, spawn isolation, record re-validation)
+            # is unchanged.
+            return validate_result_schema(
+                self.session.frozen_schema,
+                max_schema_bytes=self.policy.max_schema_bytes,
+                max_schema_depth=self.policy.max_schema_depth,
+                max_schema_properties=self.policy.max_schema_properties,
+            )
         try:
             frozen_evidence = [
                 FieldEvidence.model_validate(item)
@@ -1394,25 +1488,30 @@ class _GenerationWorkflow:
     async def run(self) -> GenerationResult:
         """Run Schema, TTP, and final full-input acceptance in order."""
 
-        schema_invalid_calls = self.session.submission_tool_call_invalids
-        schema_execution = await self._run_schema_phase()
-        phase_failure = self._resolve_phase_execution(
-            "schema",
-            schema_execution,
-            invalid_calls_before=schema_invalid_calls,
-        )
-        if phase_failure is not None:
-            return phase_failure
-
-        if self.session.agent_rounds >= self.policy.max_agent_rounds:
-            issue = _issue(
-                "generation.agent_round_limit",
-                "The AgentScope reasoning round budget was exhausted after "
-                "the Schema phase.",
-                stage="budget",
-                details={"phase": "schema", "blocked_phase": "ttp"},
+        if self.injected_schema is not None:
+            schema_failure = self._freeze_injected_schema(self.injected_schema)
+            if schema_failure is not None:
+                return schema_failure
+        else:
+            schema_invalid_calls = self.session.submission_tool_call_invalids
+            schema_execution = await self._run_schema_phase()
+            phase_failure = self._resolve_phase_execution(
+                "schema",
+                schema_execution,
+                invalid_calls_before=schema_invalid_calls,
             )
-            return self._failure("agent_round_limit", [issue])
+            if phase_failure is not None:
+                return phase_failure
+
+            if self.session.agent_rounds >= self.policy.max_agent_rounds:
+                issue = _issue(
+                    "generation.agent_round_limit",
+                    "The AgentScope reasoning round budget was exhausted after "
+                    "the Schema phase.",
+                    stage="budget",
+                    details={"phase": "schema", "blocked_phase": "ttp"},
+                )
+                return self._failure("agent_round_limit", [issue])
         if self.session.frozen_schema is None:
             issue = _issue(
                 "generation.invalid_session_state",

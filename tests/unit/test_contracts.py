@@ -20,6 +20,7 @@ from cli_parser_agent.ttp_generation.contracts import (
     GenerationResult,
     LastAttempt,
     SchemaSubmission,
+    TemplateRequest,
     ValidationIssue,
 )
 
@@ -46,6 +47,57 @@ def test_generation_request_applies_utf8_byte_limit() -> None:
 def test_generation_request_rejects_unencodable_surrogate() -> None:
     with pytest.raises(ValidationError, match="UTF-8"):
         GenerationRequest(command_outputs=["\ud800"])
+
+
+def _closed_object_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": {"name": {"type": "string"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }
+
+
+def test_template_request_carries_outputs_and_a_root_object_schema() -> None:
+    request = TemplateRequest(
+        command_outputs=["value: one"],
+        result_schema=_closed_object_schema(),
+    )
+
+    assert request.command_outputs == ["value: one"]
+    assert request.result_schema["type"] == "object"
+
+
+def test_template_request_reuses_the_command_output_rules() -> None:
+    # The same cardinality, emptiness, and UTF-8 rules as GenerationRequest.
+    for outputs in ([], [""], [" \t\r\n"], ["x"] * 6, ["\ud800"]):
+        with pytest.raises(ValidationError):
+            TemplateRequest(
+                command_outputs=outputs,
+                result_schema=_closed_object_schema(),
+            )
+
+
+@pytest.mark.parametrize(
+    "schema",
+    [
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "string"},
+        {},
+    ],
+)
+def test_template_request_rejects_a_non_object_root(schema: dict[str, object]) -> None:
+    with pytest.raises(ValidationError, match="root type must be 'object'"):
+        TemplateRequest(command_outputs=["value: one"], result_schema=schema)
+
+
+def test_template_request_forbids_unknown_fields() -> None:
+    with pytest.raises(ValidationError):
+        TemplateRequest(
+            command_outputs=["value: one"],
+            result_schema=_closed_object_schema(),
+            evidence=[],
+        )
 
 
 def test_schema_payloads_require_an_object_root() -> None:
@@ -360,7 +412,9 @@ def test_tls_environment_rejects_ambiguous_values() -> None:
 
 def test_generation_policy_has_bounded_defaults() -> None:
     policy = GenerationPolicy()
-    assert policy.total_timeout_seconds == 360
+    # Sized from measured per-round model latency (100-374s observed) so a
+    # default request can hold schema freeze, TTP corrections, and a finish.
+    assert policy.total_timeout_seconds == 900
     assert policy.max_agent_rounds == 13
     assert policy.max_ttp_submissions == 9
     assert policy.model_input_char_budget == 240_000

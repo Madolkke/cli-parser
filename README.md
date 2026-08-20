@@ -64,6 +64,46 @@ normal callers should omit it. The observer must remain fast and non-blocking. I
 recommended implementation is `queue.put_nowait(event)`, with rendering and artifact
 writing handled by a separate consumer.
 
+### Running the TTP phase alone
+
+`generate_from_schema()` freezes a caller-supplied result schema and runs only the
+TTP phase, returning the same `GenerationResult`. Use it to pin a known-good schema
+so template generation can be verified on its own:
+
+```python
+from cli_parser_agent import TemplateRequest, TtpGenerator
+
+result = await TtpGenerator.from_env().generate_from_schema(
+    TemplateRequest(
+        command_outputs=["Interface  Status\nGi0        up"],
+        result_schema={
+            "type": "object",
+            "properties": {
+                "interfaces": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "status": {"type": "string"},
+                        },
+                        "required": ["name", "status"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            "required": ["interfaces"],
+            "additionalProperties": False,
+        },
+    ),
+)
+```
+
+The schema must satisfy the same closed Draft 2020-12 subset the Schema phase
+produces. Per-leaf source evidence is not required here, since the schema is given
+rather than inferred; every other check — TTP allowlist, isolated parsing, and record
+re-validation against the schema — is unchanged.
+
 ## Zero-argument development run
 
 设置 `CLI_PARSER_ONCE_INPUT_FILES`（以当前平台路径分隔符分开的 `1-5` 个
@@ -74,6 +114,15 @@ uv run --env-file .env python scripts/run_agent_once.py
 ```
 
 The script loads the configured command-output files and writes the complete result under `.artifacts/agent-once/`. It prints the Laminar trace ID when tracing is enabled and flushes pending spans before exit.
+
+To run only the TTP phase against a schema file, set `CLI_PARSER_ONCE_INPUT_FILES`
+and `CLI_PARSER_TTP_ONCE_SCHEMA_FILE` (one JSON schema document), then run:
+
+```powershell
+uv run --env-file .env python scripts/run_ttp_phase_once.py
+```
+
+Results are written under `.artifacts/ttp-phase-once/`.
 
 ## Read-only Textual TUI
 
