@@ -10,119 +10,112 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections import deque
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
-from agentscope.event import AgentEvent, CustomEvent, ModelCallStartEvent
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
 
-from ..ttp_generation.contracts import (
-    MAX_COMMAND_OUTPUTS,
-    GenerationRequest,
-    TemplateRequest,
-)
-from ..ttp_generation.generator import TtpGenerator
-from ..ttp_generation.validation import validate_result_schema
+from .contracts import CreateRunRequest, SaveSchemaRequest, WebUIProgressEvent
+from .service import GenerationService
 from .store import RunStore, RunStoreError
 
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
 
-# Progress events worth forwarding.  Everything else is either a stream of
-# model text or a multi-megabyte context snapshot, neither of which belongs on
-# a progress channel.
-_FORWARDED_EVENTS = frozenset(
-    {
-        "cli_parser.generation.started",
-        "cli_parser.generation.completed",
-        "cli_parser.generation.cancelled",
-        "cli_parser.generation.exception",
-        "cli_parser.phase.started",
-        "cli_parser.phase.completed",
-        "cli_parser.no_tool.retry",
-        "cli_parser.round.skipped",
-        "cli_parser.final_validation.started",
-        "cli_parser.final_validation.completed",
-    },
-)
 
-RunMode = Literal["full", "propose"]
+class _ProgressQueue:
+    """Bounded async queue that coalesces adjacent text deltas."""
 
+    MAX_ITEMS = 512
+    MAX_DELTA_CHARS = 4096
 
-class CreateRunRequest(BaseModel):
-    """One new run submitted from the browser."""
+    def __init__(self) -> None:
+        self._items: deque[dict[str, Any]] = deque()
+        self._ready = asyncio.Event()
+        self._closed = False
+        self._dropped_deltas = 0
 
-    model_config = ConfigDict(extra="forbid")
+    @staticmethod
+    def _is_delta(item: dict[str, Any]) -> bool:
+        return str(item.get("type", "")).endswith("_delta")
 
-    mode: RunMode = "full"
-    title: str = Field(default="", max_length=200)
-    command_outputs: list[str] = Field(min_length=1, max_length=MAX_COMMAND_OUTPUTS)
+    @staticmethod
+    def _delta_key(item: dict[str, Any]) -> tuple[Any, ...]:
+        detail = item.get("detail") or {}
+        return (
+            item.get("type"),
+            item.get("block_id"),
+            item.get("tool_call_id"),
+            detail.get("tool_name"),
+        )
 
-
-class SaveSchemaRequest(BaseModel):
-    """A reviewed, possibly edited result schema."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    result_schema: dict[str, Any]
-
-
-class _QueueObserver:
-    """A synchronous observer whose only normal action is ``put_nowait``."""
-
-    def __init__(self, queue: asyncio.Queue[Any]) -> None:
-        self._queue = queue
-        self.failed = False
-
-    def __call__(self, event: AgentEvent) -> None:
-        if self.failed:
+    def put_nowait(self, item: dict[str, Any]) -> None:
+        if self._closed:
             return
-        try:
-            payload = _project_event(event)
-            if payload is not None:
-                self._queue.put_nowait(payload)
-        except BaseException:
-            self.failed = True
+        if self._is_delta(item) and self._items:
+            previous = self._items[-1]
+            if self._delta_key(previous) == self._delta_key(item):
+                previous_detail = previous.setdefault("detail", {})
+                current_detail = item.get("detail") or {}
+                previous_text = str(previous_detail.get("text", ""))
+                current_text = str(current_detail.get("text", ""))
+                if len(previous_text) + len(current_text) <= self.MAX_DELTA_CHARS:
+                    previous_detail["text"] = previous_text + current_text
+                    previous_detail["coalesced"] = (
+                        int(previous_detail.get("coalesced", 0)) + 1
+                    )
+                    return
+        if len(self._items) >= self.MAX_ITEMS:
+            if self._is_delta(item):
+                self._dropped_deltas += 1
+                return
+            while self._items and len(self._items) >= self.MAX_ITEMS:
+                if self._is_delta(self._items[0]):
+                    self._items.popleft()
+                    self._dropped_deltas += 1
+                else:
+                    break
+            if len(self._items) >= self.MAX_ITEMS:
+                return
+        if self._dropped_deltas:
+            item = dict(item)
+            detail = dict(item.get("detail") or {})
+            detail["dropped_delta_count"] = self._dropped_deltas
+            item["detail"] = detail
+            self._dropped_deltas = 0
+        self._items.append(item)
+        self._ready.set()
 
+    def close(self) -> None:
+        self._closed = True
+        self._ready.set()
 
-def _project_event(event: AgentEvent) -> dict[str, Any] | None:
-    """Reduce one raw event to a bounded progress fact."""
-
-    metadata = dict(getattr(event, "metadata", None) or {})
-    common = {
-        "phase": metadata.get("phase"),
-        "elapsed_seconds": round(float(metadata.get("elapsed_seconds") or 0.0), 3),
-        "sequence": metadata.get("sequence"),
-    }
-    if isinstance(event, ModelCallStartEvent):
-        return {**common, "type": "model_call"}
-    if isinstance(event, CustomEvent):
-        if event.name not in _FORWARDED_EVENTS:
-            return None
-        detail: dict[str, Any] = {}
-        value = event.value if isinstance(event.value, dict) else {}
-        for key in ("status", "termination_reason", "retry_number", "reason"):
-            if key in value:
-                detail[key] = value[key]
-        return {**common, "type": event.name, "detail": detail}
-    return None
-
+    async def get(self) -> dict[str, Any] | None:
+        while not self._items:
+            if self._closed:
+                return None
+            self._ready.clear()
+            await self._ready.wait()
+        item = self._items.popleft()
+        if not self._items:
+            self._ready.clear()
+        return item
 
 class RunManager:
     """Run one generation at a time and fan progress out to SSE listeners."""
 
-    def __init__(self, store: RunStore, generator: Any) -> None:
+    def __init__(self, store: RunStore) -> None:
         self.store = store
-        self.generator = generator
         self._task: asyncio.Task[None] | None = None
         self._active_run: str | None = None
-        self._queues: dict[str, list[asyncio.Queue[Any]]] = {}
+        self._queues: dict[str, list[_ProgressQueue]] = {}
+        self._sequences: dict[str, int] = {}
 
     @property
     def active_run(self) -> str | None:
@@ -131,12 +124,12 @@ class RunManager:
             self._task = None
         return self._active_run
 
-    def subscribe(self, run_id: str) -> asyncio.Queue[Any]:
-        queue: asyncio.Queue[Any] = asyncio.Queue()
+    def subscribe(self, run_id: str) -> _ProgressQueue:
+        queue = _ProgressQueue()
         self._queues.setdefault(run_id, []).append(queue)
         return queue
 
-    def unsubscribe(self, run_id: str, queue: asyncio.Queue[Any]) -> None:
+    def unsubscribe(self, run_id: str, queue: _ProgressQueue) -> None:
         listeners = self._queues.get(run_id)
         if not listeners:
             return
@@ -148,6 +141,12 @@ class RunManager:
     def _publish(self, run_id: str, payload: dict[str, Any]) -> None:
         for queue in self._queues.get(run_id, []):
             queue.put_nowait(payload)
+
+    def _number(self, run_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._sequences[run_id] = self._sequences.get(run_id, 0) + 1
+        numbered = dict(payload)
+        numbered["sequence"] = self._sequences[run_id]
+        return numbered
 
     def start(self, run_id: str, coroutine_factory: Any) -> None:
         """Start one background run, rejecting a second concurrent request."""
@@ -161,8 +160,10 @@ class RunManager:
         self._task = asyncio.create_task(self._execute(run_id, coroutine_factory))
 
     async def _execute(self, run_id: str, coroutine_factory: Any) -> None:
-        queue: asyncio.Queue[Any] = asyncio.Queue()
-        observer = _QueueObserver(queue)
+        queue = _ProgressQueue()
+        def observer(event: WebUIProgressEvent) -> None:
+            queue.put_nowait(event)
+
         started = time.monotonic()
         pump = asyncio.create_task(self._pump(run_id, queue))
         try:
@@ -175,7 +176,13 @@ class RunManager:
                 elapsed_seconds=round(time.monotonic() - started, 3),
                 termination_reason="cancelled",
             )
-            self._publish(run_id, {"type": "run.finished", "status": "cancelled"})
+            queue.put_nowait(
+                {
+                    "type": "run.finished",
+                    "status": "cancelled",
+                    "detail": {"reason": "cancelled"},
+                },
+            )
             raise
         except Exception as error:
             self.store.update_meta(
@@ -185,9 +192,15 @@ class RunManager:
                 elapsed_seconds=round(time.monotonic() - started, 3),
                 termination_reason=f"exception:{type(error).__name__}",
             )
-            self._publish(run_id, {"type": "run.finished", "status": "failed"})
+            queue.put_nowait(
+                {
+                    "type": "run.finished",
+                    "status": "failed",
+                    "detail": {"reason": f"exception:{type(error).__name__}"},
+                },
+            )
         else:
-            payload = result.model_dump(mode="json")
+            payload = result
             self.store.write_result(run_id, payload)
             proposal = payload.get("proposal")
             if isinstance(proposal, dict) and isinstance(
@@ -204,24 +217,31 @@ class RunManager:
                     "termination_reason",
                 ),
             )
-            self._publish(
-                run_id,
-                {"type": "run.finished", "status": payload.get("status")},
+            queue.put_nowait(
+                {
+                    "type": "run.finished",
+                    "status": payload.get("status"),
+                    "detail": {
+                        "reason": payload.get("metadata", {}).get("termination_reason"),
+                    },
+                },
             )
         finally:
-            queue.put_nowait(None)
+            queue.close()
             await pump
             self._active_run = None
+            self._sequences.pop(run_id, None)
 
-    async def _pump(self, run_id: str, queue: asyncio.Queue[Any]) -> None:
-        """Persist and fan out progress facts until the run signals stop."""
+    async def _pump(self, run_id: str, queue: _ProgressQueue) -> None:
+        """Number, persist, and fan out progress events until the run ends."""
 
         while True:
             item = await queue.get()
             if item is None:
                 return
-            self.store.append_event(run_id, item)
-            self._publish(run_id, item)
+            numbered = self._number(run_id, item)
+            self.store.append_event(run_id, numbered)
+            self._publish(run_id, numbered)
 
     async def cancel(self) -> bool:
         task = self._task
@@ -242,13 +262,12 @@ def _now() -> str:
 def create_app(
     *,
     store: RunStore,
-    generator: Any | None = None,
+    service: GenerationService,
 ) -> FastAPI:
-    """Build the WebUI application around one run store and generator."""
+    """Build the WebUI application around a store and service boundary."""
 
     app = FastAPI(title="CLI Parser Agent", docs_url=None, redoc_url=None)
-    resolved = generator if generator is not None else TtpGenerator.from_env()
-    manager = RunManager(store, resolved)
+    manager = RunManager(store)
     app.state.store = store
     app.state.manager = manager
 
@@ -273,21 +292,29 @@ def create_app(
                 detail=f"run {manager.active_run} is still in progress",
             )
         try:
-            request = GenerationRequest(command_outputs=payload.command_outputs)
+            command_outputs = service.validate_inputs(payload.command_outputs)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
 
         run_id = store.create(
             mode=payload.mode,
-            command_outputs=list(request.command_outputs),
+            command_outputs=command_outputs,
             title=payload.title.strip(),
         )
         if payload.mode == "propose":
             def factory(observer: Any) -> Any:
-                return resolved.propose_schema(request, observer=observer)
+                return service.run(
+                    "propose",
+                    payload.command_outputs,
+                    observer=observer,
+                )
         else:
             def factory(observer: Any) -> Any:
-                return resolved.generate(request, observer=observer)
+                return service.run(
+                    "full",
+                    payload.command_outputs,
+                    observer=observer,
+                )
 
         manager.start(run_id, factory)
         return {"run_id": run_id, "mode": payload.mode}
@@ -307,11 +334,11 @@ def create_app(
     @app.put("/api/runs/{run_id}/schema")
     def save_schema(run_id: str, payload: SaveSchemaRequest) -> dict[str, Any]:
         _require_run(run_id)
-        issues = validate_result_schema(payload.result_schema)
+        issues = service.validate_schema(payload.result_schema)
         if issues:
             return {
                 "saved": False,
-                "issues": [issue.model_dump(mode="json") for issue in issues],
+                "issues": issues,
             }
         store.write_schema(run_id, payload.result_schema)
         return {"saved": True, "issues": []}
@@ -328,13 +355,6 @@ def create_app(
         if schema is None:
             raise HTTPException(status_code=400, detail="run has no saved schema")
         outputs = store.read_inputs(run_id)
-        try:
-            request = TemplateRequest(
-                command_outputs=outputs,
-                result_schema=schema,
-            )
-        except ValueError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from error
 
         store.update_meta(
             run_id,
@@ -346,7 +366,11 @@ def create_app(
         )
 
         def factory(observer: Any) -> Any:
-            return resolved.generate_from_schema(request, observer=observer)
+            return service.run_from_schema(
+                outputs,
+                schema,
+                observer=observer,
+            )
 
         manager.start(run_id, factory)
         return {"run_id": run_id, "stage": "template"}
@@ -366,26 +390,62 @@ def create_app(
         return {"deleted": store.delete(run_id)}
 
     @app.get("/api/runs/{run_id}/events")
-    async def stream_events(run_id: str) -> EventSourceResponse:
+    async def stream_events(run_id: str, request: Request) -> EventSourceResponse:
         _require_run(run_id)
+        try:
+            last_event_id = int(request.headers.get("last-event-id", "0") or "0")
+        except ValueError:
+            last_event_id = 0
 
         async def publisher() -> AsyncIterator[dict[str, Any]]:
             queue = manager.subscribe(run_id)
             try:
                 # Replay what already happened so a late listener is not blind.
-                for event in store.read_events(run_id):
-                    yield {"data": _dumps(event)}
-                if manager.active_run != run_id:
-                    meta = store.read_meta(run_id) or {}
+                replayed_events = store.read_events(run_id)
+                terminal_seen = False
+                for event in replayed_events:
+                    if int(event.get("sequence", 0) or 0) <= last_event_id:
+                        if event.get("type") == "run.finished":
+                            terminal_seen = True
+                        continue
                     yield {
-                        "data": _dumps(
-                            {"type": "run.finished", "status": meta.get("status")},
-                        ),
+                        "id": str(event.get("sequence", "")),
+                        "event": event.get("type", "message"),
+                        "data": _dumps(event),
                     }
+                    terminal_seen = terminal_seen or event.get("type") == "run.finished"
+                # The terminal event can be persisted just before the manager
+                # clears active_run, so never wait on a queue after replay has
+                # already observed completion.
+                if terminal_seen:
+                    return
+                if manager.active_run != run_id:
+                    if not any(
+                        event.get("type") == "run.finished"
+                        for event in replayed_events
+                    ):
+                        meta = store.read_meta(run_id) or {}
+                        terminal = manager._number(
+                            run_id,
+                            {"type": "run.finished", "status": meta.get("status")},
+                        )
+                        store.append_event(run_id, terminal)
+                        if terminal["sequence"] > last_event_id:
+                            yield {
+                                "id": str(terminal["sequence"]),
+                                "event": "run.finished",
+                                "data": _dumps(terminal),
+                            }
                     return
                 while True:
                     item = await queue.get()
-                    yield {"data": _dumps(item)}
+                    if item is None:
+                        return
+                    yield {
+                        "id": str(item.get("sequence", "")),
+                        "event": item.get("type", "message"),
+                        "data": _dumps(item),
+                    }
                     if item.get("type") == "run.finished":
                         return
             finally:

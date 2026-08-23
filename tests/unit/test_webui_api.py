@@ -26,6 +26,7 @@ from cli_parser_agent import (
     SchemaProposal,
     SchemaProposalResult,
 )
+from cli_parser_agent.webui.agent_service import AgentGenerationService
 from cli_parser_agent.webui.app import create_app
 from cli_parser_agent.webui.store import RunStore
 
@@ -112,7 +113,10 @@ class BlockingGenerator(FakeGenerator):
 
 
 def _client(tmp_path: Path, generator: Any) -> TestClient:
-    app = create_app(store=RunStore(tmp_path / "data"), generator=generator)
+    app = create_app(
+        store=RunStore(tmp_path / "data"),
+        service=AgentGenerationService(generator),
+    )
     return TestClient(app)
 
 
@@ -229,6 +233,57 @@ def test_generate_uses_the_edited_schema(tmp_path: Path) -> None:
     assert payload["result"]["artifact"]["ttp_template"] == "value: {{ value }}"
 
 
+def test_complete_supported_schema_subset_is_saved_and_used(tmp_path: Path) -> None:
+    generator = FakeGenerator()
+    reviewed = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "title": "Inventory",
+        "description": "Reviewed in the WebUI",
+        "properties": {
+            "hostname": {
+                "type": "string",
+                "enum": ["r1", "r2"],
+                "minLength": 1,
+                "maxLength": 64,
+            },
+            "interfaces": {
+                "type": "array",
+                "minItems": 0,
+                "maxItems": 128,
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "mtu": {"type": "integer", "minimum": 0},
+                        "enabled": {"type": "boolean"},
+                    },
+                    "required": ["name"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["hostname"],
+        "additionalProperties": False,
+    }
+    with _client(tmp_path, generator) as client:
+        run_id = client.post(
+            "/api/runs",
+            json={"mode": "propose", "command_outputs": ["value: one"]},
+        ).json()["run_id"]
+        _wait_for_status(client, run_id)
+
+        saved = client.put(
+            f"/api/runs/{run_id}/schema",
+            json={"result_schema": reviewed},
+        )
+        assert saved.json() == {"saved": True, "issues": []}
+        assert client.post(f"/api/runs/{run_id}/generate").status_code == 201
+        _wait_for_status(client, run_id)
+
+    assert generator.received_schema == reviewed
+
+
 def test_generate_requires_a_saved_schema(tmp_path: Path) -> None:
     with _client(tmp_path, FakeGenerator()) as client:
         run_id = client.post(
@@ -319,7 +374,7 @@ def test_event_stream_forwards_bounded_facts_only(tmp_path: Path) -> None:
         events=[
             ("cli_parser.generation.started", "generation"),
             ("cli_parser.phase.started", "schema"),
-            # Multi-megabyte snapshots must never reach the progress channel.
+            # Context snapshots must never reach the WebUI channel.
             ("cli_parser.model.context_snapshot", "schema"),
             ("cli_parser.tool.result", "schema"),
             ("cli_parser.phase.completed", "schema"),
@@ -343,12 +398,13 @@ def test_event_stream_forwards_bounded_facts_only(tmp_path: Path) -> None:
 
     types = [event["type"] for event in received]
     assert "cli_parser.model.context_snapshot" not in types
-    assert "cli_parser.tool.result" not in types
+    assert "cli_parser.tool.result" in types
     assert "cli_parser.phase.started" in types
     assert "cli_parser.phase.completed" in types
     assert types[-1] == "run.finished"
     for event in received[:-1]:
         assert set(event) <= {"phase", "elapsed_seconds", "sequence", "type", "detail"}
+        assert event["sequence"] >= 1
 
 
 def test_event_stream_replays_a_finished_run(tmp_path: Path) -> None:
@@ -376,6 +432,38 @@ def test_event_stream_replays_a_finished_run(tmp_path: Path) -> None:
         "cli_parser.phase.started",
         "run.finished",
     ]
+
+
+def test_event_stream_supports_last_event_id_replay(tmp_path: Path) -> None:
+    generator = FakeGenerator(
+        events=[
+            ("cli_parser.phase.started", "schema"),
+            ("cli_parser.phase.completed", "schema"),
+        ],
+    )
+    with _client(tmp_path, generator) as client:
+        run_id = client.post(
+            "/api/runs",
+            json={"command_outputs": ["value: one"]},
+        ).json()["run_id"]
+        _wait_for_status(client, run_id)
+
+        received: list[dict[str, Any]] = []
+        with client.stream(
+            "GET",
+            f"/api/runs/{run_id}/events",
+            headers={"Last-Event-ID": "1"},
+        ) as stream:
+            for line in stream.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                event = json.loads(line[len("data:") :].strip())
+                received.append(event)
+                if event.get("type") == "run.finished":
+                    break
+
+    assert received
+    assert all(event["sequence"] > 1 for event in received)
 
 
 def test_failed_generation_is_recorded_without_crashing_the_server(

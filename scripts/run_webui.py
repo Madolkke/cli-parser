@@ -22,6 +22,7 @@ from cli_parser_agent import (  # noqa: E402
     TtpGenerator,
     TtpGeneratorSettings,
 )
+from cli_parser_agent.webui.agent_service import AgentGenerationService  # noqa: E402
 from cli_parser_agent.webui.app import create_app  # noqa: E402
 from cli_parser_agent.webui.store import RunStore  # noqa: E402
 
@@ -30,6 +31,17 @@ ScriptConfigurationError = _run_support.ScriptConfigurationError
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8080
+
+
+def _webui_stream_enabled(environ: Mapping[str, str]) -> bool:
+    raw = environ.get("CLI_PARSER_WEBUI_STREAM", "true").strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    raise ScriptConfigurationError(
+        "CLI_PARSER_WEBUI_STREAM must be true or false.",
+    )
 
 
 def _port(environ: Mapping[str, str]) -> int:
@@ -61,6 +73,9 @@ def main() -> int:
     try:
         # Fail before binding a port when the model configuration is unusable.
         settings = TtpGeneratorSettings.from_env(environ)
+        settings = settings.model_copy(
+            update={"stream": _webui_stream_enabled(environ)},
+        )
         policy = GenerationPolicy.from_env(environ)
         host = _host(environ)
         port = _port(environ)
@@ -81,7 +96,7 @@ def main() -> int:
 
     app = create_app(
         store=RunStore(data_root),
-        generator=TtpGenerator(settings=settings, policy=policy),
+        service=AgentGenerationService(TtpGenerator(settings=settings, policy=policy)),
     )
     print(f"model: {settings.model_name}")
     print(f"base_url: {_run_support.sanitize_base_url(settings.base_url)}")

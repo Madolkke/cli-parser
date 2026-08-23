@@ -158,7 +158,7 @@ class RunStore:
         return result if isinstance(result, dict) else None
 
     def append_event(self, run_id: str, event: dict[str, Any]) -> None:
-        """Append one bounded progress fact to the run transcript."""
+        """Append one sanitized, size-bounded WebUI event to the transcript."""
 
         path = self.run_directory(run_id) / EVENTS_FILE
         line = json.dumps(event, ensure_ascii=False) + "\n"

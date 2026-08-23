@@ -192,9 +192,9 @@ uv run --env-file .env python scripts/run_webui.py
 
 它提供两条路径：**完整生成**等价于命令行的两阶段流程；**先提案 Schema** 则调用 `propose_schema()`，把冻结提案写入运行目录供人工复核编辑，确认后再经 `generate_from_schema()` 生成模板。编辑后的 Schema 在保存前必须通过受限子集校验，未通过时回显 issue 且不覆盖已存文件。
 
-同一时刻只允许一次生成在跑，冲突返回 `409`；生成在后台任务中执行，HTTP 请求立即返回，进度经 SSE 推送阶段、轮次、耗时等有界事实——上下文快照与工具结果正文不会进入该通道。运行记录以纯文件保存在被 Git 忽略的 `data/runs/<UTC 时间戳>/`，列表即目录扫描。
+同一时刻只允许一次生成在跑，冲突返回 `409`；生成在后台任务中执行，HTTP 请求立即返回。WebUI 进程默认将自己的模型设置覆盖为 `stream=True`，可用 `CLI_PARSER_WEBUI_STREAM=false` 为不支持流式的供应商降级；公共生成器默认值不变。进度经 SSE 推送带本地 sequence 的 Agent 时间线，包含经安全投影的 Thinking、模型文本、工具参数、工具结果、阶段和重试事件，支持 `Last-Event-ID` 重放。运行记录以纯文件保存在被 Git 忽略的 `data/runs/<UTC 时间戳>/`，列表即目录扫描。
 
-WebUI 只通过公共 API 调用生成，不改变提示词、阶段、工具、预算或 finish 协议。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
+WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具、预算或 finish 协议。事件投影不序列化完整 AgentScope 对象，不发送 system prompt、完整上下文快照或凭据；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
 
 ## 只读 Textual TUI
 

@@ -4,139 +4,104 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLI Parser Agent</title>
-<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/style.css?v=2">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">
-    <span class="mark"></span>
-    <h1>CLI Parser Agent</h1>
+  <div class="brand"><span class="mark">C</span><h1>CLI Parser Agent</h1></div>
+  <div class="top-actions">
+    <button id="history-toggle" class="btn btn-ghost icon-btn mobile-only" title="打开历史记录" aria-label="打开历史记录">☰</button>
+    <button id="new-run" class="btn btn-primary">新建生成</button>
   </div>
-  <button id="new-run" class="btn btn-primary">新建生成</button>
 </header>
-
+<div id="drawer-overlay" class="drawer-overlay" hidden></div>
 <main class="layout">
-  <aside class="sidebar">
+  <aside id="sidebar" class="sidebar" aria-label="运行历史">
     <div class="sidebar-head">
-      <h2>历史</h2>
-      <button id="refresh" class="btn btn-ghost btn-sm" title="刷新">↻</button>
+      <h2>运行历史</h2>
+      <div class="sidebar-actions">
+        <button id="refresh" class="btn btn-ghost icon-btn" title="刷新历史记录" aria-label="刷新历史记录">↻</button>
+        <button id="history-close" class="btn btn-ghost icon-btn mobile-only" title="关闭历史记录" aria-label="关闭历史记录">×</button>
+      </div>
     </div>
+    <p id="history-state" class="history-state">正在加载…</p>
     <ul id="history" class="history"></ul>
-    <p id="history-empty" class="empty">暂无运行记录</p>
   </aside>
-
   <section class="content">
-    <!-- New run -->
     <section id="view-new" class="view">
-      <h2>新建生成</h2>
-      <label class="field">
-        <span class="label">标题<em>可选</em></span>
-        <input id="title" type="text" maxlength="200" placeholder="例如：show ip interface brief">
-      </label>
-
-      <div class="field">
-        <span class="label">命令输出<em>1-5 份，同一条命令的不同执行结果</em></span>
-        <div id="outputs"></div>
-        <button id="add-output" class="btn btn-ghost btn-sm">+ 增加一份输出</button>
-      </div>
-
-      <div class="field">
-        <span class="label">模式</span>
-        <div class="modes">
-          <label class="mode">
-            <input type="radio" name="mode" value="full" checked>
-            <div>
-              <strong>完整生成</strong>
-              <p>模型自行推断 Schema 并直接生成模板，等同命令行流程。</p>
-            </div>
-          </label>
-          <label class="mode">
-            <input type="radio" name="mode" value="propose">
-            <div>
-              <strong>先提案 Schema</strong>
-              <p>先产出 Schema 供你确认或编辑，再据此生成模板。</p>
-            </div>
-          </label>
+      <div class="page-head"><div><h2>新建生成</h2><p>创建一份共享模板与结果 Schema</p></div></div>
+      <div class="form-section">
+        <label class="field">
+          <span class="label">标题 <em>可选</em></span>
+          <input id="title" type="text" maxlength="200" placeholder="例如：show ip interface brief">
+        </label>
+        <div class="field">
+          <div class="field-head"><span class="label">命令输出</span><span id="output-count" class="field-count">1 / 5</span></div>
+          <div class="input-tabs-row">
+            <div id="output-tabs" class="input-tabs" role="tablist" aria-label="命令输出"></div>
+            <button id="add-output" class="btn btn-ghost btn-sm">＋ 添加输入</button>
+          </div>
+          <div class="input-editor-shell">
+            <textarea id="output-editor" spellcheck="false" placeholder="粘贴一份完整的命令输出…"></textarea>
+            <div class="input-editor-meta"><span id="output-size">0 字符 · 0 B</span><button id="remove-output" class="text-danger" hidden>删除当前输入</button></div>
+          </div>
+          <p id="output-error" class="error" hidden></p>
         </div>
+        <fieldset class="field mode-field">
+          <legend class="label">模式</legend>
+          <div class="segmented">
+            <label><input type="radio" name="mode" value="full" checked><span>完整生成</span></label>
+            <label><input type="radio" name="mode" value="propose"><span>先提案 Schema</span></label>
+          </div>
+        </fieldset>
+        <p id="new-error" class="error" hidden></p>
+        <div class="form-actions"><button id="start" class="btn btn-primary btn-lg">开始生成</button></div>
       </div>
-
-      <p id="new-error" class="error" hidden></p>
-      <button id="start" class="btn btn-primary btn-lg">开始生成</button>
     </section>
-
-    <!-- Run detail -->
     <section id="view-run" class="view" hidden>
       <div class="run-head">
-        <div>
-          <h2 id="run-title">运行</h2>
-          <p id="run-sub" class="sub"></p>
-        </div>
-        <div class="run-actions">
-          <span id="run-status" class="badge"></span>
-          <button id="cancel" class="btn btn-danger btn-sm" hidden>取消</button>
-          <button id="delete" class="btn btn-ghost btn-sm" hidden>删除</button>
-        </div>
+        <div><h2 id="run-title">运行</h2><p id="run-sub" class="sub"></p></div>
+        <div class="run-actions"><span id="run-status" class="badge"></span><button id="cancel" class="btn btn-danger btn-sm" hidden>取消</button><button id="delete" class="btn btn-ghost btn-sm" hidden>删除</button></div>
       </div>
-
-      <div id="progress" class="panel" hidden>
-        <div class="progress-head">
-          <span id="progress-phase" class="phase-pill">准备中</span>
-          <span id="progress-elapsed" class="mono"></span>
+      <details id="progress" class="panel progress-panel" hidden>
+        <summary><span id="progress-phase" class="phase-pill">准备中</span><span id="progress-elapsed" class="mono"></span></summary>
+        <div class="progress-body">
+          <div class="bar"><div id="bar-fill" class="bar-fill"></div></div>
+          <div class="progress-toolbar"><span class="label">Agent 过程</span><button id="progress-follow" class="btn btn-ghost btn-sm" type="button">跟随最新</button></div>
+          <div id="agent-timeline" class="agent-timeline" aria-live="polite"></div>
         </div>
-        <div class="bar"><div id="bar-fill" class="bar-fill"></div></div>
-        <ul id="progress-log" class="log"></ul>
-      </div>
-
-      <div id="schema-panel" class="panel" hidden>
-        <div class="panel-head">
-          <h3>Schema 提案</h3>
-          <p class="hint">确认或编辑后再生成模板。字段命名会直接决定最终 records 的键名。</p>
-        </div>
-        <div id="assumptions" class="assumptions" hidden></div>
-        <textarea id="schema-editor" class="editor" spellcheck="false"></textarea>
-        <p id="schema-error" class="error" hidden></p>
-        <div class="row">
-          <button id="format-schema" class="btn btn-ghost btn-sm">格式化</button>
-          <button id="save-schema" class="btn btn-ghost">保存 Schema</button>
-          <button id="run-template" class="btn btn-primary">按此 Schema 生成</button>
-        </div>
-        <details id="evidence-box" class="evidence" hidden>
-          <summary>字段证据</summary>
-          <div id="evidence"></div>
+      </details>
+      <section id="schema-panel" class="panel schema-panel" hidden>
+        <details id="schema-collapse" open>
+          <summary class="schema-summary"><span><strong>Schema 提案</strong><small>字段证据来自模型初始提案，编辑后不会改写。</small></span><span id="schema-state" class="save-state saved">已保存</span></summary>
+          <div class="schema-panel-content">
+            <div id="assumptions" class="assumptions" hidden></div>
+            <div class="editor-toolbar">
+              <div class="segmented compact" role="tablist" aria-label="Schema 编辑模式"><button id="schema-mode-visual" class="is-active" role="tab">可视化</button><button id="schema-mode-json" role="tab">JSON</button></div>
+              <button id="add-root-field" class="btn btn-ghost btn-sm">＋ 添加根字段</button>
+            </div>
+            <div id="schema-visual" class="schema-visual"></div>
+            <div id="schema-json" hidden><textarea id="schema-editor" class="editor" spellcheck="false"></textarea><button id="format-schema" class="btn btn-ghost btn-sm format-button">格式化 JSON</button></div>
+            <div id="schema-errors" class="schema-errors" hidden></div>
+            <p id="schema-message" class="message" hidden></p>
+            <div class="row schema-actions"><button id="save-schema" class="btn btn-secondary">保存 Schema</button><button id="run-template" class="btn btn-primary">使用此 Schema 生成</button></div>
+            <details id="evidence-box" class="evidence" hidden><summary>初始提案字段证据</summary><div id="evidence"></div></details>
+          </div>
         </details>
-      </div>
-
-      <div id="result-panel" class="panel" hidden>
-        <div class="tabs" role="tablist">
-          <button class="tab is-active" data-tab="template">TTP 模板</button>
-          <button class="tab" data-tab="records">Records</button>
-          <button class="tab" data-tab="schema">Schema</button>
-          <button class="tab" data-tab="inputs">原始输入</button>
-        </div>
-        <div id="tab-template" class="tabpane">
-          <button class="btn btn-ghost btn-sm copy" data-copy="template">复制</button>
-          <pre id="out-template" class="code"></pre>
-        </div>
-        <div id="tab-records" class="tabpane" hidden>
-          <div id="out-records"></div>
-        </div>
-        <div id="tab-schema" class="tabpane" hidden>
-          <button class="btn btn-ghost btn-sm copy" data-copy="schema">复制</button>
-          <pre id="out-schema" class="code"></pre>
-        </div>
-        <div id="tab-inputs" class="tabpane" hidden>
-          <pre id="out-inputs" class="code"></pre>
-        </div>
-      </div>
-
-      <div id="issues-panel" class="panel" hidden>
-        <h3>问题</h3>
-        <ul id="issues" class="issues"></ul>
-      </div>
+      </section>
+      <section id="result-panel" class="panel result-panel" hidden>
+        <div class="tabs" role="tablist"><button class="tab is-active" data-tab="template">TTP 模板</button><button class="tab" data-tab="records">Records</button><button class="tab" data-tab="schema">Schema</button><button class="tab" data-tab="inputs">原始输入</button></div>
+        <div id="tab-template" class="tabpane"><button class="btn btn-ghost btn-sm copy" data-copy="template">复制</button><pre id="out-template" class="code"></pre></div>
+        <div id="tab-records" class="tabpane" hidden><div id="out-records"></div></div>
+        <div id="tab-schema" class="tabpane" hidden><button class="btn btn-ghost btn-sm copy" data-copy="schema">复制</button><pre id="out-schema" class="code"></pre></div>
+        <div id="tab-inputs" class="tabpane" hidden><pre id="out-inputs" class="code"></pre></div>
+      </section>
+      <section id="issues-panel" class="panel" hidden><h3>问题</h3><ul id="issues" class="issues"></ul></section>
     </section>
   </section>
 </main>
-
-<script src="/static/app.js"></script>
+<script src="/static/agent-timeline.js?v=1"></script>
+<script src="/static/schema-model.js?v=3"></script>
+<script src="/static/app.js?v=3"></script>
 </body>
 </html>

@@ -84,7 +84,7 @@ cli_parser.tool.result
 cli_parser.final_validation.started|completed
 ```
 
-`scripts/run_agent_tui.py` 使用 Textual 消费该事件流。它只观察一次 `generate()`，为该开发运行单独启用 `stream=True`；界面操作不会更改脚本中已配置的提示、工具、policy、候选或终止条件，库默认、普通 API 和现有脚本仍保持 `stream=False`。界面提供时间线选择、详情滚动、Thinking 折叠和自动跟随，唯一影响生成的按键是 `Ctrl+C` 对整个请求发起正常取消。
+`scripts/run_agent_tui.py` 使用 Textual 消费该事件流。它只观察一次 `generate()`，为该开发运行单独启用 `stream=True`；本地 WebUI 同样只在启动脚本内启用流式模型请求，可用 `CLI_PARSER_WEBUI_STREAM=false` 降级，库默认、普通 API 和其他脚本仍保持 `stream=False`。界面提供时间线选择、详情滚动、Thinking 折叠和自动跟随，唯一影响生成的按键是 `Ctrl+C` 对整个请求发起正常取消。
 
 TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events.jsonl`，并在 `result.json` 保存脚本版本与状态、起止时间、模型、输入文件元数据、transcript 路径、可选公共结果，以及有界的 artifact/render/exception 类型。该目录是显式本地完整调试通道，可以包含命令输出、上下文快照、Thinking/文本、工具参数与结果、Schema、TTP、capture 和验证反馈，但不得包含模型或 Laminar API Key、credential/client 对象或未处理异常正文。TUI 与 Laminar 相互独立且可以同时启用；两者都只能观察，任何内容都不得回灌模型上下文。脚本退出码固定为 `0` 成功、`1` 生成/TUI/artifact 故障、`2` 配置或非 TTY、`130` 运行中取消。
 
@@ -125,6 +125,12 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 │       ├── config.py
 │       ├── evaluation.py
 │       ├── observability.py
+│       ├── webui/
+│       │   ├── agent_service.py
+│       │   ├── app.py
+│       │   ├── contracts.py
+│       │   ├── service.py
+│       │   └── store.py
 │       └── ttp_generation/
 │           ├── __init__.py
 │           ├── contracts.py
@@ -176,6 +182,9 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `validation/capture.py` | 为 Laminar、observer/TUI 和评测生成不超过 `32 KiB` 的内部诊断 capture；模型可见结果由工具适配层按输入编码为独立解析结果块 | 否 |
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
 | `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema 终验 | 否 |
+| `webui/app.py`、`webui/store.py` | HTTP 路由、单任务后台运行、文件记录和 SSE；只依赖 WebUI 服务协议，不导入 AgentScope 或生成流程类型 | 否 |
+| `webui/contracts.py`、`webui/service.py` | WebUI 自有请求、进度和服务边界契约 | 否 |
+| `webui/agent_service.py` | 唯一的 WebUI/Agent 适配器；调用公共 `TtpGenerator` API，并将 AgentScope 事件投影为经凭据过滤、限额的 WebUI 事件 | 是；仅限适配边界 |
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
 | `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
