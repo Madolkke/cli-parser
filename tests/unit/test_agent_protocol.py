@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, cast
@@ -61,7 +62,23 @@ def _tool_text(chunk: ToolChunk) -> str:
 
 
 def _matched_records(chunk: ToolChunk) -> list[Any]:
-    return cast(list[Any], json.loads(_tool_text(chunk)))
+    matches = list(
+        re.finditer(
+            r'<parsed_record input_index="(?P<input_index>\d+)" '
+            r'display_number="(?P<display_number>\d+)">\n'
+            r'(?P<record>.*?)\n</parsed_record>',
+            _tool_text(chunk),
+            flags=re.DOTALL,
+        ),
+    )
+    assert matches, _tool_text(chunk)
+    assert [int(item["input_index"]) for item in matches] == list(
+        range(len(matches)),
+    )
+    assert [int(item["display_number"]) for item in matches] == list(
+        range(1, len(matches) + 1),
+    )
+    return [json.loads(item["record"]) for item in matches]
 
 
 def _unused_schema_validator(candidate: SchemaCandidate) -> ValidatorOutcome:
@@ -127,7 +144,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v19-tool-arity-superseded-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v21-separated-record-blocks-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -167,9 +184,11 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "完成这项检查前不要改 XML wrapper" in TTP_SYSTEM_PROMPT
     assert "ignore |" not in TTP_SYSTEM_PROMPT
     assert "直接给出当前模板" in TTP_SYSTEM_PROMPT
-    assert "records JSON" in TTP_SYSTEM_PROMPT
+    assert "独立的 `<parsed_record>` 块" in TTP_SYSTEM_PROMPT
+    assert "不要把不同块拼成一个业务数组" in TTP_SYSTEM_PROMPT
+    assert "input_index" in TTP_SYSTEM_PROMPT
     assert "accepted、issues" in TTP_SYSTEM_PROMPT
-    assert "存在 records 不代表候选已通过内部验收" in TTP_SYSTEM_PROMPT
+    assert "存在结果块不代表候选已通过内部验收" in TTP_SYSTEM_PROMPT
     assert "预期数据行数完全相等" in TTP_SYSTEM_PROMPT
     assert "不能把末列 Type 当作中间 Status" in TTP_SYSTEM_PROMPT
     assert "不要使用 condition" in TTP_SYSTEM_PROMPT
@@ -181,13 +200,17 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert 'pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?")' in TTP_SYSTEM_PROMPT
     assert "不会替你消费可变空白" in TTP_SYSTEM_PROMPT
     assert "说明行控制拆开了同一实体" in TTP_SYSTEM_PROMPT
+    assert "最外层 group 必须省略 name" in TTP_SYSTEM_PROMPT
+    assert "未命名的最外层 group 对应根 object 本身" in TTP_SYSTEM_PROMPT
+    assert '{{ ignore("\\s*") }}' in TTP_SYSTEM_PROMPT
+    assert "吸收可变前导空白" in TTP_SYSTEM_PROMPT
     # Every reply must call exactly one tool; plain text is discarded and only
     # burns budget (0.67 mean no-tool TTP responses observed per trial).
     assert "必须恰好调用这两个工具之一" in TTP_SYSTEM_PROMPT
     assert "会被整条丢弃" in TTP_SYSTEM_PROMPT
     # Superseded results are collapsed in context, so the model must not read
     # the placeholder as a parse failure or resubmit the same template.
-    assert "只有最近一次提交的 records 会完整保留" in TTP_SYSTEM_PROMPT
+    assert "只有最近一次提交的独立解析结果块会完整保留" in TTP_SYSTEM_PROMPT
     assert "不表示那次" in TTP_SYSTEM_PROMPT
     # required is the weakest measured schema dimension; force enumeration.
     assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
@@ -563,6 +586,41 @@ async def test_template_submission_requires_a_frozen_schema() -> None:
     assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
     assert session.ttp_submissions == 0
     assert session.last_ttp_template is None
+
+
+@pytest.mark.asyncio
+async def test_model_receives_separately_labelled_records_for_each_input() -> None:
+    records = [
+        {
+            "hostname": 'r1 "edge"',
+            "interfaces": [{"name": "Gi0", "status": "up"}],
+        },
+        {
+            "hostname": "路由器\n二号",
+            "interfaces": [{"name": "Gi1", "status": "down"}],
+        },
+    ]
+    session = GenerationSession(
+        command_outputs=["first", "second"],
+        schema_validator=_unused_schema_validator,
+        template_validator=lambda candidate: ValidatorOutcome(
+            valid=True,
+            records=tuple(records),
+        ),
+    )
+    session.frozen_schema = _schema()
+
+    result = await SubmitTtpTemplateTool(session).call("{{ value }}")
+    text = _tool_text(result)
+
+    assert text.startswith("以下是按输入顺序分别返回的解析结果。")
+    assert not text.startswith("[")
+    assert text.count("<parsed_record ") == 2
+    assert text.count("</parsed_record>") == 2
+    assert '<parsed_record input_index="0" display_number="1">' in text
+    assert '<parsed_record input_index="1" display_number="2">' in text
+    assert _matched_records(result) == records
+    assert session.records == tuple(records)
 
 
 @pytest.mark.asyncio

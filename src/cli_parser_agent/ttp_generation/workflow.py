@@ -7,7 +7,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import asdict, dataclass
-from typing import Any, TypeVar
+from typing import Any, Literal, TypeVar
 
 import openai
 from pydantic import ValidationError
@@ -41,6 +41,8 @@ from .contracts import (
     GenerationRequest,
     GenerationResult,
     LastAttempt,
+    SchemaProposal,
+    SchemaProposalResult,
     ValidationIssue,
 )
 from .progress import ProgressEmitter
@@ -56,6 +58,7 @@ from .validation import (
 )
 
 _T = TypeVar("_T")
+GenerationMode = Literal["full", "schema_only", "template_only"]
 # Leave room for the model completion and tokenizer variance beyond
 # AgentScope's byte-based estimate.
 _INITIAL_CONTEXT_RATIO = 0.5
@@ -583,13 +586,18 @@ class _GenerationWorkflow:
         request: GenerationRequest,
         request_id: str,
         progress: ProgressEmitter,
+        mode: GenerationMode = "full",
         injected_schema: dict[str, Any] | None = None,
     ) -> None:
+        if mode == "template_only" and injected_schema is None:
+            raise ValueError("template_only mode requires an injected schema")
         self.settings = settings
         self.policy = policy
-        # When set, the Schema phase is skipped and this schema is frozen as
-        # given.  Acceptance, TTP validation, and record re-verification are
-        # unchanged; only schema *inference* is bypassed.
+        # "full" runs both phases; "schema_only" stops once the Schema phase
+        # freezes a proposal; "template_only" skips the Schema phase and freezes
+        # ``injected_schema`` as given.  Acceptance, TTP validation, and record
+        # re-verification are unchanged in every mode.
+        self.mode = mode
         self.injected_schema = injected_schema
         self.request = request
         self.request_id = request_id
@@ -1169,7 +1177,7 @@ class _GenerationWorkflow:
         )
 
     def _validate_frozen_schema(self) -> list[ValidationIssue]:
-        if self.injected_schema is not None:
+        if self.mode == "template_only":
             # A caller-supplied schema has no per-leaf evidence by construction,
             # so acceptance re-runs the schema-only closed-subset check.  Every
             # other gate (TTP allowlist, spawn isolation, record re-validation)
@@ -1485,13 +1493,15 @@ class _GenerationWorkflow:
             )
         return result
 
-    async def run(self) -> GenerationResult:
-        """Run Schema, TTP, and final full-input acceptance in order."""
+    async def _establish_frozen_schema(self) -> GenerationResult | None:
+        """Freeze a schema by inference or injection; return any failure."""
 
-        if self.injected_schema is not None:
-            schema_failure = self._freeze_injected_schema(self.injected_schema)
-            if schema_failure is not None:
-                return schema_failure
+        if self.mode == "template_only":
+            if self.injected_schema is None:
+                raise RuntimeError("template_only mode lost its injected schema")
+            failure = self._freeze_injected_schema(self.injected_schema)
+            if failure is not None:
+                return failure
         else:
             schema_invalid_calls = self.session.submission_tool_call_invalids
             schema_execution = await self._run_schema_phase()
@@ -1503,15 +1513,6 @@ class _GenerationWorkflow:
             if phase_failure is not None:
                 return phase_failure
 
-            if self.session.agent_rounds >= self.policy.max_agent_rounds:
-                issue = _issue(
-                    "generation.agent_round_limit",
-                    "The AgentScope reasoning round budget was exhausted after "
-                    "the Schema phase.",
-                    stage="budget",
-                    details={"phase": "schema", "blocked_phase": "ttp"},
-                )
-                return self._failure("agent_round_limit", [issue])
         if self.session.frozen_schema is None:
             issue = _issue(
                 "generation.invalid_session_state",
@@ -1519,6 +1520,50 @@ class _GenerationWorkflow:
                 stage="generation",
             )
             return self._failure("internal_error", [issue])
+        return None
+
+    async def run_schema_only(self) -> SchemaProposalResult:
+        """Freeze a schema proposal without generating a template."""
+
+        failure = await self._establish_frozen_schema()
+        if failure is not None:
+            return SchemaProposalResult(
+                status="failed",
+                issues=list(failure.issues),
+                metadata=failure.metadata,
+            )
+        return SchemaProposalResult(
+            status="success",
+            proposal=SchemaProposal(
+                result_schema=deepcopy(self.session.frozen_schema),
+                evidence=[
+                    FieldEvidence.model_validate(item)
+                    for item in self.session.field_evidence
+                ],
+                assumptions=list(self.session.assumptions),
+            ),
+            metadata=self._metadata("success"),
+        )
+
+    async def run(self) -> GenerationResult:
+        """Run Schema, TTP, and final full-input acceptance in order."""
+
+        failure = await self._establish_frozen_schema()
+        if failure is not None:
+            return failure
+
+        if (
+            self.mode != "template_only"
+            and self.session.agent_rounds >= self.policy.max_agent_rounds
+        ):
+            issue = _issue(
+                "generation.agent_round_limit",
+                "The AgentScope reasoning round budget was exhausted after "
+                "the Schema phase.",
+                stage="budget",
+                details={"phase": "schema", "blocked_phase": "ttp"},
+            )
+            return self._failure("agent_round_limit", [issue])
 
         frozen_result_schema = deepcopy(self.session.frozen_schema)
         ttp_invalid_calls = self.session.submission_tool_call_invalids

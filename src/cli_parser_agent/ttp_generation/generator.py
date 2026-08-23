@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from collections.abc import Mapping
+from typing import Any
 from uuid import uuid4
 
 from ..config import (
@@ -18,9 +19,14 @@ from ..observability import (
     start_laminar_span,
 )
 from .agent import PROMPT_VERSION
-from .contracts import GenerationRequest, GenerationResult, TemplateRequest
+from .contracts import (
+    GenerationRequest,
+    GenerationResult,
+    SchemaProposalResult,
+    TemplateRequest,
+)
 from .progress import ProgressEmitter, ProgressObserver
-from .workflow import _GenerationWorkflow
+from .workflow import GenerationMode, _GenerationWorkflow
 
 
 class TtpGenerator:
@@ -75,6 +81,25 @@ class TtpGenerator:
             observer=observer,
         )
 
+    async def propose_schema(
+        self,
+        request: GenerationRequest,
+        *,
+        observer: ProgressObserver | None = None,
+    ) -> SchemaProposalResult:
+        """Freeze a result schema without generating a template.
+
+        Runs the Schema phase alone and returns the frozen proposal with its
+        evidence and assumptions, so a caller can review or edit it and feed it
+        back through :meth:`generate_from_schema`.
+        """
+
+        return await self._traced_generate(
+            GenerationRequest.model_validate(request),
+            observer=observer,
+            mode="schema_only",
+        )
+
     async def generate_from_schema(
         self,
         request: TemplateRequest,
@@ -92,6 +117,7 @@ class TtpGenerator:
         return await self._traced_generate(
             GenerationRequest(command_outputs=request.command_outputs),
             observer=observer,
+            mode="template_only",
             injected_schema=request.result_schema,
         )
 
@@ -100,9 +126,10 @@ class TtpGenerator:
         request: GenerationRequest,
         *,
         observer: ProgressObserver | None,
+        mode: GenerationMode = "full",
         injected_schema: Mapping[str, object] | None = None,
-    ) -> GenerationResult:
-        """Trace one request, whether its schema is inferred or injected."""
+    ) -> Any:
+        """Trace one request across every generation mode."""
 
         request_id = str(uuid4())
         progress = ProgressEmitter(request_id=request_id, observer=observer)
@@ -126,7 +153,7 @@ class TtpGenerator:
             ),
             "policy_model_input_char_budget": self.policy.model_input_char_budget,
             "policy_max_schema_evidence": self.policy.max_schema_evidence,
-            "schema_injected": injected_schema is not None,
+            "generation_mode": mode,
         }
         if progress.enabled:
             progress.custom(
@@ -151,6 +178,7 @@ class TtpGenerator:
                     result = await self._generate(
                         request,
                         request_id=request_id,
+                        mode=mode,
                         injected_schema=injected_schema,
                     )
                 else:
@@ -158,6 +186,7 @@ class TtpGenerator:
                         request,
                         request_id=request_id,
                         progress=progress,
+                        mode=mode,
                         injected_schema=injected_schema,
                     )
             except asyncio.CancelledError as error:
@@ -234,6 +263,12 @@ class TtpGenerator:
                     sensitive=True,
                 )
             result_metadata = result.metadata
+            # A schema-only result has no artifact or last_attempt, so the
+            # funnel attributes are read tolerantly rather than duplicating the
+            # whole tracing skeleton per result type.
+            artifact = getattr(result, "artifact", None)
+            last_attempt = getattr(result, "last_attempt", None)
+            proposal = getattr(result, "proposal", None)
             final_attributes = {
                 "request_id": result_metadata.request_id,
                 "model_name": result_metadata.model_name,
@@ -257,7 +292,8 @@ class TtpGenerator:
                 "termination_reason": result_metadata.termination_reason or "",
                 "fault_domain": result_metadata.fault_domain or "",
                 "schema_frozen": bool(
-                    result.artifact is not None
+                    artifact is not None
+                    or proposal is not None
                     or result_metadata.ttp_agent_rounds > 0
                 ),
                 "entered_ttp": bool(
@@ -265,10 +301,10 @@ class TtpGenerator:
                     or result_metadata.ttp_sampled_char_count > 0
                 ),
                 "valid_ttp_candidate": bool(
-                    result.artifact is not None
+                    artifact is not None
                     or (
-                        result.last_attempt is not None
-                        and result.last_attempt.ttp_template is not None
+                        last_attempt is not None
+                        and last_attempt.ttp_template is not None
                     )
                 ),
                 "finish_called": result_metadata.termination_reason == "success",
@@ -288,15 +324,17 @@ class TtpGenerator:
         *,
         request_id: str,
         progress: ProgressEmitter | None = None,
+        mode: GenerationMode = "full",
         injected_schema: Mapping[str, object] | None = None,
-    ) -> GenerationResult:
+    ) -> Any:
         """Delegate one validated request to its private workflow."""
 
-        return await _GenerationWorkflow(
+        workflow = _GenerationWorkflow(
             settings=self.settings,
             policy=self.policy,
             request=request,
             request_id=request_id,
+            mode=mode,
             injected_schema=(
                 None if injected_schema is None else dict(injected_schema)
             ),
@@ -305,7 +343,10 @@ class TtpGenerator:
                 if progress is not None
                 else ProgressEmitter(request_id=request_id)
             ),
-        ).run()
+        )
+        if mode == "schema_only":
+            return await workflow.run_schema_only()
+        return await workflow.run()
 
 
 __all__ = ["TtpGenerator"]

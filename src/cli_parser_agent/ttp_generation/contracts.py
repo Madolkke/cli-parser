@@ -118,6 +118,20 @@ class SchemaSubmission(ContractModel):
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
 
+class SchemaProposal(ContractModel):
+    """A frozen result schema returned without generating a template.
+
+    Mirrors what the Schema phase froze, so a caller can review or edit it and
+    feed it back through ``generate_from_schema``.
+    """
+
+    result_schema: dict[str, JsonValue]
+    evidence: list[FieldEvidence] = Field(default_factory=list)
+    assumptions: list[str] = Field(default_factory=list)
+
+    _root_schema = field_validator("result_schema")(_validate_root_object_schema)
+
+
 class ArtifactBundle(ContractModel):
     """A fully validated TTP parser and its actual output contract."""
 
@@ -243,6 +257,34 @@ class GenerationResult(ContractModel):
         return self
 
 
+class SchemaProposalResult(ContractModel):
+    """Return value for a schema-only run.
+
+    ``GenerationResult`` cannot express this: its success branch requires an
+    ``ArtifactBundle`` with a non-empty template and records, neither of which
+    exists before the TTP phase runs.
+    """
+
+    status: GenerationStatus
+    proposal: SchemaProposal | None = None
+    issues: list[ValidationIssue] = Field(default_factory=list)
+    metadata: GenerationMetadata
+
+    @model_validator(mode="after")
+    def status_matches_payload(self) -> Self:
+        if self.status == "success":
+            if self.proposal is None:
+                raise ValueError("a successful result requires proposal")
+            if any(issue.severity == "error" for issue in self.issues):
+                raise ValueError("a successful result cannot contain error issues")
+        else:
+            if self.proposal is not None:
+                raise ValueError("a failed result cannot contain a frozen proposal")
+            if not any(issue.severity == "error" for issue in self.issues):
+                raise ValueError("a failed result requires at least one error issue")
+        return self
+
+
 # A shorter public spelling without weakening the descriptive class name.
 Metadata = GenerationMetadata
 
@@ -259,6 +301,9 @@ __all__ = [
     "MAX_COMMAND_OUTPUT_BYTES",
     "MAX_COMMAND_OUTPUTS",
     "Metadata",
+    "SchemaProposal",
+    "SchemaProposalResult",
     "SchemaSubmission",
+    "TemplateRequest",
     "ValidationIssue",
 ]

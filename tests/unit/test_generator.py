@@ -383,6 +383,7 @@ def _template_only_workflow(
         request=GenerationRequest(command_outputs=outputs or ["value: one"]),
         request_id="request-1",
         progress=ProgressEmitter(request_id="request-1"),
+        mode="template_only",
         injected_schema=schema,
     )
 

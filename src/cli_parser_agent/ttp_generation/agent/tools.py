@@ -223,6 +223,35 @@ def _brief_ttp_error(issues: Sequence[Any]) -> str:
     return "错误：模板未产生可用的匹配结果。"
 
 
+def _format_ttp_records_for_model(records: Sequence[Any]) -> str:
+    """Format each input-mapped record as an independently labelled block."""
+
+    if not records:
+        return "[]"
+
+    lines = [
+        "以下是按输入顺序分别返回的解析结果。每个块只对应一个输入，不要跨块合并。",
+    ]
+    for input_index, record in enumerate(records):
+        serialized = json.dumps(
+            record,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+        lines.extend(
+            [
+                "",
+                (
+                    f'<parsed_record input_index="{input_index}" '
+                    f'display_number="{input_index + 1}">'
+                ),
+                serialized,
+                "</parsed_record>",
+            ],
+        )
+    return "\n".join(lines)
+
+
 def _ttp_result_chunk(
     *,
     accepted: bool,
@@ -237,11 +266,7 @@ def _ttp_result_chunk(
         **details,
     )
     records = _jsonable(tuple(matched_records))
-    model_text = json.dumps(
-        records,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
+    model_text = _format_ttp_records_for_model(records)
     if not records:
         model_text = f"{model_text}\n{_brief_ttp_error(issues)}"
     return _TracedToolResult(

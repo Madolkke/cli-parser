@@ -3,17 +3,24 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import sys
 from collections.abc import Mapping
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TextIO
 from urllib.parse import urlsplit, urlunsplit
 
 MAX_COMMAND_OUTPUTS = 5
 MAX_COMMAND_OUTPUT_BYTES = 1024 * 1024
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+# The run-directory and JSON writers live in the package so ``src`` never has
+# to import from ``scripts``; the runners re-export them for their own use.
+from cli_parser_agent.webui.store import new_run_id  # noqa: E402
+from cli_parser_agent.webui.store import write_json as _write_json  # noqa: E402
 
 
 class ScriptConfigurationError(ValueError):
@@ -152,8 +159,7 @@ def load_command_outputs(
 def new_run_directory(artifact_root: Path) -> Path:
     """Create a unique UTC-stamped artifact directory."""
 
-    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%S.%fZ")
-    path = artifact_root / run_id
+    path = artifact_root / new_run_id()
     path.mkdir(parents=True, exist_ok=False)
     return path
 
@@ -161,11 +167,7 @@ def new_run_directory(artifact_root: Path) -> Path:
 def write_json(path: Path, value: Any) -> None:
     """Write deterministic, human-readable UTF-8 JSON."""
 
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-        newline="\n",
-    )
+    _write_json(path, value)
 
 
 def flush_laminar(*, error_stream: TextIO | None = None) -> bool:

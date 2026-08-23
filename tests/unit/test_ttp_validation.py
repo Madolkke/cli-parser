@@ -667,6 +667,114 @@ System: r2
     }
 
 
+def _root_scalar_and_array_schema() -> dict:
+    return {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "routing_table_type": {"type": "string"},
+            "routes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "destination_mask": {"type": "string"},
+                        "protocol": {"type": "string"},
+                    },
+                    "required": ["destination_mask", "protocol"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["routing_table_type", "routes"],
+        "additionalProperties": False,
+    }
+
+
+def test_anonymous_root_group_yields_one_root_object() -> None:
+    """A root object holding scalars plus an array needs an unnamed root group.
+
+    Naming that group would nest the root scalars under the name, so TTP's extra
+    single-element list around unnamed top-level groups must be unwrapped rather
+    than rejected as "not a root object".
+    """
+
+    template = """\
+<group>
+Routing Tables: {{ routing_table_type | WORD }}
+<group name="routes*">
+{{ ignore("\\s*") }}{{ destination_mask | WORD }} {{ protocol | WORD }}
+</group>
+</group>"""
+    source = """\
+Routing Tables: Public
+        10.0.0.0/8  Static
+        10.1.0.0/16  Direct"""
+
+    result = validate_ttp_template(
+        template,
+        [source],
+        _root_scalar_and_array_schema(),
+    )
+
+    assert result.valid
+    assert result.records == [
+        {
+            "routing_table_type": "Public",
+            "routes": [
+                {"destination_mask": "10.0.0.0/8", "protocol": "Static"},
+                {"destination_mask": "10.1.0.0/16", "protocol": "Direct"},
+            ],
+        },
+    ]
+
+
+def test_anonymous_root_unwrapping_preserves_input_order() -> None:
+    template = """\
+<group>
+Routing Tables: {{ routing_table_type | WORD }}
+<group name="routes*">
+{{ ignore("\\s*") }}{{ destination_mask | WORD }} {{ protocol | WORD }}
+</group>
+</group>"""
+    first = "Routing Tables: Public\n        10.0.0.0/8  Static"
+    second = "Routing Tables: Private\n        192.168.0.0/16  Direct"
+
+    result = validate_ttp_template(
+        template,
+        [first, second],
+        _root_scalar_and_array_schema(),
+    )
+
+    assert result.valid
+    assert [record["routing_table_type"] for record in result.records] == [
+        "Public",
+        "Private",
+    ]
+
+
+def test_repeating_anonymous_root_group_is_still_rejected() -> None:
+    """Unwrapping must only collapse a single-element wrapper.
+
+    An unnamed root group that matches twice yields two root objects for one
+    input, which the one-root-object contract still has to reject.
+    """
+
+    template = """\
+<group>
+Host: {{ host | WORD }}
+</group>"""
+
+    result = validate_ttp_template(
+        template,
+        ["Host: r1\nHost: r2"],
+        _line_schema(field="host"),
+    )
+
+    assert not result.valid
+    assert any("root object" in issue.message for issue in result.issues)
+
+
 def test_full_parse_requires_frozen_schema_match() -> None:
     template = "Value: {{ value | WORD }}"
     schema = _line_schema(field_type="integer")

@@ -787,6 +787,26 @@ def _normalise_json_value(value: Any) -> Any:
     raise ValueError("non-JSON result value")
 
 
+def _unwrap_anonymous_root(record: Any) -> Any:
+    """Strip the single-element list TTP wraps around an anonymous root group.
+
+    A root object holding both scalars and an array can only come from a
+    top-level ``<group>`` without a ``name``, because a named root group would
+    nest every field under that name.  TTP wraps the result of any unnamed
+    top-level group in one extra list, so that otherwise valid shape used to be
+    rejected as "not a root object".
+
+    Only a list holding exactly one dict is unwrapped, which is precisely one
+    root object.  Two sibling top-level groups or a repeating unnamed root group
+    yield more than one element and are left alone, so genuine multi-root output
+    is still rejected downstream.
+    """
+
+    if isinstance(record, list) and len(record) == 1 and isinstance(record[0], dict):
+        return record[0]
+    return record
+
+
 def _isolated_ttp_worker(
     connection: Any,
     template: str,
@@ -828,6 +848,7 @@ def _isolated_ttp_worker(
         if not isinstance(records, list) or len(records) != len(command_outputs):
             connection.send(("invalid_mapping", None))
             return
+        records = [_unwrap_anonymous_root(record) for record in records]
         if any(not isinstance(record, dict) for record in records):
             connection.send(("invalid_record", None))
             return

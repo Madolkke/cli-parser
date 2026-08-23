@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v19-tool-arity-superseded-zh-cn"
+PROMPT_VERSION = "ttp-generator-v21-separated-record-blocks-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -87,11 +87,15 @@ submit_ttp_template，已经满意就调用 finish_generation。不要用普通�
 冻结 Schema 是不可修改的唯一结果契约；同一模板必须解析每份完整输出，
 并在相同索引处各产生一个符合该契约的根 object。
 
-submit_ttp_template 的 ToolResult 直接给出当前模板对全部完整输入产生的 records JSON
-数组，数组元素按输入索引一一对应。没有可用 records 时先返回 []，随后追加一行简短的
-中文错误。工具不会告诉你 accepted、issues、剩余预算、候选状态或下一步动作；必须自行
-对照冻结 Schema、原始输入和 records 判断模板是否完整、字段是否来自正确列、业务内容
-是否忠实且结构是否一致。需要修正时重新提交，确认匹配结果合理后才调用
+submit_ttp_template 的 ToolResult 直接给出当前模板对全部完整输入产生的解析结果，
+并分别放在
+独立的 `<parsed_record>` 块中。每个块带有从 0 开始的 `input_index` 和从 1 开始的
+`display_number`，只对应同一个输入；不要把不同块拼成一个业务数组，也不要把块之间的
+结果相互合并。一个 record 内部冻结 Schema 允许的嵌套 object 和 array 仍然是该 record
+自己的业务数据。没有可用结果块时先返回 []，随后追加一行简短的中文错误。工具不会告诉
+你 accepted、issues、剩余预算、候选状态或下一步动作；必须自行对照冻结 Schema、原始输入
+和每个独立结果块判断模板是否完整、字段是否来自正确列、业务内容是否忠实且结构是否一致。
+需要修正时重新提交，确认匹配结果合理后才调用
 finish_generation。每次模型回复最多调用一个工具；必须等提交 ToolResult 已进入后续
 模型上下文，才能调用 finish_generation。绝不要原样重复无效候选，也不要在没有合理
 匹配结果时尝试结束。
@@ -170,20 +174,35 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
 - 不要捕获冻结 Schema 中不存在的辅助字段。每个 group name/path 必须对应冻结
   Schema 中真实存在的 object 或 array 容器。出现 additionalProperties 失败时，
   使所有 group path 和具名捕获与冻结结构严格对齐。
+- 当冻结 Schema 的根层同时有标量字段和 array 时，最外层 group 必须省略 name，
+  把 array 写成它的嵌套子组。未命名的最外层 group 对应根 object 本身，而根
+  object 没有名字，因此这不违反上一条；若给它加上 name，所有根层标量都会被错误
+  地嵌进那个名字底下。例如根层有 routing_table_type 和 routes 数组时：
+    <group>
+    Routing Tables: {{ routing_table_type | WORD }}
+    <group name="routes*">
+    {{ ignore("\\s*") }}{{ destination_mask | WORD }} {{ protocol | WORD }}
+    </group>
+    </group>
+- 表格的表头常常顶格而数据行有前导空白。TTP 从行首开始锚定，忽略前导空白会
+  导致只匹配到表头行而一条数据都捕获不到。数据行存在缩进时，在该行第一个字段
+  前加 `{{ ignore("\\s*") }}` 吸收可变前导空白。加上它以后表头行也可能开始匹配，
+  此时按上面的表头规则在真实字段 pipeline 上用 `exclude` 排除表头字面量。
 - 保持冻结字段名、嵌套结构和标量类型不变。TTP `DIGIT` 的结果是文本；冻结字段
   为 integer 时在 `DIGIT` 后添加 `to_int`，其他转换同理。
 - 冻结 Schema 中未列入 required 的字段可以在对应原文不存在时缺失。模板必须让
   TTP 省略未匹配的可选键，不能用空 string 或 null 代替不存在的字段，也不能因
   可选行不存在而丢弃其父 object、同级必填字段或整条业务记录。原文字段槽明确存在
   但字面值为空时，可以按冻结 Schema 忠实捕获为空 string。
-- 每次工具反馈中的 records 都是当前候选对全部完整输入的真实解析结果。返回 [] 和
-  中文错误表示本次没有可用匹配；存在 records 不代表候选已通过内部验收。
-- 只有最近一次提交的 records 会完整保留在上下文中。更早提交的结果会被替换为
+- 每次工具反馈中的 `<parsed_record>` 块都是当前候选对对应完整输入的真实解析结果。
+  必须检查结果块数量是否与输入数量相等，并用每个块的 `input_index` 对照同索引原文。
+  返回 [] 和中文错误表示本次没有可用匹配；存在结果块不代表候选已通过内部验收。
+- 只有最近一次提交的独立解析结果块会完整保留在上下文中。更早提交的结果会被替换为
   "该次提交的匹配结果已被后续提交取代"的固定说明；这只表示它已过时，不表示那次
-  解析失败或被拒绝。请始终以最近一次完整 records 为准进行复核，不要因为看到该说明
+  解析失败或被拒绝。请始终以最近一次完整结果块为准进行复核，不要因为看到该说明
   就重新提交同一个模板，也不要试图追问历史结果。
-- 每次 submit_ttp_template 返回后都要主动复核 records。对于表格，records 中对应
-  数组的长度必须与提交前数出的预期数据行数完全相等；
+- 每次 submit_ttp_template 返回后都要主动逐个复核解析结果块。对于每个结果块中的表格，
+  record 内对应数组的长度必须与提交前数出的预期数据行数完全相等；
   多一条通常表示表头或分隔线混入，少一条也属于漏解析。逐个输入检查第一条、中间一条
   和最后一条记录：字段名不能作为值，每个字段值必须位于原文相同行的对应表头列，
   “值能在原文其他位置找到”不算正确。特别核对 status/state/type/name 等容易错列的

@@ -1056,9 +1056,10 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
         request: GenerationRequest,
         *,
         request_id: str,
+        mode: str = "full",
         injected_schema: Any = None,
     ) -> GenerationResult:
-        del injected_schema
+        del mode, injected_schema
         return GenerationResult(
             status="success",
             artifact=ArtifactBundle(
@@ -1125,9 +1126,10 @@ async def test_root_trace_records_only_extra_body_hash(
         request: GenerationRequest,
         *,
         request_id: str,
+        mode: str = "full",
         injected_schema: Any = None,
     ) -> GenerationResult:
-        del injected_schema
+        del mode, injected_schema
         return GenerationResult(
             status="failed",
             metadata=GenerationMetadata(
@@ -1208,3 +1210,73 @@ async def test_generate_closes_trace_before_propagating_base_exceptions(
         "exception_type": type(error).__name__,
     }
     assert "private" not in str(finishes[0])
+
+
+async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``propose_schema`` must stop once the Schema phase freezes."""
+
+    phases: list[str] = []
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        phases.append(phase)
+        session.record_agent_round("schema")
+        session.frozen_schema = _result_schema()
+        session.field_evidence = (
+            {"path": "/value", "output_index": 0, "excerpt": "one"},
+        )
+        session.assumptions = ("kept for review",)
+        return AgentRunOutcome(phase_completed=True)
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().propose_schema(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert phases == ["schema"]
+    assert result.status == "success"
+    assert result.proposal is not None
+    assert result.proposal.result_schema == _result_schema()
+    assert [item.path for item in result.proposal.evidence] == ["/value"]
+    assert result.proposal.assumptions == ["kept for review"]
+
+    # The TTP phase never ran, and the metadata identity still holds.
+    assert result.metadata.ttp_agent_rounds == 0
+    assert result.metadata.ttp_submissions == 0
+    assert result.metadata.schema_agent_rounds == 1
+    assert result.metadata.agent_rounds == 1
+    assert result.metadata.termination_reason == "success"
+
+
+async def test_schema_only_failure_reports_issues_without_a_proposal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        assert phase == "schema"
+        session.record_agent_round("schema")
+        session.terminal_reason = "model_no_tool_retry_limit"
+        return AgentRunOutcome(model_no_tool_retry_limit=True)
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator().propose_schema(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+
+    assert result.status == "failed"
+    assert result.proposal is None
+    assert [issue.code for issue in result.issues] == [
+        "model.submission_tool_not_called",
+    ]

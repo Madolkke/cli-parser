@@ -192,8 +192,10 @@ async def test_generate_emits_request_lifecycle_and_accepts_keyword_observer(
         *,
         request_id: str,
         progress: ProgressEmitter,
+        mode: str = "full",
         injected_schema: Any = None,
     ) -> GenerationResult:
+        assert mode == "full"
         assert injected_schema is None
         assert progress.request_id == request_id
         assert request.command_outputs == ["value: one"]
@@ -230,9 +232,10 @@ async def test_generate_emits_cancelled_without_exception_event(
         *,
         request_id: str,
         progress: ProgressEmitter,
+        mode: str = "full",
         injected_schema: Any = None,
     ) -> GenerationResult:
-        del request, request_id, progress, injected_schema
+        del request, request_id, progress, mode, injected_schema
         raise asyncio.CancelledError
 
     monkeypatch.setattr(generator, "_generate", cancel)
@@ -260,9 +263,10 @@ async def test_generate_exception_event_records_only_the_exception_type(
         *,
         request_id: str,
         progress: ProgressEmitter,
+        mode: str = "full",
         injected_schema: Any = None,
     ) -> GenerationResult:
-        del request, request_id, progress, injected_schema
+        del request, request_id, progress, mode, injected_schema
         raise RuntimeError("secret exception body")
 
     monkeypatch.setattr(generator, "_generate", fail)

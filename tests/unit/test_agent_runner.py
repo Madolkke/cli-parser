@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import json
+import re
 import time
 from contextlib import contextmanager
 from copy import deepcopy
@@ -52,6 +53,17 @@ def _schema() -> dict[str, Any]:
         "required": ["value"],
         "additionalProperties": False,
     }
+
+
+def _parse_record_blocks(text: str) -> list[Any]:
+    matches = re.findall(
+        r'<parsed_record input_index="\d+" display_number="\d+">\n'
+        r'(.*?)\n</parsed_record>',
+        text,
+        flags=re.DOTALL,
+    )
+    assert matches, text
+    return [json.loads(record) for record in matches]
 
 
 def _schema_call(call_id: str = "schema") -> ChatResponse:
@@ -461,8 +473,9 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert len(tool_results) == 1
     assert tool_results[0].id == "template-rejected"
     assert len(tool_results[0].output) == 1
-    payload = json.loads(tool_results[0].output[0].text)
-    assert payload == [captured_record]
+    assert _parse_record_blocks(tool_results[0].output[0].text) == [
+        captured_record,
+    ]
     assert "accepted" not in tool_results[0].output[0].text
     assert issue["message"] not in tool_results[0].output[0].text
 
@@ -480,10 +493,11 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
 async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() -> None:
     """Only the newest submission keeps its records.
 
-    Every ``submit_ttp_template`` result carries the full records JSON for all
-    inputs and AgentScope only appends to the context, so superseded results
-    were re-sent on every later round (3.9k to 92k input tokens observed).
-    The review contract only requires the current result to be complete.
+    Every ``submit_ttp_template`` result carries a complete labelled result
+    block for each input and AgentScope only appends to the context, so
+    superseded results were re-sent on every later round (3.9k to 92k input
+    tokens observed). The review contract only requires the current result to
+    be complete.
     """
 
     records_by_submission = [
@@ -537,7 +551,7 @@ async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() 
         assert superseded.output[0].text == SUPERSEDED_TTP_RESULT_NOTICE
 
     newest = tool_results[-1]
-    assert json.loads(newest.output[0].text) == [{"value": "one"}]
+    assert _parse_record_blocks(newest.output[0].text) == [{"value": "one"}]
 
     # Superseded bodies must not leak diagnostics, and source data is untouched.
     collapsed_text = "\n".join(
@@ -570,8 +584,9 @@ async def test_valid_template_submission_waits_for_explicit_finish() -> None:
         if isinstance(block, ToolResultBlock)
     ]
     assert len(second_request_results) == 1
-    accepted_payload = json.loads(second_request_results[0].output[0].text)
-    assert accepted_payload == [{"value": "one"}]
+    assert _parse_record_blocks(second_request_results[0].output[0].text) == [
+        {"value": "one"},
+    ]
     assert outcome.phase_completed
     assert outcome.stopped_after_terminal_tool
     assert session.ttp_submissions == 1

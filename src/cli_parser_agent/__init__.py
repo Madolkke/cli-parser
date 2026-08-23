@@ -8,6 +8,8 @@ from .ttp_generation.contracts import (
     GenerationRequest,
     GenerationResult,
     LastAttempt,
+    SchemaProposal,
+    SchemaProposalResult,
     TemplateRequest,
     ValidationIssue,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "GenerationResult",
     "LastAttempt",
     "ProgressObserver",
+    "SchemaProposal",
+    "SchemaProposalResult",
     "TemplateRequest",
     "TtpGeneratorSettings",
     "TtpGenerator",

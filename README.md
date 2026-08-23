@@ -64,6 +64,32 @@ normal callers should omit it. The observer must remain fast and non-blocking. I
 recommended implementation is `queue.put_nowait(event)`, with rendering and artifact
 writing handled by a separate consumer.
 
+During the TTP phase, the model receives one separately labelled parse-result block
+per command output, with an explicit `input_index`. The public result keeps its
+`artifact.records` list and its one-record-per-input mapping unchanged.
+
+### Proposing a schema for review
+
+`propose_schema()` runs only the Schema phase and returns the frozen proposal
+with its evidence and assumptions, so you can review or edit the field names
+before a template is generated:
+
+```python
+from cli_parser_agent import GenerationRequest, TtpGenerator
+
+proposal = await TtpGenerator.from_env().propose_schema(
+    GenerationRequest(command_outputs=["Interface  Status\nGi0        up"]),
+)
+if proposal.status == "success":
+    print(proposal.proposal.result_schema)
+    print(proposal.proposal.assumptions)
+```
+
+It returns a `SchemaProposalResult` rather than a `GenerationResult`: a
+successful proposal has no template and no records, so it cannot satisfy
+`ArtifactBundle`. Pair it with `generate_from_schema()` below to get a
+propose → review → generate workflow.
+
 ### Running the TTP phase alone
 
 `generate_from_schema()` freezes a caller-supplied result schema and runs only the
@@ -123,6 +149,30 @@ uv run --env-file .env python scripts/run_ttp_phase_once.py
 ```
 
 Results are written under `.artifacts/ttp-phase-once/`.
+
+## Local WebUI
+
+设置模型环境变量后启动本地界面：
+
+```powershell
+uv run --env-file .env python scripts/run_webui.py
+```
+
+默认服务于 `http://127.0.0.1:8080`，可用 `CLI_PARSER_WEBUI_HOST`、
+`CLI_PARSER_WEBUI_PORT` 和 `CLI_PARSER_WEBUI_DATA_ROOT` 覆盖。
+
+界面提供两条路径：
+
+- **完整生成** — 等价于命令行的两阶段流程。
+- **先提案 Schema** — 先产出 Schema 供你确认或编辑，再据此生成模板。字段命名
+  直接决定最终 records 的键名，这一步的人工介入可以避免模型自造命名带来的偏差。
+
+生成在后台执行，进度经 SSE 实时推送，可随时取消。每次运行保存在被 Git 忽略的
+`data/runs/<UTC 时间戳>/` 下（`meta.json`、`inputs.json`、`schema.json`、
+`result.json`、`events.jsonl`），历史列表就是目录扫描，删除即删目录。
+
+同一时刻只允许一次生成在跑。这是单用户本地工具：只绑回环地址、无鉴权、无并发
+隔离，不是部署形态。
 
 ## Read-only Textual TUI
 

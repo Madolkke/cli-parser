@@ -117,10 +117,10 @@ def _submission_count(session: GenerationSession, tool_name: str) -> int:
 def _collapse_superseded_ttp_results(agent: Any) -> int:
     """Replace every TTP result body except the newest with a fixed notice.
 
-    Each ``submit_ttp_template`` result carries the full records JSON for all
-    inputs, and AgentScope only appends to the context, so every superseded
-    submission is re-sent and re-billed on each later round.  Live runs grew
-    from 3.9k to 92k input tokens across TTP rounds this way.
+    Each ``submit_ttp_template`` result carries a complete labelled result
+    block for every input, and AgentScope only appends to the context, so every
+    superseded submission is re-sent and re-billed on each later round. Live
+    runs grew from 3.9k to 92k input tokens across TTP rounds this way.
 
     Only results the model has already acted on are collapsed; the newest one
     keeps its complete records, so the review contract is unchanged.  The
