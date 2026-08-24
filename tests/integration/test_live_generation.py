@@ -7,7 +7,6 @@ import os
 import time
 
 import pytest
-from pydantic import ValidationError
 
 from cli_parser_agent import (
     GenerationPolicy,
@@ -25,10 +24,9 @@ from cli_parser_agent.ttp_generation.agent import (
     build_ttp_task_message,
     run_generation_phase,
 )
-from cli_parser_agent.ttp_generation.contracts import FieldEvidence, ValidationIssue
+from cli_parser_agent.ttp_generation.contracts import ValidationIssue
 from cli_parser_agent.ttp_generation.validation import (
     validate_result_schema,
-    validate_schema_proposal,
     validate_ttp_template,
 )
 from cli_parser_agent.ttp_generation.workflow import _run_before_deadline
@@ -130,21 +128,8 @@ async def test_real_model_reacts_to_schema_and_template_rejections() -> None:
 
     def validate_schema(candidate: SchemaCandidate) -> ValidatorOutcome:
         nonlocal schema_valid_rejected
-        try:
-            evidence = [
-                FieldEvidence.model_validate(item) for item in candidate.evidence
-            ]
-        except ValidationError:
-            issue = ValidationIssue(
-                code="schema.invalid_evidence",
-                stage="schema",
-                message="Field evidence does not satisfy the contract.",
-            )
-            return ValidatorOutcome(valid=False, issues=(issue,))
-        issues = validate_schema_proposal(
+        issues = validate_result_schema(
             candidate.result_schema,
-            evidence,
-            candidate.command_outputs,
         )
         if not issues and not schema_valid_rejected:
             schema_valid_rejected = True

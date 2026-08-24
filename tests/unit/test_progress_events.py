@@ -331,13 +331,6 @@ async def test_runner_forwards_model_events_and_emits_debug_context() -> None:
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "evidence": [
-                    {
-                        "path": "/value",
-                        "output_index": 0,
-                        "excerpt": "one",
-                    },
-                ],
                 "assumptions": [],
             },
         ),
@@ -484,9 +477,6 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
         if phase == "schema":
             session.schema_submissions = 1
             session.frozen_schema = _schema()
-            session.field_evidence = (
-                {"path": "/value", "output_index": 0, "excerpt": "one"},
-            )
             return AgentRunOutcome(phase_completed=True)
         session.ttp_submissions = 1
         session.validated_ttp_template = "value: {{ value }}"
@@ -499,7 +489,7 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
     monkeypatch.setattr(workflow_module, "run_generation_phase", run)
     monkeypatch.setattr(
         workflow_module,
-        "validate_schema_proposal",
+        "validate_result_schema",
         lambda *_args, **_kwargs: [],
     )
     monkeypatch.setattr(

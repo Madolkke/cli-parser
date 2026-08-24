@@ -501,7 +501,7 @@ async function refreshRun() {
   const proposal = result && result.proposal;
   const showSchema = Boolean(schema) && meta.mode === "propose" && !(result && result.artifact);
   $("schema-panel").hidden = !showSchema;
-  if (showSchema && (!state.schemaDraft || !state.schemaDirty)) { initialiseSchema(schema); renderAssumptions(proposal ? proposal.assumptions : []); renderEvidence(proposal ? proposal.evidence : []); }
+  if (showSchema && (!state.schemaDraft || !state.schemaDirty)) { initialiseSchema(schema); renderAssumptions(proposal ? proposal.assumptions : []); }
   renderResult(result, inputs, schema); renderIssues(result ? result.issues : []);
   return data;
 }
@@ -547,11 +547,6 @@ function renderAssumptions(items) {
   const box = $("assumptions"); box.hidden = !items || !items.length; box.replaceChildren(); if (!items || !items.length) return;
   const strong = document.createElement("strong"); strong.textContent = "模型假设"; const ul = document.createElement("ul");
   for (const value of items) { const li = document.createElement("li"); li.textContent = value; ul.append(li); } box.append(strong, ul);
-}
-function renderEvidence(items) {
-  const box = $("evidence-box"); box.hidden = !items || !items.length; const table = document.createElement("table");
-  for (const item of items || []) { const row = document.createElement("tr"); const path = document.createElement("td"); path.textContent = item.path; const excerpt = document.createElement("td"); excerpt.textContent = item.excerpt; row.append(path, excerpt); table.append(row); }
-  $("evidence").replaceChildren(table);
 }
 function renderResult(result, inputs, schema) {
   const artifact = result && result.artifact;

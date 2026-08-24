@@ -1191,7 +1191,7 @@ def project_candidate_quality(
 
 
 def _project_schema_quality(span: Mapping[str, Any]) -> dict[str, Any]:
-    """Project a Schema submission without retaining schema/evidence data."""
+    """Project a Schema submission without retaining raw schema data."""
 
     payload = _candidate_payload(span)
     issue_values = payload.get("issues")

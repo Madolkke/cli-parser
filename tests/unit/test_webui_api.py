@@ -86,7 +86,6 @@ class FakeGenerator:
             status="success",
             proposal=SchemaProposal(
                 result_schema=CLOSED_SCHEMA,
-                evidence=[],
                 assumptions=["reviewed by hand"],
             ),
             metadata=_metadata(),

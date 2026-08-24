@@ -40,30 +40,6 @@ SUBMIT_TEMPLATE_TOOL_NAME = "submit_ttp_template"
 FINISH_GENERATION_TOOL_NAME = "finish_generation"
 
 
-class FieldEvidenceInput(ParamsBase):
-    """为候选 Schema 的一个叶子路径提交的原文证据。"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    path: str = Field(
-        min_length=1,
-        max_length=2_048,
-        description=(
-            "JSON 风格的数据路径；array 条目使用 *，例如 /interfaces/*/name。"
-        ),
-    )
-    output_index: int = Field(
-        ge=0,
-        le=4,
-        description="包含该证据的命令输出索引，从 0 开始。",
-    )
-    excerpt: str = Field(
-        min_length=1,
-        max_length=4096,
-        description="从对应命令输出中原样复制的一段连续 excerpt。",
-    )
-
-
 class SchemaSubmissionInput(ParamsBase):
     """submit_result_schema 接受的完整参数。"""
 
@@ -71,13 +47,6 @@ class SchemaSubmissionInput(ParamsBase):
 
     result_schema: dict[str, Any] = Field(
         description="描述单个 record 的完整 Draft 2020-12 JSON Schema。",
-    )
-    evidence: list[FieldEvidenceInput] = Field(
-        min_length=1,
-        description=(
-            "Schema 声明的每个叶子字段至少有一条 evidence；同一个 path 可以"
-            "根据多个样例提供多条 evidence。"
-        ),
     )
     assumptions: list[str] = Field(
         default_factory=list,
@@ -459,28 +428,24 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     name = SUBMIT_SCHEMA_TOOL_NAME
     description = (
-        "提交完整的结果 JSON Schema、每个叶子字段至少一条 evidence，以及"
-        "必要的 assumptions。Schema 一旦通过便永久冻结；被拒绝后可以修正并"
-        "重新提交。"
+        "提交完整的结果 JSON Schema 和必要的 assumptions。Schema 一旦通过便"
+        "永久冻结；被拒绝后可以修正并重新提交。"
     )
     input_schema = SchemaSubmissionInput.model_json_schema()
 
     async def call(
         self,
         result_schema: dict[str, Any],
-        evidence: list[dict[str, Any]],
         assumptions: list[str] | None = None,
     ) -> ToolChunk:
         return await _run_traced_tool_call(
             name=self.name,
             input={
                 "result_schema": result_schema,
-                "evidence": evidence,
                 "assumptions": assumptions,
             },
             operation=lambda: self._call(
                 result_schema=result_schema,
-                evidence=evidence,
                 assumptions=assumptions,
             ),
             progress=self.progress,
@@ -490,7 +455,6 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
     async def _call(
         self,
         result_schema: dict[str, Any],
-        evidence: list[dict[str, Any]],
         assumptions: list[str] | None,
     ) -> ToolChunk:
         if self.session.schema_is_frozen:
@@ -510,7 +474,6 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
         try:
             submission = SchemaSubmissionInput(
                 result_schema=result_schema,
-                evidence=evidence,
                 assumptions=[] if assumptions is None else assumptions,
             )
         except ValidationError:
@@ -527,9 +490,6 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
         candidate = SchemaCandidate(
             result_schema=deepcopy(submission.result_schema),
-            evidence=tuple(
-                item.model_dump(mode="python") for item in submission.evidence
-            ),
             assumptions=tuple(submission.assumptions),
             command_outputs=tuple(self.session.command_outputs),
         )
@@ -557,7 +517,6 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
         if outcome.valid:
             self.session.frozen_schema = deepcopy(candidate.result_schema)
-            self.session.field_evidence = deepcopy(candidate.evidence)
             self.session.assumptions = candidate.assumptions
 
         return _result_chunk(
@@ -936,7 +895,6 @@ def build_submission_tools(
 
 
 __all__ = [
-    "FieldEvidenceInput",
     "GenerationPhase",
     "GenerationSession",
     "FinishGenerationTool",

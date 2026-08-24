@@ -6,11 +6,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v21-separated-record-blocks-zh-cn"
+PROMPT_VERSION = "ttp-generator-v22-schema-without-evidence-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
-    "请现在只调用 submit_result_schema，并提交完整参数。"
+    "请现在只调用 submit_result_schema，并提交 result_schema 和 assumptions。"
 )
 TTP_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的可用工具，普通文本不会被视为产物。"
@@ -61,13 +61,6 @@ SCHEMA_SYSTEM_PROMPT = """\
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
-- 每个叶子字段至少提供一条 evidence；同一个 path 可以根据多个样例提供多条
-  evidence。array 条目的 path 使用 *，例如 /interfaces/*/name。填写从零开始的
-  output_index，并从同一样例原样复制连续 excerpt。优先使用短的字面数据 token，
-  不要使用重构后的短语、规范化间距或虚构占位符。同一条数据行可为多个相关字段
-  分别提供证据。
-- 收到 evidence_not_found 后遵循 required_action：replace_excerpt 表示彻底替换
-  excerpt；change_output_index 表示使用 matching_output_indexes 中的索引。
 - assumptions 通常提交 []。确有无法避免的不确定性时，最多填写两句简短中文，
   不包含源文本引文、反引号或换行；不要发明输出中不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把

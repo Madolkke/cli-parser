@@ -28,14 +28,14 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 每个 `generate` 调用创建请求级 generation session，并顺序创建两个相互独立的 AgentScope 运行时：`ttp_schema_generator` 与 `ttp_template_generator`。两者分别拥有新的 `OpenAIChatModel`、Agent、`AgentState` 和 Toolkit；不同请求之间不共享任何状态，同一请求的两个阶段也不共享模型消息或 usage。
 
-`GenerationSession` 是唯一受控交接通道：它保存完整输入、冻结 Schema、提交计数、最近模板、结构化问题、最新有效 TTP 候选及其 records，以及显式完成状态。TTP 阶段只把 session 中的冻结 Schema 与从完整输入重新生成的样本序列化为新的 UserMsg；Schema 阶段的 rejected candidate、evidence、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 不会复制到新的 `AgentState`。evidence 与 assumptions 仍保留在 session，供最终验收和 artifact 使用。
+`GenerationSession` 是唯一受控交接通道：它保存完整输入、冻结 Schema、提交计数、最近模板、结构化问题、最新有效 TTP 候选及其 records，以及显式完成状态。TTP 阶段只把 session 中的冻结 Schema 与从完整输入重新生成的样本序列化为新的 UserMsg；Schema 阶段的 rejected candidate、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 不会复制到新的 `AgentState`。assumptions 仍保留在 session，供 artifact 使用。
 
 ### 2.2 两阶段硬隔离与语义重试
 
 每个阶段只注册固定的阶段工具，发送给 OpenAI 兼容 HTTP API 的请求完全省略 `tool_choice`：
 
 1. Schema Agent 只拥有 `submit_result_schema`。无效提交及其结构化问题留在 Schema `AgentState` 内，模型可修正后重提。
-2. 第一个通过元模式、白名单和字段证据校验的 Schema 被深拷贝并永久冻结；对应 `ToolResultEndEvent` 是阶段安全暂停点，runner 立即结束 Schema reply。
+2. 第一个通过 Draft 2020-12 受限子集校验的 Schema 被深拷贝并永久冻结；对应 `ToolResultEndEvent` 是阶段安全暂停点，runner 立即结束 Schema reply。
 3. 若仍有全局轮次和总时长预算，私有 generation workflow 创建新的 TTP 模型、Agent、`AgentState` 和 Toolkit。首次 TTP UserMsg 只含冻结 Schema 与该阶段重新采样的命令输出。
 4. TTP Agent 固定拥有 `submit_ttp_template` 和无参数的 `finish_generation`。有效模板只保存为最新候选并向模型返回按 `input_index` 分隔的独立完整解析结果块，不结束 Agent；每个块只对应一个输入，模型根据结果块、冻结 Schema 和原始输入复核记录数量、异常空容器、表头/分隔线误捕获、字段粒度和多样例一致性后，选择继续提交或 finish。后续无效提交保留先前有效候选，新的有效提交替换它。
 5. 如果一轮模型调用正常完成但没有工具调用，runner 不解析其 assistant 文本，只追加固定中文提醒并在当前阶段重试。提醒不引用或摘要模型回复；两个阶段分别受独立重试上限约束。
@@ -53,11 +53,11 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 模型构造层不识别供应商主机名，不发送 `thinking.type=disabled` 或其他供应商专用覆盖，也不根据异常正文推断模型是否支持工具。两个独立模型请求都只携带所属 Toolkit 的阶段工具 Schema 并省略 `tool_choice`；正常完成却未调用工具属于可观测的协议行为，而不是供应商能力结论。
 
-默认执行限制是总时长 `900` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。剩余时长不足以完成一次模型调用时不再开启新轮次，请求直接以 `generation_timeout` 结束；超时后的取消清理有固定宽限期，不会让被取消的阶段再发起一次模型请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。Schema evidence 总数默认上限为 `256`，可通过 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在 `1..256` 内向下收紧；该资源上限不写入 Agent 工具协议。零工具回复及其重试计入总轮次和总时长。达到有效 `max_ttp_submissions` 上限的模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
+默认执行限制是总时长 `900` 秒、AgentScope `13` 轮、最多 `9` 次模板提交、Schema 阶段最多 `3` 次零工具重试、TTP 阶段最多 `3` 次零工具重试，以及每次 TTP 隔离解析 `20` 秒；最先达到的限制终止请求。剩余时长不足以完成一次模型调用时不再开启新轮次，请求直接以 `generation_timeout` 结束；超时后的取消清理有固定宽限期，不会让被取消的阶段再发起一次模型请求。两个零工具上限可通过 `GenerationPolicy.max_schema_no_tool_retries` / `max_ttp_no_tool_retries` 程序化设置，或分别由 `CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES` / `CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES` 从环境读取；均允许设为 `0`。零工具回复及其重试计入总轮次和总时长。达到有效 `max_ttp_submissions` 上限的模板提交仍执行校验并返回反馈，但随后无条件以 `ttp_submission_limit` 失败；默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后成功调用 finish，且达到上限后不能用 finish 绕过失败。
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v21-separated-record-blocks-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v22-schema-without-evidence-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -168,7 +168,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `config.py` | OpenAI 兼容配置与独立的执行/安全策略 | 否 |
 | `observability.py` | 可选 Laminar 幂等初始化与 trace 边界辅助函数 | 否 |
 | `evaluation.py` | 开发期评测 manifest/target 安全加载、独立验收、严格 records/Schema 评分和脱敏 trial 投影 | 否 |
-| `contracts.py` | 请求、成功/失败结果、artifact、issue、metadata 和 Schema evidence | 否 |
+| `contracts.py` | 请求、成功/失败结果、artifact、issue、metadata 和 Schema proposal | 否 |
 | `progress.py` | `ProgressObserver` 调试类型、请求级事件序列化与异常隔离 | 是；只复制和派发事件，不参与 Agent 决策 |
 | `sampling.py` | 确定性模型上下文采样，不改变全文验收输入；workflow 另做阶段序列化/token fitting | 否 |
 | `generator.py` | 公共 `TtpGenerator` 门面、环境构造、请求入口与 `ttp.generate` 根 Trace；委托私有 workflow | 否 |
@@ -218,7 +218,6 @@ TemplateRequest                       # 仅 generate_from_schema 使用
 
 SchemaProposal                        # 仅 propose_schema 返回
   result_schema: dict                 # 已冻结的 Draft 2020-12 根对象
-  evidence: list[FieldEvidence]       # 每个叶子字段的原文出处
   assumptions: list[str]
 
 SchemaProposalResult                  # propose_schema 的返回值

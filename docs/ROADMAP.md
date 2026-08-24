@@ -3,10 +3,9 @@
 ## 当前 Schema proposal 兼容基线
 
 Schema proposal 的根 `$schema` 可以省略；显式提供时仍必须声明 Draft 2020-12，
-系统不会修改或自动补全冻结 Schema。每个叶子路径必须有至少一条真实 evidence，
-同一路径允许多条并逐条验证。evidence 总数默认上限为 `256`，可以通过
-`GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 在
-`1..256` 内向下收紧；该资源上限不暴露在 Agent 工具 Schema 中。
+系统不会修改或自动补全冻结 Schema。Schema proposal 只包含冻结 Schema 和
+assumptions，不再要求模型提交逐叶子 Evidence；模型提交和调用方注入统一使用
+同一个受限 Draft 2020-12 Schema 校验。
 
 ## TTP 转换结果的来源追踪
 

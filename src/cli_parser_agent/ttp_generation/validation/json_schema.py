@@ -10,12 +10,11 @@ from typing import Any
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
-from ..contracts import FieldEvidence, ValidationIssue
+from ..contracts import ValidationIssue
 
 MAX_SCHEMA_BYTES = 64 * 1024
 MAX_SCHEMA_DEPTH = 16
 MAX_SCHEMA_PROPERTIES = 256
-MAX_SCHEMA_EVIDENCE = 256
 MAX_ENUM_VALUES = 128
 MAX_VALIDATION_ISSUES = 100
 MAX_FIELD_NAME_CHARS = 120
@@ -415,163 +414,6 @@ def validate_result_schema(
     return issues[:MAX_VALIDATION_ISSUES]
 
 
-def schema_leaf_paths(
-    schema: Mapping[str, Any],
-    *,
-    max_schema_depth: int = MAX_SCHEMA_DEPTH,
-    max_schema_properties: int = MAX_SCHEMA_PROPERTIES,
-) -> set[str]:
-    """Return supported leaf paths after structural validation."""
-
-    max_schema_depth = _effective_limit(
-        max_schema_depth,
-        MAX_SCHEMA_DEPTH,
-        "max_schema_depth",
-    )
-    max_schema_properties = _effective_limit(
-        max_schema_properties,
-        MAX_SCHEMA_PROPERTIES,
-        "max_schema_properties",
-    )
-    state: dict[str, Any] = {
-        "issues": [],
-        "leaf_paths": set(),
-        "property_count": 0,
-        "max_schema_depth": max_schema_depth,
-        "max_schema_properties": max_schema_properties,
-    }
-    _walk_schema(
-        schema,
-        schema_path=(),
-        field_path=(),
-        logical_depth=1,
-        state=state,
-    )
-    return set(state["leaf_paths"])
-
-
-def validate_field_evidence(
-    schema: Mapping[str, Any],
-    evidence: Sequence[FieldEvidence],
-    command_outputs: Sequence[str],
-    *,
-    max_schema_depth: int = MAX_SCHEMA_DEPTH,
-    max_schema_properties: int = MAX_SCHEMA_PROPERTIES,
-    max_schema_evidence: int = MAX_SCHEMA_EVIDENCE,
-) -> list[ValidationIssue]:
-    """Require at least one real source excerpt for every inferred leaf field."""
-
-    max_schema_evidence = _effective_limit(
-        max_schema_evidence,
-        MAX_SCHEMA_EVIDENCE,
-        "max_schema_evidence",
-    )
-    if len(evidence) > max_schema_evidence:
-        return [
-            _issue(
-                "schema.evidence_limit_exceeded",
-                f"field evidence cannot exceed {max_schema_evidence} items",
-                path="/",
-            ),
-        ]
-
-    issues: list[ValidationIssue] = []
-    leaf_paths = schema_leaf_paths(
-        schema,
-        max_schema_depth=max_schema_depth,
-        max_schema_properties=max_schema_properties,
-    )
-    evidenced_paths: set[str] = set()
-
-    for item in evidence:
-        if item.path not in leaf_paths:
-            issues.append(
-                _issue(
-                    "schema.evidence_unknown_path",
-                    "field evidence path does not identify a schema leaf",
-                    path=item.path,
-                    output_index=item.output_index,
-                ),
-            )
-            continue
-        if item.output_index >= len(command_outputs):
-            issues.append(
-                _issue(
-                    "schema.evidence_output_index",
-                    "field evidence references an unavailable command output",
-                    path=item.path,
-                    output_index=item.output_index,
-                ),
-            )
-            continue
-        if item.excerpt not in command_outputs[item.output_index]:
-            matching_output_indexes = [
-                index
-                for index, output in enumerate(command_outputs)
-                if item.excerpt in output
-            ]
-            issues.append(
-                _issue(
-                    "schema.evidence_not_found",
-                    "field evidence excerpt was not found in the referenced "
-                    "output; copy it exactly from that output or use an index "
-                    "listed in matching_output_indexes",
-                    path=item.path,
-                    output_index=item.output_index,
-                    details={
-                        "matching_output_indexes": matching_output_indexes,
-                        "required_action": (
-                            "change_output_index"
-                            if matching_output_indexes
-                            else "replace_excerpt"
-                        ),
-                    },
-                ),
-            )
-            continue
-        evidenced_paths.add(item.path)
-
-    for path in sorted(leaf_paths - evidenced_paths):
-        issues.append(
-            _issue(
-                "schema.evidence_missing",
-                "schema leaf is missing source evidence",
-                path=path,
-            ),
-        )
-    return issues[:MAX_VALIDATION_ISSUES]
-
-
-def validate_schema_proposal(
-    schema: Mapping[str, Any],
-    evidence: Sequence[FieldEvidence],
-    command_outputs: Sequence[str],
-    *,
-    max_schema_bytes: int = MAX_SCHEMA_BYTES,
-    max_schema_depth: int = MAX_SCHEMA_DEPTH,
-    max_schema_properties: int = MAX_SCHEMA_PROPERTIES,
-    max_schema_evidence: int = MAX_SCHEMA_EVIDENCE,
-) -> list[ValidationIssue]:
-    """Validate a schema submission and its evidence before freezing it."""
-
-    issues = validate_result_schema(
-        schema,
-        max_schema_bytes=max_schema_bytes,
-        max_schema_depth=max_schema_depth,
-        max_schema_properties=max_schema_properties,
-    )
-    if issues:
-        return issues
-    return validate_field_evidence(
-        schema,
-        evidence,
-        command_outputs,
-        max_schema_depth=max_schema_depth,
-        max_schema_properties=max_schema_properties,
-        max_schema_evidence=max_schema_evidence,
-    )
-
-
 def validate_records_against_schema(
     records: Sequence[Mapping[str, Any]],
     schema: Mapping[str, Any],
@@ -663,11 +505,7 @@ def validate_records_against_schema(
 __all__ = [
     "MAX_SCHEMA_BYTES",
     "MAX_SCHEMA_DEPTH",
-    "MAX_SCHEMA_EVIDENCE",
     "MAX_SCHEMA_PROPERTIES",
-    "schema_leaf_paths",
-    "validate_field_evidence",
     "validate_records_against_schema",
     "validate_result_schema",
-    "validate_schema_proposal",
 ]

@@ -14,7 +14,6 @@ from cli_parser_agent.config import (
 )
 from cli_parser_agent.ttp_generation.contracts import (
     ArtifactBundle,
-    FieldEvidence,
     GenerationMetadata,
     GenerationRequest,
     GenerationResult,
@@ -101,12 +100,13 @@ def test_template_request_forbids_unknown_fields() -> None:
 
 
 def test_schema_payloads_require_an_object_root() -> None:
-    evidence = FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0")
     submission = SchemaSubmission(
         result_schema={"type": "object"},
-        evidence=[evidence],
     )
-    assert submission.evidence == [evidence]
+    assert submission.assumptions == []
+
+    with pytest.raises(ValidationError):
+        SchemaSubmission(result_schema={"type": "object"}, evidence=[])
 
     with pytest.raises(ValidationError, match="root type"):
         ArtifactBundle(
@@ -114,21 +114,6 @@ def test_schema_payloads_require_an_object_root() -> None:
             result_schema={"type": "array"},
             records=[{}],
         )
-
-
-@pytest.mark.parametrize(
-    "path",
-    ["interfaces/*/name", "/interfaces/-/name", "/*/value"],
-)
-def test_field_evidence_rejects_ambiguous_paths(path: str) -> None:
-    with pytest.raises(ValidationError):
-        FieldEvidence(path=path, output_index=0, excerpt="value")
-
-
-def test_field_evidence_allows_a_scalar_array_leaf() -> None:
-    evidence = FieldEvidence(path="/values/*", output_index=0, excerpt="one")
-
-    assert evidence.path == "/values/*"
 
 
 def _metadata(count: int = 1) -> GenerationMetadata:
@@ -419,7 +404,6 @@ def test_generation_policy_has_bounded_defaults() -> None:
     assert policy.max_ttp_submissions == 9
     assert policy.model_input_char_budget == 240_000
     assert policy.ttp_validation_timeout_seconds == 20
-    assert policy.max_schema_evidence == 256
 
     with pytest.raises(ValidationError, match="cannot exceed"):
         GenerationPolicy(total_timeout_seconds=1, ttp_validation_timeout_seconds=2)
@@ -443,8 +427,6 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
             "CLI_PARSER_MAX_SCHEMA_BYTES": "32000",
             "CLI_PARSER_MAX_SCHEMA_DEPTH": "8",
             "CLI_PARSER_MAX_SCHEMA_PROPERTIES": "128",
-            "CLI_PARSER_MAX_SCHEMA_EVIDENCE": "64",
-            "CLI_PARSER_MAX_EVIDENCE_EXCERPT_CHARS": "2048",
         },
     )
     assert policy.total_timeout_seconds == 600
@@ -462,17 +444,10 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
     assert policy.max_schema_bytes == 32_000
     assert policy.max_schema_depth == 8
     assert policy.max_schema_properties == 128
-    assert policy.max_schema_evidence == 64
-    assert policy.max_evidence_excerpt_chars == 2_048
 
     with pytest.raises(ValidationError):
         GenerationPolicy.from_env({"CLI_PARSER_MAX_AGENT_ITERS": "not-an-int"})
 
-    for value in ("0", "257", "not-an-int"):
-        with pytest.raises(ValidationError):
-            GenerationPolicy.from_env(
-                {"CLI_PARSER_MAX_SCHEMA_EVIDENCE": value},
-            )
 
 
 @pytest.mark.parametrize(
@@ -487,8 +462,6 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
         ("max_schema_bytes", 64 * 1024 + 1),
         ("max_schema_depth", 17),
         ("max_schema_properties", 257),
-        ("max_schema_evidence", 257),
-        ("max_evidence_excerpt_chars", 4_097),
     ],
 )
 def test_generation_policy_can_tighten_but_not_raise_safety_ceilings(

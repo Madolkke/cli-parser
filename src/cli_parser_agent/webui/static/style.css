@@ -226,12 +226,6 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12.5px; line-h
 .message.success { background: var(--ok-soft); color: var(--ok); }
 .schema-actions { padding: 13px 16px; border-top: 1px solid var(--border); justify-content: flex-end; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
-.evidence { margin: 0 16px 14px; border-top: 1px solid var(--border); padding-top: 11px; font-size: 12px; }
-.evidence summary { cursor: pointer; color: var(--muted); }
-.evidence table { width: 100%; margin-top: 8px; border-collapse: collapse; }
-.evidence td { padding: 5px 7px; border-top: 1px solid var(--border); vertical-align: top; }
-.evidence td:first-child { width: 30%; color: var(--accent); font-family: var(--mono); overflow-wrap: anywhere; }
-
 .result-panel { padding: 14px; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; margin: -4px -4px 12px; border-bottom: 1px solid var(--border); }
 .tab { padding: 8px 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); cursor: pointer; white-space: nowrap; }

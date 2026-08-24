@@ -71,7 +71,7 @@ per command output, with an explicit `input_index`. The public result keeps its
 ### Proposing a schema for review
 
 `propose_schema()` runs only the Schema phase and returns the frozen proposal
-with its evidence and assumptions, so you can review or edit the field names
+with its assumptions, so you can review or edit the field names
 before a template is generated:
 
 ```python
@@ -126,8 +126,8 @@ result = await TtpGenerator.from_env().generate_from_schema(
 ```
 
 The schema must satisfy the same closed Draft 2020-12 subset the Schema phase
-produces. Per-leaf source evidence is not required here, since the schema is given
-rather than inferred; every other check — TTP allowlist, isolated parsing, and record
+produces. The Schema phase and caller-supplied mode use the same schema-only
+validation; every other check — TTP allowlist, isolated parsing, and record
 re-validation against the schema — is unchanged.
 
 ## Zero-argument development run

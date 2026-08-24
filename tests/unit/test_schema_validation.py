@@ -4,12 +4,9 @@ import json
 
 import pytest
 
-from cli_parser_agent.ttp_generation.contracts import FieldEvidence
 from cli_parser_agent.ttp_generation.validation import (
-    schema_leaf_paths,
     validate_records_against_schema,
     validate_result_schema,
-    validate_schema_proposal,
 )
 
 
@@ -39,141 +36,6 @@ def _inventory_schema() -> dict:
 
 def _codes(issues) -> set[str]:
     return {issue.code for issue in issues}
-
-
-def test_valid_schema_and_evidence_are_accepted() -> None:
-    outputs = ["Hostname: edge_1\neth0 up mtu 1500"]
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-    ]
-
-    assert schema_leaf_paths(_inventory_schema()) == {
-        "/hostname",
-        "/interfaces/*/name",
-        "/interfaces/*/mtu",
-    }
-    assert validate_schema_proposal(_inventory_schema(), evidence, outputs) == []
-
-
-def test_scalar_array_leaf_can_be_evidenced() -> None:
-    schema = {
-        "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "type": "object",
-        "properties": {
-            "values": {"type": "array", "items": {"type": "string"}},
-        },
-        "required": ["values"],
-        "additionalProperties": False,
-    }
-
-    issues = validate_schema_proposal(
-        schema,
-        [FieldEvidence(path="/values/*", output_index=0, excerpt="one")],
-        ["one\ntwo"],
-    )
-
-    assert issues == []
-
-
-def test_evidence_must_match_a_leaf_and_full_source() -> None:
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="not present"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/unknown", output_index=0, excerpt="edge_1"),
-    ]
-
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        evidence,
-        ["Hostname: edge_1\neth0 up mtu 1500"],
-    )
-
-    assert _codes(issues) == {
-        "schema.evidence_missing",
-        "schema.evidence_not_found",
-        "schema.evidence_unknown_path",
-    }
-    missing_paths = {
-        issue.path for issue in issues if issue.code == "schema.evidence_missing"
-    }
-    assert missing_paths == {
-        "/hostname",
-        "/interfaces/*/mtu",
-    }
-
-
-def test_missing_evidence_reports_matching_sample_indexes_without_values() -> None:
-    excerpt = "edge_1"
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        [
-            FieldEvidence(path="/hostname", output_index=1, excerpt=excerpt),
-            FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-            FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-        ],
-        ["Hostname: edge_1\neth0 up mtu 1500", "Hostname: branch_1"],
-    )
-
-    issue = next(item for item in issues if item.code == "schema.evidence_not_found")
-    assert issue.details == {
-        "matching_output_indexes": [0],
-        "required_action": "change_output_index",
-    }
-    assert excerpt not in json.dumps(issue.model_dump(mode="json"))
-
-
-def test_missing_evidence_requires_replacement_when_no_sample_contains_it() -> None:
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        [
-            FieldEvidence(path="/hostname", output_index=0, excerpt="invented"),
-            FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-            FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-        ],
-        ["Hostname: edge_1\neth0 up mtu 1500"],
-    )
-
-    issue = next(item for item in issues if item.code == "schema.evidence_not_found")
-    assert issue.details == {
-        "matching_output_indexes": [],
-        "required_action": "replace_excerpt",
-    }
-
-
-def test_evidence_accepts_multiple_valid_items_for_one_leaf() -> None:
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
-        FieldEvidence(path="/hostname", output_index=1, excerpt="branch_1"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-    ]
-
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        evidence,
-        ["Hostname: edge_1\neth0 up mtu 1500", "Hostname: branch_1"],
-    )
-
-    assert issues == []
-
-
-def test_each_duplicate_evidence_item_must_be_valid() -> None:
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
-        FieldEvidence(path="/hostname", output_index=1, excerpt="invented"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-    ]
-
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        evidence,
-        ["Hostname: edge_1\neth0 up mtu 1500", "Hostname: branch_1"],
-    )
-
-    assert _codes(issues) == {"schema.evidence_not_found"}
 
 
 @pytest.mark.parametrize(
@@ -273,15 +135,7 @@ def test_schema_may_omit_draft_declaration_without_normalization() -> None:
     schema = _inventory_schema()
     del schema["$schema"]
 
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-    ]
-    outputs = ["Hostname: edge_1\neth0 up mtu 1500"]
-
     assert validate_result_schema(schema) == []
-    assert validate_schema_proposal(schema, evidence, outputs) == []
     assert validate_records_against_schema(
         [{"hostname": "edge_1", "interfaces": [{"name": "eth0", "mtu": 1500}]}],
         schema,
@@ -294,31 +148,6 @@ def test_explicit_draft_declaration_must_be_draft_2020_12() -> None:
 
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema#"
     assert "schema.wrong_draft" in _codes(validate_result_schema(schema))
-
-
-def test_evidence_limit_can_be_tightened_but_not_raised() -> None:
-    evidence = [
-        FieldEvidence(path="/hostname", output_index=0, excerpt="edge_1"),
-        FieldEvidence(path="/hostname", output_index=0, excerpt="Hostname"),
-        FieldEvidence(path="/interfaces/*/name", output_index=0, excerpt="eth0"),
-        FieldEvidence(path="/interfaces/*/mtu", output_index=0, excerpt="1500"),
-    ]
-    outputs = ["Hostname: edge_1\neth0 up mtu 1500"]
-
-    issues = validate_schema_proposal(
-        _inventory_schema(),
-        evidence,
-        outputs,
-        max_schema_evidence=3,
-    )
-    assert _codes(issues) == {"schema.evidence_limit_exceeded"}
-
-    assert validate_schema_proposal(
-        _inventory_schema(),
-        evidence,
-        outputs,
-        max_schema_evidence=10**9,
-    ) == []
 
 
 def test_schema_complexity_limits_are_enforced() -> None:
@@ -395,22 +224,11 @@ def test_callers_can_tighten_but_not_loosen_schema_limits() -> None:
         "max_schema_bytes",
         "max_schema_depth",
         "max_schema_properties",
-        "max_schema_evidence",
     ],
 )
 def test_schema_limits_must_be_positive(keyword: str) -> None:
-    function = (
-        validate_schema_proposal
-        if keyword == "max_schema_evidence"
-        else validate_result_schema
-    )
-    args = (
-        (_inventory_schema(), [], ["output"])
-        if keyword == "max_schema_evidence"
-        else (_inventory_schema(),)
-    )
     with pytest.raises(ValueError, match="positive integer"):
-        function(*args, **{keyword: 0})
+        validate_result_schema(_inventory_schema(), **{keyword: 0})
 
 
 def test_record_validation_is_value_safe_and_reports_paths() -> None:

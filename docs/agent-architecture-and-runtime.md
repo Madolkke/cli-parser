@@ -21,7 +21,7 @@ flowchart TD
     REQ --> SSAMPLE["Schema 阶段独立采样"]
     SSAMPLE --> SAGENT["ttp_schema_generator<br/>独立 Model + AgentState + Toolkit"]
     SAGENT --> STOOL["submit_result_schema"]
-    STOOL --> SVALIDATE["Schema + evidence 校验"]
+    STOOL --> SVALIDATE["Schema 受限子集校验"]
     SVALIDATE -->|拒绝| SAGENT
     SVALIDATE -->|冻结| HANDOFF["安全暂停<br/>仅交接冻结 Schema"]
 
@@ -83,7 +83,7 @@ observer 同步接收原始 AgentScope `AgentEvent` 和项目补充的 `CustomEv
 - Laminar Trace 可以只读观察两个阶段的完整过程，但 Trace 内容不会进入 handoff，也不会回灌模型上下文。
 - 可选 observer 接收同一次运行的流式事件和确定性进度事件。Textual TUI 可把它们保存为本地完整转录，但事件同样不会进入 session、handoff 或下一轮模型上下文。
 
-Schema Agent 的 rejected candidate、evidence、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 都不会进入 TTP `AgentState`。evidence 与 assumptions 仍留在 session 中，供最终验收和 artifact 使用。
+Schema Agent 的 rejected candidate、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 都不会进入 TTP `AgentState`。assumptions 仍留在 session 中，供 artifact 使用。
 
 ### 阶段专属工具
 
@@ -107,11 +107,11 @@ Pydantic 首先检查输入数量、空白内容和 UTF-8 字节上限。workflo
 
 Schema 阶段从完整输出确定性采样，并按自己的系统提示、任务消息和唯一工具描述估算上下文。超限输入在完整行边界保留头部与尾部；若最小可用样本仍无法容纳，请求以带阶段信息的结构化上下文预算错误结束。
 
-workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度业务 Schema、字段 evidence 和 assumptions，不包含 TTP 提交协议或语法。
+workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度业务 Schema 和 assumptions，不包含 TTP 提交协议或语法。
 
 ### 3. 提交、修正并冻结 Schema
 
-Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每个叶子字段至少一条原文证据和 assumptions；同一路径可以包含多条证据并逐条验证。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具在完整输入上检查元模式、安全子集、复杂度、封闭对象、字段名、required 集合和 evidence。evidence 总数默认上限为 `256`，可由 `GenerationPolicy.max_schema_evidence` 或 `CLI_PARSER_MAX_SCHEMA_EVIDENCE` 向下收紧，但该资源上限不进入 Agent 工具协议。
+Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema 和 assumptions。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具检查元模式、安全子集、复杂度、封闭对象、字段名和 required 集合。
 
 无效候选及其 issues 留在 Schema `AgentState` 中，模型可以继续修正。第一个通过校验的 Schema 被深拷贝并永久冻结；对应的 `ToolResultEndEvent` 是安全暂停点，runner 立即结束当前 reply。若 Schema 恰好耗尽了全局轮次，请求直接失败，不启动 TTP Agent。
 
@@ -119,13 +119,13 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema、每�
 
 进入 TTP 阶段时，workflow 只从 session 读取冻结 Schema，并重新从完整输出执行 TTP 阶段采样和 token fitting。冻结 Schema 会计入该阶段的上下文预算。
 
-调用方也可以经公共 `propose_schema(GenerationRequest)` 只运行 Schema 阶段：它在 Schema 冻结后立即返回 `SchemaProposalResult`，不进入 TTP 阶段、不做最终验收，`ttp_agent_rounds` 与 `ttp_submissions` 恒为 `0`。返回的提案带 evidence 与 assumptions，便于人工判断字段命名与粒度是否合适。由于成功的提案没有模板与 records，它无法满足 `ArtifactBundle`，因此使用独立结果契约而不是复用 `GenerationResult`。
+调用方也可以经公共 `propose_schema(GenerationRequest)` 只运行 Schema 阶段：它在 Schema 冻结后立即返回 `SchemaProposalResult`，不进入 TTP 阶段、不做最终验收，`ttp_agent_rounds` 与 `ttp_submissions` 恒为 `0`。返回的提案带 assumptions，便于人工判断字段命名与粒度是否合适。由于成功的提案没有模板与 records，它无法满足 `ArtifactBundle`，因此使用独立结果契约而不是复用 `GenerationResult`。
 
 把 `propose_schema` 与 `generate_from_schema` 串起来，就得到"先提案、人工确认或编辑、再按该 Schema 生成"的工作流；本地 WebUI 正是这样组合它们的。字段命名直接决定最终 records 的键名，这一步的人工介入可以消除模型自造命名带来的偏差。
 
-调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。由于手写 Schema 按定义没有逐叶子 evidence，最终验收在该模式改用不含 evidence 的 Schema 校验——evidence 的作用是把模型臆造的 Schema 锚定到原文，对人工指定的 Schema 不适用。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
+调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v21-separated-record-blocks-zh-cn`。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v22-schema-without-evidence-zh-cn`。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -149,7 +149,7 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 
 ### 6. Agent 外最终验收
 
-`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema 与 evidence，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。当前不对转换后的标量做原文子串溯源；成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
+`finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 
 失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
 

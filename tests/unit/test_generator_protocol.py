@@ -499,11 +499,6 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     monkeypatch.setattr(workflow_module, "run_generation_phase", run)
     monkeypatch.setattr(
         workflow_module,
-        "validate_schema_proposal",
-        lambda *_args, **_kwargs: [],
-    )
-    monkeypatch.setattr(
-        workflow_module,
         "validate_ttp_template",
         lambda *_args, **_kwargs: SimpleNamespace(
             valid=True,
@@ -530,7 +525,6 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     assert result.metadata.schema_agent_rounds == 1
     assert result.metadata.ttp_agent_rounds == 2
     assert result.metadata.agent_rounds == 3
-    assert span_starts[0]["attributes"]["policy_max_schema_evidence"] == 256
     assert [(item["name"], item["parent"]) for item in span_starts] == [
         ("ttp.generate", None),
         ("schema.phase", "ttp.generate"),
@@ -597,15 +591,6 @@ PID: {{ pid | ORPHRASE }}
         if phase == "schema":
             session.schema_submissions = 1
             session.frozen_schema = frozen_schema
-            session.field_evidence = (
-                {"path": "/inventory/*/name", "output_index": 0, "excerpt": "first"},
-                {
-                    "path": "/inventory/*/name",
-                    "output_index": 0,
-                    "excerpt": "second",
-                },
-                {"path": "/inventory/*/pid", "output_index": 0, "excerpt": "one"},
-            )
             return AgentRunOutcome(phase_completed=True)
 
         session.ttp_submissions = 1
@@ -654,9 +639,6 @@ async def test_workflow_accepts_literal_empty_string_allowed_by_schema(
         if phase == "schema":
             session.schema_submissions = 1
             session.frozen_schema = frozen_schema
-            session.field_evidence = (
-                {"path": "/pid", "output_index": 0, "excerpt": "PID: ,"},
-            )
             return AgentRunOutcome(phase_completed=True)
 
         session.ttp_submissions = 1
@@ -823,9 +805,6 @@ async def test_schema_acceptance_on_last_round_does_not_build_ttp_agent(
         session.record_agent_round("schema")
         session.schema_submissions = 1
         session.frozen_schema = _result_schema()
-        session.field_evidence = (
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-        )
         return AgentRunOutcome(phase_completed=True)
 
     monkeypatch.setattr(workflow_module, "build_agent", build)
@@ -1229,9 +1208,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
         phases.append(phase)
         session.record_agent_round("schema")
         session.frozen_schema = _result_schema()
-        session.field_evidence = (
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-        )
         session.assumptions = ("kept for review",)
         return AgentRunOutcome(phase_completed=True)
 
@@ -1244,7 +1220,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
     assert result.status == "success"
     assert result.proposal is not None
     assert result.proposal.result_schema == _result_schema()
-    assert [item.path for item in result.proposal.evidence] == ["/value"]
     assert result.proposal.assumptions == ["kept for review"]
 
     # The TTP phase never ran, and the metadata identity still holds.

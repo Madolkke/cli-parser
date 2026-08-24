@@ -144,7 +144,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v21-separated-record-blocks-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v22-schema-without-evidence-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -216,18 +216,11 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
     assert "只有每行都有的列才是" in SCHEMA_SYSTEM_PROMPT
     assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
+    assert "evidence" not in SCHEMA_SYSTEM_PROMPT
     assert "evidence" not in TTP_SYSTEM_PROMPT
     assert "assumptions" not in TTP_SYSTEM_PROMPT
 
-    schema_tokens = (
-        "JSON Schema",
-        "evidence_not_found",
-        "required_action",
-        "replace_excerpt",
-        "change_output_index",
-        "matching_output_indexes",
-        "/interfaces/*/name",
-    )
+    schema_tokens = ("JSON Schema", "required 的判定必须逐实例枚举")
     for token in schema_tokens:
         assert token in SCHEMA_SYSTEM_PROMPT
 
@@ -265,23 +258,12 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert "submit_ttp_template" not in schema_protocol
     assert set(schema_contract["properties"]) == {
         "result_schema",
-        "evidence",
         "assumptions",
     }
     for property_schema in schema_contract["properties"].values():
         assert _contains_chinese(property_schema["description"])
 
-    evidence_contract = schema_contract["$defs"]["FieldEvidenceInput"]
-    assert set(evidence_contract["properties"]) == {
-        "path",
-        "output_index",
-        "excerpt",
-    }
-    for property_schema in evidence_contract["properties"].values():
-        assert _contains_chinese(property_schema["description"])
-    assert "恰好一条" not in schema_protocol
-    assert "至少" in schema_contract["properties"]["evidence"]["description"]
-    assert "maxItems" not in schema_contract["properties"]["evidence"]
+    assert "$defs" not in schema_contract
 
     assumptions_description = schema_contract["properties"]["assumptions"][
         "description"
@@ -370,7 +352,6 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
 
     rejected = await tool.call(
         result_schema=_schema("wrong"),
-        evidence=[{"path": "/wrong", "output_index": 0, "excerpt": "one"}],
     )
     assert _payload(rejected)["accepted"] is False
     assert session.frozen_schema is None
@@ -378,28 +359,17 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     accepted_schema = _schema()
     accepted = await tool.call(
         result_schema=accepted_schema,
-        evidence=[
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-            {"path": "/value", "output_index": 1, "excerpt": "two"},
-        ],
         assumptions=["这些值按标签处理。"],
     )
     assert _payload(accepted)["accepted"] is True
     assert _payload(accepted)["next_action"] == "finish_schema"
     assert session.schema_submissions == 2
     assert session.frozen_schema == _schema()
-    assert session.field_evidence == (
-        {"path": "/value", "output_index": 0, "excerpt": "one"},
-        {"path": "/value", "output_index": 1, "excerpt": "two"},
-    )
     assert session.assumptions == ("这些值按标签处理。",)
     assert seen[-1].command_outputs == ("value: one", "value: two")
     accepted_schema["properties"]["value"]["type"] = "integer"
     replacement = await tool.call(
         result_schema=_schema("replacement"),
-        evidence=[
-            {"path": "/replacement", "output_index": 0, "excerpt": "one"},
-        ],
     )
     replacement_payload = _payload(replacement)
     assert replacement_payload["accepted"] is False
@@ -434,11 +404,8 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
         template_validator=_unused_template_validator,
     )
     schema = _schema()
-    evidence = [{"path": "/value", "output_index": 0, "excerpt": "one"}]
-
     result = await SubmitResultSchemaTool(session).call(
         result_schema=schema,
-        evidence=evidence,
         assumptions=["按字符串处理。"],
     )
     payload = _payload(result)
@@ -448,7 +415,6 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
             "name": SUBMIT_SCHEMA_TOOL_NAME,
             "input": {
                 "result_schema": schema,
-                "evidence": evidence,
                 "assumptions": ["按字符串处理。"],
             },
             "span_type": "TOOL",
@@ -469,7 +435,7 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
 
 @pytest.mark.asyncio
 async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> None:
-    secret = "schema-evidence-secret-7b459b"
+    secret = "schema-unknown-field-secret-7b459b"
     session = GenerationSession(
         command_outputs=["value: one"],
         schema_validator=_unused_schema_validator,
@@ -481,13 +447,7 @@ async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> Non
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "evidence": [
-                    {
-                        "path": "/value",
-                        "output_index": 0,
-                        "excerpt": {"untrusted": secret},
-                    },
-                ],
+                    "assumptions": [{"untrusted": secret}],
             },
         ),
     )
@@ -509,7 +469,7 @@ async def test_schema_validator_exception_is_redacted_from_agent_events() -> Non
     secret = "schema-validator-secret-c52679"
 
     def fail_with_candidate(candidate: SchemaCandidate) -> ValidatorOutcome:
-        raise RuntimeError(f"{secret}: {candidate.evidence!r}")
+        raise RuntimeError(f"{secret}: {candidate.result_schema!r}")
 
     session = GenerationSession(
         command_outputs=["value: one"],
@@ -522,13 +482,7 @@ async def test_schema_validator_exception_is_redacted_from_agent_events() -> Non
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "evidence": [
-                    {
-                        "path": "/value",
-                        "output_index": 0,
-                        "excerpt": secret,
-                    },
-                ],
+                "assumptions": [secret],
             },
         ),
     )
@@ -564,9 +518,6 @@ async def test_schema_validator_cancellation_propagates() -> None:
     with pytest.raises(asyncio.CancelledError):
         await SubmitResultSchemaTool(session).call(
             result_schema=_schema(),
-            evidence=[
-                {"path": "/value", "output_index": 0, "excerpt": "one"},
-            ],
         )
 
     assert session.schema_submissions == 1

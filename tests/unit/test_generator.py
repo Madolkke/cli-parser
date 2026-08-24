@@ -427,18 +427,11 @@ def test_injected_schema_still_enforces_the_closed_subset() -> None:
     assert workflow.session.frozen_schema is None
 
 
-def test_template_only_acceptance_does_not_require_field_evidence() -> None:
-    """Regression guard for the one deliberate validation difference.
-
-    A caller-supplied schema has no per-leaf evidence, so acceptance must run
-    the schema-only check.  Restoring ``validate_schema_proposal`` here would
-    fail every leaf with ``schema.evidence_missing``.
-    """
+def test_template_only_acceptance_uses_the_closed_schema_check() -> None:
+    """Caller-supplied schemas use the same closed-subset check as inference."""
 
     workflow = _template_only_workflow(_closed_schema())
     assert workflow._freeze_injected_schema(workflow.injected_schema) is None
-    assert workflow.session.field_evidence == ()
-
     assert workflow._validate_frozen_schema() == []
 
 
