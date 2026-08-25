@@ -2,190 +2,36 @@
   "records": [
     {
       "interfaces": [
-        {
-          "port": "fc2/1",
-          "status": "up",
-          "port_mode": "NP"
-        },
-        {
-          "port": "fc2/2",
-          "status": "up",
-          "port_mode": "NP"
-        },
-        {
-          "port": "fc2/3",
-          "status": "up",
-          "port_mode": "NP"
-        },
-        {
-          "port": "fc2/4",
-          "status": "up",
-          "port_mode": "NP"
-        },
-        {
-          "port": "fc2/5",
-          "status": "down (SFP not present)"
-        },
-        {
-          "port": "fc2/6",
-          "status": "down (SFP not present)"
-        },
-        {
-          "port": "Eth1/1",
-          "name": "XXXXXXX1_bond1_Act",
-          "status": "connected",
-          "vlan": "111",
-          "duplex": "full",
-          "speed": "1000",
-          "type": "SFP-1000BAS"
-        },
-        {
-          "port": "Eth1/2",
-          "name": "XXXXXXX3_bond1_Act",
-          "status": "connected",
-          "vlan": "112",
-          "duplex": "full",
-          "speed": "1000",
-          "type": "SFP-1000BAS"
-        },
-        {
-          "port": "Eth1/3",
-          "name": "YYYYYYYY1_ha1",
-          "status": "connected",
-          "vlan": "115",
-          "duplex": "full",
-          "speed": "1000",
-          "type": "SFP-1000BAS"
-        },
-        {
-          "port": "Eth1/4",
-          "name": "ZZZZZZZZZZZZZ1_tru",
-          "status": "connected",
-          "vlan": "trunk",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "10Gbase-SR"
-        },
-        {
-          "port": "Eth1/5",
-          "name": "ZZZZZZZZZZZZZ1_tru",
-          "status": "connected",
-          "vlan": "trunk",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "10Gbase-SR"
-        },
-        {
-          "port": "Eth1/6",
-          "name": "AAAAAAAAA1_po2",
-          "status": "connected",
-          "vlan": "trunk",
-          "duplex": "full",
-          "speed": "1000",
-          "type": "SFP-1000BAS"
-        },
-        {
-          "port": "Eth1/7",
-          "name": "BBBBBBBB10-1",
-          "status": "connected",
-          "vlan": "4093",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "Fabric Exte"
-        },
-        {
-          "port": "Eth1/8",
-          "name": "BBBBBBBB10-1",
-          "status": "connected",
-          "vlan": "4093",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "Fabric Exte"
-        },
-        {
-          "port": "Eth1/9",
-          "name": "BBBBBBBB11-1",
-          "status": "connected",
-          "vlan": "4093",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "Fabric Exte"
-        },
-        {
-          "port": "Eth1/10",
-          "name": "BBBBBBBB11-1",
-          "status": "connected",
-          "vlan": "4093",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "Fabric Exte"
-        },
-        {
-          "port": "Po3",
-          "name": "Wireless Controlle",
-          "status": "notconnect",
-          "vlan": "unassigned",
-          "duplex": "auto",
-          "speed": "auto"
-        }
+        {"port": "fc2/1", "status": "up"},
+        {"port": "fc2/2", "status": "up"},
+        {"port": "fc2/3", "status": "up"},
+        {"port": "fc2/4", "status": "up"},
+        {"port": "fc2/5", "status": "down"},
+        {"port": "fc2/6", "status": "down"},
+        {"port": "Eth1/1", "name": "XXXXXXX1_bond1_Act", "status": "connected", "vlan": "111", "duplex": "full", "speed": "1000", "type": "SFP-1000BAS"},
+        {"port": "Eth1/2", "name": "XXXXXXX3_bond1_Act", "status": "connected", "vlan": "112", "duplex": "full", "speed": "1000", "type": "SFP-1000BAS"},
+        {"port": "Eth1/3", "name": "YYYYYYYY1_ha1", "status": "connected", "vlan": "115", "duplex": "full", "speed": "1000", "type": "SFP-1000BAS"},
+        {"port": "Eth1/4", "name": "ZZZZZZZZZZZZZ1_tru", "status": "connected", "vlan": "trunk", "duplex": "full", "speed": "10G", "type": "10Gbase-SR"},
+        {"port": "Eth1/5", "name": "ZZZZZZZZZZZZZ1_tru", "status": "connected", "vlan": "trunk", "duplex": "full", "speed": "10G", "type": "10Gbase-SR"},
+        {"port": "Eth1/6", "name": "AAAAAAAAA1_po2", "status": "connected", "vlan": "trunk", "duplex": "full", "speed": "1000", "type": "SFP-1000BAS"},
+        {"port": "Eth1/7", "name": "BBBBBBBB10-1", "status": "connected", "vlan": "4093", "duplex": "full", "speed": "10G", "type": "Fabric Exte"},
+        {"port": "Eth1/8", "name": "BBBBBBBB10-1", "status": "connected", "vlan": "4093", "duplex": "full", "speed": "10G", "type": "Fabric Exte"},
+        {"port": "Eth1/9", "name": "BBBBBBBB11-1", "status": "connected", "vlan": "4093", "duplex": "full", "speed": "10G", "type": "Fabric Exte"},
+        {"port": "Eth1/10", "name": "BBBBBBBB11-1", "status": "connected", "vlan": "4093", "duplex": "full", "speed": "10G", "type": "Fabric Exte"},
+        {"port": "Po3", "name": "Wireless Controlle", "status": "notconnect", "vlan": "unassigned", "duplex": "auto", "speed": "auto"}
       ]
     }
   ],
   "schema_contract": [
-    {
-      "path": "/",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/port",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/status",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/port_mode",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/name",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/vlan",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/duplex",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/speed",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/type",
-      "type": "string",
-      "required": false
-    }
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/port", "type": "string", "required": true},
+    {"path": "/interfaces/*/status", "type": "string", "required": true},
+    {"path": "/interfaces/*/name", "type": "string", "required": false},
+    {"path": "/interfaces/*/vlan", "type": "string", "required": false},
+    {"path": "/interfaces/*/duplex", "type": "string", "required": false},
+    {"path": "/interfaces/*/speed", "type": "string", "required": false},
+    {"path": "/interfaces/*/type", "type": "string", "required": false}
   ]
 }

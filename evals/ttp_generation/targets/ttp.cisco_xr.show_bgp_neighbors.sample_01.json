@@ -3,131 +3,500 @@
     {
       "neighbors": [
         {
-          "neighbor_address": "192.168.100.1",
+          "neighbor": "192.168.100.1",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "RouteReflector_1",
           "remote_router_id": "192.168.100.1",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "2w3d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "179",
+          "foreign_host": "192.168.100.1",
+          "foreign_port": "13617",
+          "connections_established": "2",
+          "connections_dropped": "1",
+          "last_reset": "2w3d, due to Peer closing down the session",
+          "peer_reset_reason": "Remote closed the session (No error)",
+          "address_families": [
+            {
+              "address_family": "IPv4 Unicast",
+              "bgp_neighbor_version": "56362493",
+              "update_group": "0.4",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "847583",
+              "bestpaths": "794705",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "170",
+              "suppressed": "0",
+              "withdrawn": "19",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "56362493",
+              "last_synced_ack_version": "56362493",
+              "outstanding_current": "0",
+              "outstanding_max": "3",
+              "additional_paths_operation": "None"
+            }
+          ]
         },
         {
-          "neighbor_address": "192.168.100.2",
+          "neighbor": "192.168.100.2",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "RouteReflector_2",
           "remote_router_id": "192.168.100.2",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "2w3d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "179",
+          "foreign_host": "192.168.100.2",
+          "foreign_port": "15445",
+          "connections_established": "2",
+          "connections_dropped": "1",
+          "last_reset": "2w3d, due to Peer closing down the session",
+          "peer_reset_reason": "Remote closed the session (No error)",
+          "address_families": [
+            {
+              "address_family": "IPv4 Unicast",
+              "bgp_neighbor_version": "56362493",
+              "update_group": "0.4",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "847585",
+              "bestpaths": "52523",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "170",
+              "suppressed": "0",
+              "withdrawn": "19",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "56362493",
+              "last_synced_ack_version": "56362493",
+              "outstanding_current": "0",
+              "outstanding_max": "3",
+              "additional_paths_operation": "None"
+            }
+          ]
         },
         {
-          "neighbor_address": "192.168.0.1",
+          "neighbor": "192.168.0.1",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "VPN_RouteReflector_1",
           "remote_router_id": "192.168.0.1",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "2w4d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "45510",
+          "foreign_host": "192.168.0.1",
+          "foreign_port": "179",
+          "connections_established": "3",
+          "connections_dropped": "2",
+          "last_reset": "2w4d, due to BGP Notification received: peer unconfigured",
+          "address_families": [
+            {
+              "address_family": "VPNv4 Unicast",
+              "bgp_neighbor_version": "1735091",
+              "update_group": "0.2",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "4713",
+              "bestpaths": "4443",
+              "cumulative_prefixes_denied": "387634.",
+              "prefix_advertised": "889",
+              "suppressed": "0",
+              "withdrawn": "6",
+              "maximum_prefixes_allowed": "2097152",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "1735091",
+              "last_synced_ack_version": "1735091",
+              "outstanding_current": "0",
+              "outstanding_max": "5",
+              "additional_paths_operation": "None"
+            },
+            {
+              "address_family": "VPNv6 Unicast",
+              "bgp_neighbor_version": "1",
+              "update_group": "0.2",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "1",
+              "last_synced_ack_version": "1",
+              "outstanding_current": "0",
+              "outstanding_max": "0",
+              "additional_paths_operation": "None"
+            },
+            {
+              "address_family": "IPv4 MDT",
+              "bgp_neighbor_version": "77",
+              "update_group": "0.2",
+              "filter_group": "0.2",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "131072",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "77",
+              "last_synced_ack_version": "77",
+              "outstanding_current": "0",
+              "outstanding_max": "0",
+              "additional_paths_operation": "None"
+            }
+          ]
         },
         {
-          "neighbor_address": "192.168.0.2",
+          "neighbor": "192.168.0.2",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "VPN_RouteReflector_2",
           "remote_router_id": "192.168.0.2",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "3w2d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "35134",
+          "foreign_host": "192.168.0.2",
+          "foreign_port": "179",
+          "connections_established": "1",
+          "connections_dropped": "0",
+          "last_reset": "3w2d, due to BGP Notification sent: peer in wrong AS",
+          "address_families": [
+            {
+              "address_family": "VPNv4 Unicast",
+              "bgp_neighbor_version": "1735091",
+              "update_group": "0.2",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "4710",
+              "bestpaths": "66",
+              "cumulative_prefixes_denied": "500233.",
+              "prefix_advertised": "5803",
+              "suppressed": "0",
+              "withdrawn": "9",
+              "maximum_prefixes_allowed": "2097152",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "1735091",
+              "last_synced_ack_version": "1735091",
+              "outstanding_current": "0",
+              "outstanding_max": "5",
+              "additional_paths_operation": "None"
+            },
+            {
+              "address_family": "VPNv6 Unicast",
+              "bgp_neighbor_version": "1",
+              "update_group": "0.2",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "1",
+              "last_synced_ack_version": "1",
+              "outstanding_current": "0",
+              "outstanding_max": "0",
+              "additional_paths_operation": "None"
+            },
+            {
+              "address_family": "IPv4 MDT",
+              "bgp_neighbor_version": "77",
+              "update_group": "0.2",
+              "filter_group": "0.2",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "131072",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "77",
+              "last_synced_ack_version": "77",
+              "outstanding_current": "0",
+              "outstanding_max": "0",
+              "additional_paths_operation": "None"
+            }
+          ]
         },
         {
-          "neighbor_address": "10.0.0.42",
+          "neighbor": "10.0.0.42",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "iBGP_Neighbor",
           "remote_router_id": "0.0.0.0",
           "cluster_id": "10.0.0.1",
-          "bgp_state": "OpenSent",
+          "state": "OpenSent",
           "nsr_state": "None",
           "hold_time": "180",
           "keepalive_interval": "60",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "59248",
+          "foreign_host": "10.0.0.42",
+          "foreign_port": "179",
+          "connections_established": "1",
+          "connections_dropped": "1",
+          "last_reset": "00:00:52, due to Peer closing down the session",
+          "peer_reset_reason": "Remote closed the session (Connection timed out)",
+          "address_families": [
+            {
+              "address_family": "IPv4 Unicast",
+              "bgp_neighbor_version": "0",
+              "update_group": "0.1",
+              "filter_group": "0.0",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "0",
+              "last_synced_ack_version": "0",
+              "outstanding_current": "0",
+              "outstanding_max": "178",
+              "additional_paths_operation": "None",
+              "policy_incoming": "DENY-ALL",
+              "policy_outgoing": "PASS-ALL"
+            },
+            {
+              "address_family": "IPv6 Unicast",
+              "bgp_neighbor_version": "0",
+              "update_group": "0.1",
+              "filter_group": "0.0",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "0",
+              "bestpaths": "0",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "524288",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "0",
+              "last_synced_ack_version": "0",
+              "outstanding_current": "0",
+              "outstanding_max": "175",
+              "additional_paths_operation": "None",
+              "policy_incoming": "DENY-ALL",
+              "policy_outgoing": "PASS-ALL"
+            }
+          ]
         },
         {
-          "neighbor_address": "10.0.0.124",
+          "neighbor": "10.0.0.124",
           "remote_as": "65012",
           "local_as": "65001",
-          "link_type": "external",
+          "link_type": "external link",
           "remote_router_id": "10.1.2.3",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "3w1d",
           "nsr_state": "NSR Ready",
           "hold_time": "180",
           "keepalive_interval": "60",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "10.0.0.1",
+          "local_port": "37554",
+          "foreign_host": "10.0.0.124",
+          "foreign_port": "179",
+          "connections_established": "1",
+          "connections_dropped": "0",
+          "last_reset": "3w1d, due to User clear requested (CEASE notification sent - administrative reset)",
+          "address_families": [
+            {
+              "address_family": "IPv4 Unicast",
+              "bgp_neighbor_version": "56362493",
+              "update_group": "0.3",
+              "filter_group": "0.3",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "5836",
+              "bestpaths": "5836",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "0",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "1048576",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "56362493",
+              "last_synced_ack_version": "56362493",
+              "outstanding_current": "0",
+              "outstanding_max": "0",
+              "additional_paths_operation": "None",
+              "policy_incoming": "eBGP-IN",
+              "policy_outgoing": "DENY-ALL"
+            }
+          ]
         },
         {
-          "neighbor_address": "1:1:1::1",
+          "neighbor": "1:1:1::1",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "rs01.lsan01-ca",
           "remote_router_id": "192.168.100.1",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "2w3d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "100::42",
+          "local_port": "179",
+          "foreign_host": "1:1:1::1",
+          "foreign_port": "13730",
+          "connections_established": "2",
+          "connections_dropped": "1",
+          "last_reset": "2w3d, due to Peer closing down the session",
+          "peer_reset_reason": "Remote closed the session (No error)",
+          "address_families": [
+            {
+              "address_family": "IPv6 Unicast",
+              "bgp_neighbor_version": "18781601",
+              "update_group": "0.3",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "59216",
+              "bestpaths": "35229",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "1",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "524288",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "18781601",
+              "last_synced_ack_version": "18781601",
+              "outstanding_current": "0",
+              "outstanding_max": "1",
+              "additional_paths_operation": "None"
+            }
+          ]
         },
         {
-          "neighbor_address": "1:1:34::242",
+          "neighbor": "1:1:34::242",
           "remote_as": "65001",
           "local_as": "65001",
-          "link_type": "internal",
+          "link_type": "internal link",
           "description": "RouteReflector_2",
           "remote_router_id": "192.168.100.2",
-          "bgp_state": "Established",
+          "state": "Established",
           "uptime": "2w3d",
           "nsr_state": "NSR Ready",
           "hold_time": "90",
           "keepalive_interval": "30",
           "configured_hold_time": "180",
           "configured_keepalive": "60",
-          "minimum_acceptable_hold_time": "3"
+          "min_acceptable_hold_time": "3",
+          "local_host": "100::42",
+          "local_port": "179",
+          "foreign_host": "1:1:34::242",
+          "foreign_port": "44455",
+          "connections_established": "2",
+          "connections_dropped": "1",
+          "last_reset": "2w3d, due to Peer closing down the session",
+          "peer_reset_reason": "Remote closed the session (No error)",
+          "address_families": [
+            {
+              "address_family": "IPv6 Unicast",
+              "bgp_neighbor_version": "18781601",
+              "update_group": "0.3",
+              "filter_group": "0.1",
+              "route_refresh_received": "0",
+              "route_refresh_sent": "0",
+              "accepted_prefixes": "59216",
+              "bestpaths": "23987",
+              "cumulative_prefixes_denied": "0.",
+              "prefix_advertised": "1",
+              "suppressed": "0",
+              "withdrawn": "0",
+              "maximum_prefixes_allowed": "524288",
+              "threshold_warning": "75%",
+              "restart_interval": "0 min",
+              "last_ack_version": "18781601",
+              "last_synced_ack_version": "18781601",
+              "outstanding_current": "0",
+              "outstanding_max": "1",
+              "additional_paths_operation": "None"
+            }
+          ]
         }
       ]
     }
@@ -149,7 +518,7 @@
       "required": false
     },
     {
-      "path": "/neighbors/*/neighbor_address",
+      "path": "/neighbors/*/neighbor",
       "type": "string",
       "required": true
     },
@@ -179,7 +548,7 @@
       "required": true
     },
     {
-      "path": "/neighbors/*/bgp_state",
+      "path": "/neighbors/*/state",
       "type": "string",
       "required": true
     },
@@ -214,9 +583,169 @@
       "required": true
     },
     {
-      "path": "/neighbors/*/minimum_acceptable_hold_time",
+      "path": "/neighbors/*/min_acceptable_hold_time",
       "type": "string",
       "required": true
+    },
+    {
+      "path": "/neighbors/*/local_host",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/local_port",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/foreign_host",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/foreign_port",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/connections_established",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/connections_dropped",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/last_reset",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/peer_reset_reason",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/address_families",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/address_families/*/address_family",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/bgp_neighbor_version",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/update_group",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/filter_group",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/route_refresh_received",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/route_refresh_sent",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/accepted_prefixes",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/bestpaths",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/cumulative_prefixes_denied",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/prefix_advertised",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/suppressed",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/withdrawn",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/maximum_prefixes_allowed",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/threshold_warning",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/restart_interval",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/last_ack_version",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/last_synced_ack_version",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/outstanding_current",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/outstanding_max",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/additional_paths_operation",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/neighbors/*/address_families/*/policy_incoming",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/neighbors/*/address_families/*/policy_outgoing",
+      "type": "string",
+      "required": false
     },
     {
       "path": "/neighbors/*/cluster_id",

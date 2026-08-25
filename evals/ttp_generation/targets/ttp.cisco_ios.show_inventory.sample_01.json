@@ -1,77 +1,45 @@
 {
   "records": [
     {
-      "inventory": [
+      "inventory_items": [
         {
           "name": "3640 chassis",
-          "description": "3640 chassis",
+          "descr": "3640 chassis",
           "vid": "0xFF",
-          "serial_number": "FF1045C5"
+          "sn": "FF1045C5"
         },
         {
           "name": "One port Fastethernet TX",
-          "description": "One port Fastethernet TX",
+          "descr": "One port Fastethernet TX",
           "pid": "NM-1FE-TX=",
           "vid": "1.0",
-          "serial_number": "7720321"
+          "sn": "7720321"
         },
         {
           "name": "One port Fastethernet TX",
-          "description": "One port Fastethernet TX",
+          "descr": "One port Fastethernet TX",
           "pid": "NM-1FE-TX=",
           "vid": "1.0",
-          "serial_number": "7720321"
+          "sn": "7720321"
         },
         {
           "name": "One port Fastethernet TX",
-          "description": "One port Fastethernet TX",
+          "descr": "One port Fastethernet TX",
           "pid": "NM-1FE-TX=",
           "vid": "1.0",
-          "serial_number": "7720321"
+          "sn": "7720321"
         }
       ]
     }
   ],
   "schema_contract": [
-    {
-      "path": "/",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/inventory",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/inventory/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/inventory/*/name",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/description",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/vid",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/serial_number",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/pid",
-      "type": "string",
-      "required": false
-    }
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/inventory_items", "type": "array", "required": true},
+    {"path": "/inventory_items/*", "type": "object", "required": false},
+    {"path": "/inventory_items/*/name", "type": "string", "required": true},
+    {"path": "/inventory_items/*/descr", "type": "string", "required": true},
+    {"path": "/inventory_items/*/pid", "type": "string", "required": false},
+    {"path": "/inventory_items/*/vid", "type": "string", "required": true},
+    {"path": "/inventory_items/*/sn", "type": "string", "required": true}
   ]
 }

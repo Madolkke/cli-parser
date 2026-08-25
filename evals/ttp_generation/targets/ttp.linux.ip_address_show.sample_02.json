@@ -2,336 +2,41 @@
   "records": [
     {
       "interfaces": [
-        {
-          "interface_index": "1",
-          "name": "lo",
-          "flags": "LOOPBACK,UP,LOWER_UP",
-          "mtu": "65536",
-          "qdisc": "noqueue",
-          "state": "UNKNOWN",
-          "group": "default",
-          "qlen": "1000",
-          "link_type": "loopback",
-          "link_address": "00:00:00:00:00:00",
-          "broadcast_address": "00:00:00:00:00:00",
-          "ipv4_addresses": [
-            {
-              "address": "127.0.0.1/8",
-              "scope": "host",
-              "interface": "lo",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ],
-          "ipv6_addresses": [
-            {
-              "address": "::1/128",
-              "scope": "host",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ]
-        },
-        {
-          "interface_index": "2",
-          "name": "eth0",
-          "flags": "BROADCAST,MULTICAST,UP,LOWER_UP",
-          "mtu": "1500",
-          "qdisc": "fq_codel",
-          "state": "UP",
-          "group": "default",
-          "qlen": "1000",
-          "link_type": "ether",
-          "link_address": "52:54:00:8c:62:44",
-          "broadcast_address": "ff:ff:ff:ff:ff:ff",
-          "ipv4_addresses": [
-            {
-              "address": "192.168.121.241/24",
-              "broadcast": "192.168.121.255",
-              "scope": "global",
-              "attributes": "dynamic",
-              "interface": "eth0",
-              "valid_lft": "3515sec",
-              "preferred_lft": "3515sec"
-            },
-            {
-              "address": "192.168.121.45/24",
-              "scope": "global",
-              "attributes": "secondary",
-              "interface": "eth0",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ],
-          "ipv6_addresses": [
-            {
-              "address": "fe80::5054:ff:fe8c:6244/64",
-              "scope": "link",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ]
-        },
-        {
-          "interface_index": "3",
-          "name": "ens33",
-          "flags": "BROADCAST,MULTICAST,UP,LOWER_UP",
-          "mtu": "1500",
-          "qdisc": "fq_codel",
-          "state": "UP",
-          "group": "default",
-          "qlen": "1000",
-          "link_type": "ether",
-          "link_address": "00:0c:29:b0:21:7d",
-          "broadcast_address": "ff:ff:ff:ff:ff:ff",
-          "altname": "enp2s1",
-          "ipv4_addresses": [
-            {
-              "address": "192.168.94.133/24",
-              "broadcast": "192.168.94.255",
-              "scope": "global",
-              "attributes": "dynamic noprefixroute",
-              "interface": "ens33",
-              "valid_lft": "1541sec",
-              "preferred_lft": "1541sec"
-            }
-          ],
-          "ipv6_addresses": [
-            {
-              "address": "fe80::b681:60db:7206:13a0/64",
-              "scope": "link",
-              "attributes": "noprefixroute",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ]
-        },
-        {
-          "interface_index": "4",
-          "name": "ens37",
-          "flags": "BROADCAST,MULTICAST,UP,LOWER_UP",
-          "mtu": "1500",
-          "qdisc": "fq_codel",
-          "state": "UP",
-          "group": "default",
-          "qlen": "1000",
-          "link_type": "ether",
-          "link_address": "00:50:56:20:47:14",
-          "broadcast_address": "ff:ff:ff:ff:ff:ff",
-          "altname": "enp2s5",
-          "ipv4_addresses": [
-            {
-              "address": "192.168.94.134/24",
-              "broadcast": "192.168.94.255",
-              "scope": "global",
-              "attributes": "dynamic noprefixroute",
-              "interface": "ens37",
-              "valid_lft": "1541sec",
-              "preferred_lft": "1541sec"
-            }
-          ],
-          "ipv6_addresses": [
-            {
-              "address": "fe80::6c2a:3447:5d99:700a/64",
-              "scope": "link",
-              "attributes": "noprefixroute",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ]
-        },
-        {
-          "interface_index": "5",
-          "name": "ens38",
-          "flags": "BROADCAST,MULTICAST,UP,LOWER_UP",
-          "mtu": "0",
-          "qdisc": "fq_codel",
-          "state": "UP",
-          "group": "default",
-          "qlen": "1000",
-          "link_type": "ether",
-          "link_address": "00:50:56:37:93:58",
-          "broadcast_address": "ff:ff:ff:ff:ff:ff",
-          "altname": "enp2s6",
-          "ipv4_addresses": [
-            {
-              "address": "192.168.94.135/24",
-              "broadcast": "192.168.94.255",
-              "scope": "global",
-              "attributes": "dynamic noprefixroute",
-              "interface": "ens38",
-              "valid_lft": "1540sec",
-              "preferred_lft": "1540sec"
-            }
-          ],
-          "ipv6_addresses": [
-            {
-              "address": "fe80::97ef:a3f1:a962:9ef0/64",
-              "scope": "link",
-              "attributes": "noprefixroute",
-              "valid_lft": "forever",
-              "preferred_lft": "forever"
-            }
-          ]
-        }
+        {"name": "lo", "flags": "<LOOPBACK,UP,LOWER_UP>", "mtu": "65536", "qdisc": "noqueue", "state": "UNKNOWN", "group": "default", "qlen": "1000", "link": {"type": "loopback", "address": "00:00:00:00:00:00", "broadcast": "00:00:00:00:00:00"}, "addresses": [{"family": "inet", "address": "127.0.0.1", "prefix_length": "8", "scope": "host", "valid_lft": "forever", "preferred_lft": "forever"}, {"family": "inet6", "address": "::1", "prefix_length": "128", "scope": "host", "valid_lft": "forever", "preferred_lft": "forever"}]},
+        {"name": "eth0", "flags": "<BROADCAST,MULTICAST,UP,LOWER_UP>", "mtu": "1500", "qdisc": "fq_codel", "state": "UP", "group": "default", "qlen": "1000", "link": {"type": "ether", "address": "52:54:00:8c:62:44", "broadcast": "ff:ff:ff:ff:ff:ff"}, "addresses": [{"family": "inet", "address": "192.168.121.241", "prefix_length": "24", "scope": "global", "dynamic": "dynamic", "label": "eth0", "valid_lft": "3515sec", "preferred_lft": "3515sec"}, {"family": "inet", "address": "192.168.121.45", "prefix_length": "24", "scope": "global", "secondary": "secondary", "label": "eth0", "valid_lft": "forever", "preferred_lft": "forever"}, {"family": "inet6", "address": "fe80::5054:ff:fe8c:6244", "prefix_length": "64", "scope": "link", "valid_lft": "forever", "preferred_lft": "forever"}]},
+        {"name": "ens33", "flags": "<BROADCAST,MULTICAST,UP,LOWER_UP>", "mtu": "1500", "qdisc": "fq_codel", "state": "UP", "group": "default", "qlen": "1000", "altname": "enp2s1", "link": {"type": "ether", "address": "00:0c:29:b0:21:7d", "broadcast": "ff:ff:ff:ff:ff:ff"}, "addresses": [{"family": "inet", "address": "192.168.94.133", "prefix_length": "24", "scope": "global", "dynamic": "dynamic", "noprefixroute": "noprefixroute", "label": "ens33", "valid_lft": "1541sec", "preferred_lft": "1541sec"}, {"family": "inet6", "address": "fe80::b681:60db:7206:13a0", "prefix_length": "64", "scope": "link", "noprefixroute": "noprefixroute", "valid_lft": "forever", "preferred_lft": "forever"}]},
+        {"name": "ens37", "flags": "<BROADCAST,MULTICAST,UP,LOWER_UP>", "mtu": "1500", "qdisc": "fq_codel", "state": "UP", "group": "default", "qlen": "1000", "altname": "enp2s5", "link": {"type": "ether", "address": "00:50:56:20:47:14", "broadcast": "ff:ff:ff:ff:ff:ff"}, "addresses": [{"family": "inet", "address": "192.168.94.134", "prefix_length": "24", "scope": "global", "dynamic": "dynamic", "noprefixroute": "noprefixroute", "label": "ens37", "valid_lft": "1541sec", "preferred_lft": "1541sec"}, {"family": "inet6", "address": "fe80::6c2a:3447:5d99:700a", "prefix_length": "64", "scope": "link", "noprefixroute": "noprefixroute", "valid_lft": "forever", "preferred_lft": "forever"}]},
+        {"name": "ens38", "flags": "<BROADCAST,MULTICAST,UP,LOWER_UP>", "mtu": "1500", "qdisc": "fq_codel", "state": "UP", "group": "default", "qlen": "1000", "altname": "enp2s6", "link": {"type": "ether", "address": "00:50:56:37:93:58", "broadcast": "ff:ff:ff:ff:ff:ff"}, "addresses": [{"family": "inet", "address": "192.168.94.135", "prefix_length": "24", "scope": "global", "dynamic": "dynamic", "noprefixroute": "noprefixroute", "label": "ens38", "valid_lft": "1540sec", "preferred_lft": "1540sec"}, {"family": "inet6", "address": "fe80::97ef:a3f1:a962:9ef0", "prefix_length": "64", "scope": "link", "noprefixroute": "noprefixroute", "valid_lft": "forever", "preferred_lft": "forever"}]}
       ]
     }
   ],
   "schema_contract": [
-    {
-      "path": "/",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/interface_index",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/name",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/flags",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/mtu",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/qdisc",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/state",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/group",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/qlen",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/link_type",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/link_address",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/broadcast_address",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/address",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/scope",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/interface",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/valid_lft",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/preferred_lft",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*/address",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*/scope",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*/valid_lft",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*/preferred_lft",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/broadcast",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/ipv4_addresses/*/attributes",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/altname",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/ipv6_addresses/*/attributes",
-      "type": "string",
-      "required": false
-    }
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/name", "type": "string", "required": true},
+    {"path": "/interfaces/*/flags", "type": "string", "required": true},
+    {"path": "/interfaces/*/mtu", "type": "string", "required": true},
+    {"path": "/interfaces/*/qdisc", "type": "string", "required": true},
+    {"path": "/interfaces/*/state", "type": "string", "required": true},
+    {"path": "/interfaces/*/group", "type": "string", "required": true},
+    {"path": "/interfaces/*/qlen", "type": "string", "required": true},
+    {"path": "/interfaces/*/altname", "type": "string", "required": false},
+    {"path": "/interfaces/*/link", "type": "object", "required": true},
+    {"path": "/interfaces/*/link/type", "type": "string", "required": true},
+    {"path": "/interfaces/*/link/address", "type": "string", "required": true},
+    {"path": "/interfaces/*/link/broadcast", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses", "type": "array", "required": true},
+    {"path": "/interfaces/*/addresses/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/addresses/*/family", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses/*/address", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses/*/prefix_length", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses/*/scope", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses/*/dynamic", "type": "string", "required": false},
+    {"path": "/interfaces/*/addresses/*/secondary", "type": "string", "required": false},
+    {"path": "/interfaces/*/addresses/*/noprefixroute", "type": "string", "required": false},
+    {"path": "/interfaces/*/addresses/*/label", "type": "string", "required": false},
+    {"path": "/interfaces/*/addresses/*/valid_lft", "type": "string", "required": true},
+    {"path": "/interfaces/*/addresses/*/preferred_lft", "type": "string", "required": true}
   ]
 }

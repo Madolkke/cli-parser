@@ -2,121 +2,26 @@
   "records": [
     {
       "interfaces": [
-        {
-          "port": "Twe1/0/1",
-          "name": "Device 1",
-          "status": "connected",
-          "vlan": "123",
-          "duplex": "a-full",
-          "speed": "a-1000",
-          "type": "10/100/1000BaseTX SFP"
-        },
-        {
-          "port": "Twe1/0/2",
-          "name": "Device 2",
-          "status": "disabled",
-          "vlan": "456",
-          "duplex": "auto",
-          "speed": "auto",
-          "type": "10/100/1000BaseTX SFP"
-        },
-        {
-          "port": "Twe1/0/4",
-          "name": "* Device 3 *",
-          "status": "connected",
-          "vlan": "123,1234",
-          "duplex": "a-full",
-          "speed": "a-1000",
-          "type": "10/100/1000BaseTX SFP"
-        },
-        {
-          "port": "Twe1/0/5",
-          "name": "Device 4",
-          "status": "disabled",
-          "vlan": "2345",
-          "duplex": "auto",
-          "speed": "auto",
-          "type": "10/100/1000BaseTX SFP"
-        },
-        {
-          "port": "Twe1/0/17",
-          "name": "Device 5",
-          "status": "connected",
-          "vlan": "pvlan prom",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "SFP-10GBase-SR"
-        },
-        {
-          "port": "Twe1/0/28",
-          "name": "Device 6",
-          "status": "notconnect",
-          "vlan": "123",
-          "duplex": "auto",
-          "speed": "auto",
-          "type": "10/100/1000BaseTX SFP"
-        },
-        {
-          "port": "Twe2/0/32",
-          "status": "monitoring",
-          "vlan": "1",
-          "duplex": "full",
-          "speed": "10G",
-          "type": "SFP-10GBase-SR"
-        }
+        {"port": "Twe1/0/1", "name": "Device 1", "status": "connected", "vlan": "123", "duplex": "a-full", "speed": "a-1000", "type": "10/100/1000BaseTX SFP"},
+        {"port": "Twe1/0/2", "name": "Device 2", "status": "disabled", "vlan": "456", "duplex": "auto", "speed": "auto", "type": "10/100/1000BaseTX SFP"},
+        {"port": "Twe1/0/4", "name": "* Device 3 *", "status": "connected", "vlan": "123,1234", "duplex": "a-full", "speed": "a-1000", "type": "10/100/1000BaseTX SFP"},
+        {"port": "Twe1/0/5", "name": "Device 4", "status": "disabled", "vlan": "2345", "duplex": "auto", "speed": "auto", "type": "10/100/1000BaseTX SFP"},
+        {"port": "Twe1/0/17", "name": "Device 5", "status": "connected", "vlan": "pvlan prom", "duplex": "full", "speed": "10G", "type": "SFP-10GBase-SR"},
+        {"port": "Twe1/0/28", "name": "Device 6", "status": "notconnect", "vlan": "123", "duplex": "auto", "speed": "auto", "type": "10/100/1000BaseTX SFP"},
+        {"port": "Twe2/0/32", "status": "monitoring", "vlan": "1", "duplex": "full", "speed": "10G", "type": "SFP-10GBase-SR"}
       ]
     }
   ],
   "schema_contract": [
-    {
-      "path": "/",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/port",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/name",
-      "type": "string",
-      "required": false
-    },
-    {
-      "path": "/interfaces/*/status",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/vlan",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/duplex",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/speed",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/interfaces/*/type",
-      "type": "string",
-      "required": true
-    }
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/interfaces", "type": "array", "required": true},
+    {"path": "/interfaces/*", "type": "object", "required": false},
+    {"path": "/interfaces/*/port", "type": "string", "required": true},
+    {"path": "/interfaces/*/name", "type": "string", "required": false},
+    {"path": "/interfaces/*/status", "type": "string", "required": true},
+    {"path": "/interfaces/*/vlan", "type": "string", "required": true},
+    {"path": "/interfaces/*/duplex", "type": "string", "required": true},
+    {"path": "/interfaces/*/speed", "type": "string", "required": true},
+    {"path": "/interfaces/*/type", "type": "string", "required": true}
   ]
 }

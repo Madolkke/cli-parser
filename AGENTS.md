@@ -71,7 +71,7 @@
 - 官方黑盒评测和真实语料将每份 raw 作为独立单输入 case；运行时公共 API 仍兼容 `1-5` 输入，但当前测试资产不测量跨样本共享模板泛化。公开真实语料 manifest 固定为 `31` 个 case、`31` 份文本；无凭据时必须可以独立执行 preflight，验证文件编码、大小、终端噪声、凭据模式和 SHA-256，不得产生模型请求。
 - 真实语料闭环独立于 pytest：先要求 smoke 的 `5/5` 单输入 case（`5` 份文本）通过，再用同一结果目录 resume 完整代表集并达到 `31/31`；只有当前 `prompt_version` 的成功 case 才能被跳过，每个成功 case 都要在 Agent 外使用全文重新验收。
 - Laminar 单测必须覆盖可选初始化、幂等行为、独立/继承 Trace、根与 TOOL span 的正常/失败/异常/取消生命周期、trace ID 契约和短进程 flush；语料 `list`/`preflight` 必须证明不触发 tracing 初始化或网络访问。
-- 评测系统单测必须覆盖 manifest 严格解析、路径逃逸、哈希、非空 target、Schema 断言闭合、严格 records 比较、漏行/表头/空数组/类型差异、逐输入诊断、严格正确率与遥测完整性解耦、结果与 Trace ID 一致性、遥测延迟和 Key 排除。版本化 smoke 定义固定为 `12` 个单输入 case、`12` 份输入；低歧义 baseline 定义固定为 `3` 个单输入 case、`3` 份输入；live canary 只运行一个单输入 trial，严格失败仍可作为系统验收，但必须完整记录评分和 Trace 且不自动重试。高预算诊断、重复 trial 和 HumanEvaluator 评审均属于独立开发评测步骤，不进入普通 pytest。
+- 评测系统单测必须覆盖 manifest 严格解析、路径逃逸、哈希、非空 target、Schema 断言闭合、严格 records 比较、漏行/表头/空数组/类型差异、逐输入诊断、严格正确率与遥测完整性解耦、结果与 Trace ID 一致性、遥测延迟和 Key 排除。版本化完整语料 `all` suite 固定为 `31` 个单输入 case、`31` 份输入；smoke suite 固定为 `5` 个单输入 case、`5` 份输入；live canary 只运行一个单输入 trial，严格失败仍可作为系统验收，但必须完整记录评分和 Trace 且不自动重试。高预算诊断、重复 trial 和 HumanEvaluator 评审均属于独立开发评测步骤，不进入普通 pytest。
 - observer 与 TUI 单测必须覆盖缺省行为不变、事件顺序和请求隔离、observer 异常隔离、阶段上下文快照、零工具丢弃标记、外部/内部取消区分、完整 JSONL 转录和 Key 排除；Textual `run_test()` 还需覆盖上下导航、Thinking 折叠、详情滚动、自动跟随与完成后退出。
 - 首版交付前至少完成一次真实模型的端到端闭环；普通测试仍必须离线、稳定且不依赖模型。
 
