@@ -129,6 +129,10 @@ The schema must satisfy the same closed Draft 2020-12 subset the Schema phase
 produces. The Schema phase and caller-supplied mode use the same schema-only
 validation; every other check — TTP allowlist, isolated parsing, and record
 re-validation against the schema — is unchanged.
+ASCII `snake_case` Python keywords such as `as`, `class`, and `for` are valid
+field names and are preserved in TTP records. The scalar property name `ignore`
+is reserved by TTP and is rejected during schema validation; object and array
+containers named `ignore` remain valid.
 
 ## Zero-argument development run
 
@@ -170,6 +174,11 @@ uv run --env-file .env python scripts/run_webui.py
 生成在后台执行，进度经 SSE 实时推送，可随时取消。每次运行保存在被 Git 忽略的
 `data/runs/<UTC 时间戳>/` 下（`meta.json`、`inputs.json`、`schema.json`、
 `result.json`、`events.jsonl`），历史列表就是目录扫描，删除即删目录。
+
+WebUI 的 SSE 使用浏览器默认 `message` 事件，业务事件类型由 JSON 正文的 `type`
+字段分发；断线可通过 `Last-Event-ID` 或 `after_sequence` 继续重放。Thinking、
+模型文本和工具增量在服务端按 50ms 或 4 KiB 合并后再分配 sequence、落盘和广播，
+因此文本完整且顺序可重建，但不保留供应商逐 token 的边界。
 
 同一时刻只允许一次生成在跑。这是单用户本地工具：只绑回环地址、无鉴权、无并发
 隔离，不是部署形态。

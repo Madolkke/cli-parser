@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import json
+import keyword
 
 import pytest
 
 from cli_parser_agent.ttp_generation.validation import (
     validate_records_against_schema,
     validate_result_schema,
+)
+
+_PYTHON_SNAKE_CASE_KEYWORDS = tuple(
+    field_name for field_name in keyword.kwlist if field_name.islower()
 )
 
 
@@ -48,6 +53,79 @@ def test_required_uses_draft_2020_12_semantics(required: list[str] | None) -> No
         schema.pop("required")
     else:
         schema["required"] = required
+
+    assert validate_result_schema(schema) == []
+
+
+@pytest.mark.parametrize("field_name", _PYTHON_SNAKE_CASE_KEYWORDS)
+def test_python_keywords_are_valid_schema_field_names(field_name: str) -> None:
+    schema = {
+        "type": "object",
+        "properties": {field_name: {"type": "string"}},
+        "required": [field_name],
+        "additionalProperties": False,
+    }
+
+    assert validate_result_schema(schema) == []
+
+
+def test_python_keyword_is_valid_in_nested_object() -> None:
+    schema = {
+        "type": "object",
+        "properties": {
+            "details": {
+                "type": "object",
+                "properties": {"class": {"type": "string"}},
+                "required": ["class"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["details"],
+        "additionalProperties": False,
+    }
+
+    assert validate_result_schema(schema) == []
+
+
+@pytest.mark.parametrize("scalar_type", ["string", "integer", "number", "boolean"])
+def test_scalar_ignore_is_rejected_as_reserved_name(scalar_type: str) -> None:
+    schema = {
+        "type": "object",
+        "properties": {"ignore": {"type": scalar_type}},
+        "required": ["ignore"],
+        "additionalProperties": False,
+    }
+
+    issues = validate_result_schema(schema)
+
+    reserved = next(
+        issue for issue in issues if issue.code == "schema.reserved_scalar_field_name"
+    )
+    assert reserved.path == "/properties/ignore"
+    assert reserved.details == {"reserved_name": "ignore"}
+
+
+@pytest.mark.parametrize(
+    "container_schema",
+    [
+        {
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "required": ["value"],
+            "additionalProperties": False,
+        },
+        {"type": "array", "items": {"type": "string"}},
+    ],
+)
+def test_ignore_is_allowed_as_object_or_array_container(
+    container_schema: dict[str, object],
+) -> None:
+    schema = {
+        "type": "object",
+        "properties": {"ignore": container_schema},
+        "required": ["ignore"],
+        "additionalProperties": False,
+    }
 
     assert validate_result_schema(schema) == []
 

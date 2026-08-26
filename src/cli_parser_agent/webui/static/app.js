@@ -2,12 +2,17 @@
 
 const $ = (id) => document.getElementById(id);
 const model = window.SchemaModel;
+const timelineApi = window.AgentTimeline;
 const MAX_INPUT_BYTES = 1024 * 1024;
 const state = {
   runId: null, stream: null, activeTab: "template", outputs: [{ text: "", scrollTop: 0 }],
   activeOutput: 0, schemaDraft: null, savedSchema: null, schemaDirty: false,
   schemaMode: "visual", schemaErrors: [], schemaExpanded: Object.create(null),
   drawerOpen: false, events: [], followProgress: true,
+  timeline: timelineApi.createTimelineState(),
+  eventTracker: timelineApi.createSequenceTracker(),
+  timelineNodes: new Map(), timelineDirty: new Set(), timelineRemoved: new Set(),
+  timelineScheduler: null,
 };
 
 async function api(path, options) {
@@ -490,14 +495,14 @@ $("run-template").onclick = async () => {
 async function refreshRun() {
   const data = await api("/api/runs/" + state.runId);
   const { meta, result, schema, inputs, events } = data;
-  state.events = Array.isArray(events) ? events.slice() : [];
+  const timelineEvents = Array.isArray(events) ? events : [];
   $("run-title").textContent = meta.title || "运行";
   $("run-sub").textContent = meta.run_id + " · " + (meta.mode === "propose" ? "Schema 提案" : "完整生成");
   const badge = $("run-status"); badge.className = "badge " + meta.status; badge.textContent = statusLabel(meta.status) + (meta.elapsed_seconds ? " · " + meta.elapsed_seconds.toFixed(1) + "s" : "");
   const running = meta.status === "running";
   $("cancel").hidden = !running; $("delete").hidden = running;
-  $("progress").hidden = events.length === 0 && !running; $("progress").open = running;
-  $("bar-fill").classList.toggle("is-done", !running); renderLog(events);
+  $("progress").hidden = timelineEvents.length === 0 && !running; $("progress").open = running;
+  $("bar-fill").classList.toggle("is-done", !running); renderLog(timelineEvents);
   const proposal = result && result.proposal;
   const showSchema = Boolean(schema) && meta.mode === "propose" && !(result && result.artifact);
   $("schema-panel").hidden = !showSchema;
@@ -506,32 +511,140 @@ async function refreshRun() {
   return data;
 }
 function renderLog(events) {
-  renderAgentTimeline(events);
+  resetAgentTimeline(events);
   const last = events[events.length - 1];
-  if (last) { $("progress-phase").textContent = phaseLabel(last); $("progress-elapsed").textContent = (last.elapsed_seconds || 0).toFixed(1) + "s"; }
+  if (last) updateProgressSummary(last);
 }
-function renderAgentTimeline(events) {
+
+function updateProgressSummary(event) {
+  $("progress-phase").textContent = phaseLabel(event);
+  $("progress-elapsed").textContent = (event.elapsed_seconds || 0).toFixed(1) + "s";
+}
+
+function preferredEntryOpen(entry) {
+  if (entry.manualOpen !== null) return entry.manualOpen;
+  return !entry.complete || entry.kind === "text";
+}
+
+function createTimelineNode(entry) {
+  const details = document.createElement("details");
+  details.className = "agent-entry " + entry.kind;
+  const summary = document.createElement("summary");
+  const title = document.createElement("strong");
+  const meta = document.createElement("span");
+  meta.className = "agent-entry-meta";
+  summary.append(title, meta);
+  details.append(summary);
+  const body = document.createElement("div");
+  body.className = "agent-entry-body";
+  details.append(body);
+  summary.addEventListener("click", () => {
+    setTimeout(() => {
+      const current = state.timeline.byKey.get(entry.key);
+      if (current) current.manualOpen = details.open;
+    }, 0);
+  });
+  const refs = { details, title, meta, body, text: null, detail: null, status: null };
+  state.timelineNodes.set(entry.key, refs);
+  return refs;
+}
+
+function updateTimelineNode(entry) {
+  let refs = state.timelineNodes.get(entry.key);
+  if (!refs) refs = createTimelineNode(entry);
+  refs.details.className = "agent-entry " + entry.kind;
+  refs.details.open = preferredEntryOpen(entry);
+  refs.title.textContent = entry.title;
+  refs.meta.textContent = (entry.phase || "") + " · " + Number(entry.elapsed || 0).toFixed(1) + "s";
+  const children = [];
+  if (entry.text) {
+    if (!refs.text) {
+      refs.text = document.createElement("pre");
+      refs.text.className = "agent-stream-text";
+    }
+    refs.text.textContent = entry.text;
+    children.push(refs.text);
+  }
+  if (entry.detail && Object.keys(entry.detail).length) {
+    if (!refs.detail) {
+      refs.detail = document.createElement("pre");
+      refs.detail.className = "agent-stream-json";
+    }
+    refs.detail.textContent = JSON.stringify(entry.detail, null, 2);
+    children.push(refs.detail);
+  }
+  if (!children.length) {
+    if (!refs.status) {
+      refs.status = document.createElement("span");
+      refs.status.className = "mono";
+    }
+    refs.status.textContent = entry.complete ? "已完成" : "进行中…";
+    children.push(refs.status);
+  }
+  refs.body.replaceChildren(...children);
+  return refs.details;
+}
+
+function renderTimelineFull() {
   const host = $("agent-timeline");
   host.replaceChildren();
-  const entries = window.AgentTimeline.reduceAgentEvents(events);
+  state.timelineNodes.clear();
+  const entries = state.timeline.entries;
   if (!entries.length) {
     const empty = document.createElement("p"); empty.className = "timeline-empty"; empty.textContent = "等待 Agent 事件…"; host.append(empty); return;
   }
-  for (const entry of entries) {
-    const details = document.createElement("details");
-    details.className = "agent-entry " + entry.kind;
-    details.open = !entry.complete || entry.kind === "text";
-    const summary = document.createElement("summary");
-    const title = document.createElement("strong"); title.textContent = entry.title;
-    const meta = document.createElement("span"); meta.className = "agent-entry-meta"; meta.textContent = (entry.phase || "") + " · " + Number(entry.elapsed || 0).toFixed(1) + "s";
-    summary.append(title, meta); details.append(summary);
-    const body = document.createElement("div"); body.className = "agent-entry-body";
-    if (entry.text) { const pre = document.createElement("pre"); pre.className = "agent-stream-text"; pre.textContent = entry.text; body.append(pre); }
-    if (entry.detail && Object.keys(entry.detail).length) { const pre = document.createElement("pre"); pre.className = "agent-stream-json"; pre.textContent = JSON.stringify(entry.detail, null, 2); body.append(pre); }
-    if (!entry.text && !entry.detail) { const empty = document.createElement("span"); empty.className = "mono"; empty.textContent = entry.complete ? "已完成" : "进行中…"; body.append(empty); }
-    details.append(body); host.append(details);
-  }
+  for (const entry of entries) host.append(updateTimelineNode(entry));
   if (state.followProgress) host.scrollTop = host.scrollHeight;
+}
+
+function flushTimelineChanges() {
+  const host = $("agent-timeline");
+  const empty = host.querySelector(".timeline-empty");
+  if (empty) empty.remove();
+  for (const key of state.timelineRemoved) {
+    const refs = state.timelineNodes.get(key);
+    if (refs) refs.details.remove();
+    state.timelineNodes.delete(key);
+  }
+  for (const key of state.timelineDirty) {
+    const entry = state.timeline.byKey.get(key);
+    if (!entry) continue;
+    const node = updateTimelineNode(entry);
+    if (!node.isConnected) host.append(node);
+  }
+  state.timelineRemoved.clear();
+  state.timelineDirty.clear();
+  if (state.followProgress) host.scrollTop = host.scrollHeight;
+}
+
+state.timelineScheduler = timelineApi.createRenderScheduler(
+  flushTimelineChanges,
+  (callback) => requestAnimationFrame(callback),
+  (handle) => cancelAnimationFrame(handle),
+);
+
+function resetAgentTimeline(events) {
+  state.timelineScheduler.cancel();
+  state.events = events.slice();
+  state.eventTracker = timelineApi.createSequenceTracker(events);
+  state.timeline = timelineApi.buildTimeline(events);
+  state.timelineDirty.clear();
+  state.timelineRemoved.clear();
+  renderTimelineFull();
+}
+
+function appendTimelineEvent(event) {
+  if (!state.eventTracker.accept(event)) return false;
+  state.events.push(event);
+  const change = timelineApi.appendAgentEvent(state.timeline, event);
+  if (change.removedKey) {
+    state.timelineRemoved.add(change.removedKey);
+    state.timelineDirty.delete(change.removedKey);
+  }
+  state.timelineDirty.add(change.entry.key);
+  updateProgressSummary(event);
+  state.timelineScheduler.schedule();
+  return true;
 }
 function describe(event) {
   if (event.type === "model_call") return (event.phase || "") + " 模型调用";
@@ -577,13 +690,16 @@ function renderIssues(issues) {
 
 /* Events and actions */
 function openStream(runId) {
-  closeStream(); const stream = new EventSource("/api/runs/" + runId + "/events"); state.stream = stream;
+  closeStream();
+  const after = state.eventTracker.highest();
+  const stream = new EventSource("/api/runs/" + runId + "/events?after_sequence=" + after);
+  state.stream = stream;
   stream.onmessage = (message) => {
-    const event = JSON.parse(message.data);
-    const sequence = Number(event.sequence || 0);
-    if (sequence && state.events.some((item) => Number(item.sequence || 0) === sequence)) return;
-    state.events.push(event);
-    $("progress").hidden = false; $("progress").open = true; renderLog(state.events);
+    let event;
+    try { event = JSON.parse(message.data); }
+    catch { return; }
+    if (!appendTimelineEvent(event)) return;
+    $("progress").hidden = false; $("progress").open = true;
     if (event.type === "run.finished") { closeStream(); refreshRun().then(loadHistory); }
   };
   stream.onerror = () => {
@@ -592,8 +708,15 @@ function openStream(runId) {
     if (stream.readyState === EventSource.CLOSED) closeStream();
   };
 }
-function closeStream() { if (state.stream) { state.stream.close(); state.stream = null; } }
-$('progress-follow').onclick = () => { state.followProgress = true; renderAgentTimeline(state.events); };
+function closeStream() {
+  if (state.stream) { state.stream.close(); state.stream = null; }
+  state.timelineScheduler.cancel();
+}
+$('progress-follow').onclick = () => {
+  state.followProgress = true;
+  const host = $("agent-timeline");
+  host.scrollTop = host.scrollHeight;
+};
 $("agent-timeline").addEventListener("scroll", () => {
   const host = $("agent-timeline");
   state.followProgress = host.scrollHeight - host.scrollTop - host.clientHeight < 24;
@@ -601,7 +724,7 @@ $("agent-timeline").addEventListener("scroll", () => {
 $("new-run").onclick = showNew; $("refresh").onclick = loadHistory; $("history-toggle").onclick = openDrawer; $("history-close").onclick = closeDrawer; $("drawer-overlay").onclick = closeDrawer;
 $("start").onclick = async () => {
   if (!validateOutputs()) return; const error = $("new-error"); error.hidden = true; $("start").disabled = true;
-  try { const mode = document.querySelector('input[name="mode"]:checked').value; const created = await api("/api/runs", { method: "POST", body: JSON.stringify({ mode, title: $("title").value, command_outputs: state.outputs.map((item) => item.text) }) }); await openRun(created.run_id); openStream(created.run_id); }
+  try { const mode = document.querySelector('input[name="mode"]:checked').value; const created = await api("/api/runs", { method: "POST", body: JSON.stringify({ mode, title: $("title").value, command_outputs: state.outputs.map((item) => item.text) }) }); await openRun(created.run_id); }
   catch (failure) { error.textContent = failure.message; error.hidden = false; }
   finally { validateOutputs(); }
 };

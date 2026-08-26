@@ -144,7 +144,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v22-schema-without-evidence-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v23-keyword-field-compatibility-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -155,6 +155,8 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "只在部分实例出现的字段应保持可选" in SCHEMA_SYSTEM_PROMPT
     assert "省略该键" in SCHEMA_SYSTEM_PROMPT
     assert "允许忠实使用空 string" in SCHEMA_SYSTEM_PROMPT
+    assert "Python 关键字也是合法字段名" in SCHEMA_SYSTEM_PROMPT
+    assert "标量字段不能命名为 `ignore`" in SCHEMA_SYSTEM_PROMPT
     assert "中文" in SCHEMA_SYSTEM_PROMPT
     assert "1-3" not in SCHEMA_SYSTEM_PROMPT
     assert "TTP" not in SCHEMA_SYSTEM_PROMPT
@@ -204,6 +206,7 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "未命名的最外层 group 对应根 object 本身" in TTP_SYSTEM_PROMPT
     assert '{{ ignore("\\s*") }}' in TTP_SYSTEM_PROMPT
     assert "吸收可变前导空白" in TTP_SYSTEM_PROMPT
+    assert "Python 关键字字段" in TTP_SYSTEM_PROMPT
     # Every reply must call exactly one tool; plain text is discarded and only
     # burns budget (0.67 mean no-tool TTP responses observed per trial).
     assert "必须恰好调用这两个工具之一" in TTP_SYSTEM_PROMPT

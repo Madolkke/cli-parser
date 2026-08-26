@@ -111,7 +111,7 @@ workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度
 
 ### 3. 提交、修正并冻结 Schema
 
-Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema 和 assumptions。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具检查元模式、安全子集、复杂度、封闭对象、字段名和 required 集合。
+Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema 和 assumptions。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具检查元模式、安全子集、复杂度、封闭对象、字段名和 required 集合。符合 ASCII `snake_case` 的 Python 关键字字段合法；标量字段名 `ignore` 在这里以 `schema.reserved_scalar_field_name` 拒绝，object 和 array 容器名 `ignore` 仍允许。
 
 无效候选及其 issues 留在 Schema `AgentState` 中，模型可以继续修正。第一个通过校验的 Schema 被深拷贝并永久冻结；对应的 `ToolResultEndEvent` 是安全暂停点，runner 立即结束当前 reply。若 Schema 恰好耗尽了全局轮次，请求直接失败，不启动 TTP Agent。
 
@@ -125,7 +125,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema 和 ass
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v22-schema-without-evidence-zh-cn`。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v23-keyword-field-compatibility-zh-cn`。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -193,6 +193,8 @@ uv run --env-file .env python scripts/run_webui.py
 它提供两条路径：**完整生成**等价于命令行的两阶段流程；**先提案 Schema** 则调用 `propose_schema()`，把冻结提案写入运行目录供人工复核编辑，确认后再经 `generate_from_schema()` 生成模板。编辑后的 Schema 在保存前必须通过受限子集校验，未通过时回显 issue 且不覆盖已存文件。
 
 同一时刻只允许一次生成在跑，冲突返回 `409`；生成在后台任务中执行，HTTP 请求立即返回。WebUI 进程默认将自己的模型设置覆盖为 `stream=True`，可用 `CLI_PARSER_WEBUI_STREAM=false` 为不支持流式的供应商降级；公共生成器默认值不变。进度经 SSE 推送带本地 sequence 的 Agent 时间线，包含经安全投影的 Thinking、模型文本、工具参数、工具结果、阶段和重试事件，支持 `Last-Event-ID` 重放。运行记录以纯文件保存在被 Git 忽略的 `data/runs/<UTC 时间戳>/`，列表即目录扫描。
+
+SSE 帧统一使用默认 `message` 事件，客户端按 JSON 正文中的 `type` 分发；详情接口加载历史事件后可用 `after_sequence` 避免重复，浏览器自动重连继续使用 `Last-Event-ID`。同一 block 或 tool call 的连续 delta 在服务端按 50ms 或 4096 字符合并，再分配 sequence、写入 `events.jsonl` 并广播。合并不会丢失正常流量的文本内容，但不承诺保留供应商逐 token 边界。
 
 WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具、预算或 finish 协议。事件投影不序列化完整 AgentScope 对象，不发送 system prompt、完整上下文快照或凭据；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
 

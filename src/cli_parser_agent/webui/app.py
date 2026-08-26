@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
@@ -30,16 +30,32 @@ STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
 
 
 class _ProgressQueue:
-    """Bounded async queue that coalesces adjacent text deltas."""
+    """Bounded async queue with time- and size-based delta coalescing."""
 
     MAX_ITEMS = 512
     MAX_DELTA_CHARS = 4096
+    DELTA_WINDOW_SECONDS = 0.05
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        coalesce_window_seconds: float = DELTA_WINDOW_SECONDS,
+        max_items: int = MAX_ITEMS,
+        max_delta_chars: int = MAX_DELTA_CHARS,
+    ) -> None:
+        if coalesce_window_seconds < 0:
+            raise ValueError("coalesce_window_seconds cannot be negative")
+        if max_items < 1 or max_delta_chars < 1:
+            raise ValueError("queue limits must be positive")
         self._items: deque[dict[str, Any]] = deque()
         self._ready = asyncio.Event()
         self._closed = False
         self._dropped_deltas = 0
+        self._pending_delta: dict[str, Any] | None = None
+        self._flush_handle: asyncio.TimerHandle | None = None
+        self._coalesce_window_seconds = coalesce_window_seconds
+        self._max_items = max_items
+        self._max_delta_chars = max_delta_chars
 
     @staticmethod
     def _is_delta(item: dict[str, Any]) -> bool:
@@ -55,34 +71,29 @@ class _ProgressQueue:
             detail.get("tool_name"),
         )
 
-    def put_nowait(self, item: dict[str, Any]) -> None:
-        if self._closed:
-            return
-        if self._is_delta(item) and self._items:
-            previous = self._items[-1]
-            if self._delta_key(previous) == self._delta_key(item):
-                previous_detail = previous.setdefault("detail", {})
-                current_detail = item.get("detail") or {}
-                previous_text = str(previous_detail.get("text", ""))
-                current_text = str(current_detail.get("text", ""))
-                if len(previous_text) + len(current_text) <= self.MAX_DELTA_CHARS:
-                    previous_detail["text"] = previous_text + current_text
-                    previous_detail["coalesced"] = (
-                        int(previous_detail.get("coalesced", 0)) + 1
-                    )
-                    return
-        if len(self._items) >= self.MAX_ITEMS:
+    @staticmethod
+    def _delta_text(item: dict[str, Any]) -> str:
+        return str((item.get("detail") or {}).get("text", ""))
+
+    def _enqueue(self, item: dict[str, Any]) -> None:
+        if len(self._items) >= self._max_items:
             if self._is_delta(item):
                 self._dropped_deltas += 1
                 return
-            while self._items and len(self._items) >= self.MAX_ITEMS:
-                if self._is_delta(self._items[0]):
-                    self._items.popleft()
-                    self._dropped_deltas += 1
-                else:
+            while len(self._items) >= self._max_items:
+                delta_index = next(
+                    (
+                        index
+                        for index, queued in enumerate(self._items)
+                        if self._is_delta(queued)
+                    ),
+                    None,
+                )
+                if delta_index is None:
+                    # Structural events are sparse and must never be dropped.
                     break
-            if len(self._items) >= self.MAX_ITEMS:
-                return
+                del self._items[delta_index]
+                self._dropped_deltas += 1
         if self._dropped_deltas:
             item = dict(item)
             detail = dict(item.get("detail") or {})
@@ -92,7 +103,105 @@ class _ProgressQueue:
         self._items.append(item)
         self._ready.set()
 
+    def _cancel_flush(self) -> None:
+        if self._flush_handle is not None:
+            self._flush_handle.cancel()
+            self._flush_handle = None
+
+    def _schedule_flush(self) -> None:
+        if self._coalesce_window_seconds <= 0:
+            self._flush_pending()
+            return
+        if self._flush_handle is None:
+            loop = asyncio.get_running_loop()
+            self._flush_handle = loop.call_later(
+                self._coalesce_window_seconds,
+                self._flush_pending,
+            )
+
+    def _flush_pending(self) -> None:
+        self._cancel_flush()
+        if self._pending_delta is None:
+            return
+        pending = self._pending_delta
+        self._pending_delta = None
+        self._enqueue(pending)
+
+    def _start_pending(self, item: dict[str, Any], text: str) -> None:
+        pending = dict(item)
+        detail = dict(item.get("detail") or {})
+        detail["text"] = text
+        pending["detail"] = detail
+        self._pending_delta = pending
+        self._schedule_flush()
+
+    def _merge_pending(self, item: dict[str, Any], text: str) -> bool:
+        pending = self._pending_delta
+        if pending is None or self._delta_key(pending) != self._delta_key(item):
+            return False
+        pending_detail = pending.setdefault("detail", {})
+        previous_text = str(pending_detail.get("text", ""))
+        if len(previous_text) + len(text) > self._max_delta_chars:
+            return False
+        pending_detail["text"] = previous_text + text
+        current_detail = item.get("detail") or {}
+        pending_detail["coalesced"] = (
+            int(pending_detail.get("coalesced", 0))
+            + int(current_detail.get("coalesced", 0))
+            + 1
+        )
+        for key in ("phase", "elapsed_seconds", "round_index"):
+            if item.get(key) is not None:
+                pending[key] = item[key]
+        return True
+
+    def _put_delta(self, item: dict[str, Any]) -> None:
+        text = self._delta_text(item)
+        if not text:
+            if self._pending_delta is not None and self._delta_key(
+                self._pending_delta,
+            ) != self._delta_key(item):
+                self._flush_pending()
+            if self._pending_delta is None:
+                self._start_pending(item, "")
+            return
+        offset = 0
+        while offset < len(text):
+            pending_text = (
+                self._delta_text(self._pending_delta)
+                if self._pending_delta is not None
+                else ""
+            )
+            available = self._max_delta_chars - len(pending_text)
+            if (
+                self._pending_delta is None
+                or self._delta_key(self._pending_delta) != self._delta_key(item)
+                or available <= 0
+            ):
+                self._flush_pending()
+                chunk = text[offset : offset + self._max_delta_chars]
+                self._start_pending(item, chunk)
+                offset += len(chunk)
+                continue
+            chunk = text[offset : offset + available]
+            if not self._merge_pending(item, chunk):
+                self._flush_pending()
+                continue
+            offset += len(chunk)
+            if len(self._delta_text(self._pending_delta)) >= self._max_delta_chars:
+                self._flush_pending()
+
+    def put_nowait(self, item: dict[str, Any]) -> None:
+        if self._closed:
+            return
+        if self._is_delta(item):
+            self._put_delta(item)
+            return
+        self._flush_pending()
+        self._enqueue(item)
+
     def close(self) -> None:
+        self._flush_pending()
         self._closed = True
         self._ready.set()
 
@@ -116,6 +225,7 @@ class RunManager:
         self._active_run: str | None = None
         self._queues: dict[str, list[_ProgressQueue]] = {}
         self._sequences: dict[str, int] = {}
+        self._active_start_sequences: dict[str, int] = {}
 
     @property
     def active_run(self) -> str | None:
@@ -125,7 +235,8 @@ class RunManager:
         return self._active_run
 
     def subscribe(self, run_id: str) -> _ProgressQueue:
-        queue = _ProgressQueue()
+        # Deltas are already coalesced before persistence and publication.
+        queue = _ProgressQueue(coalesce_window_seconds=0)
         self._queues.setdefault(run_id, []).append(queue)
         return queue
 
@@ -148,6 +259,18 @@ class RunManager:
         numbered["sequence"] = self._sequences[run_id]
         return numbered
 
+    def _stored_sequence(self, run_id: str) -> int:
+        return max(
+            (
+                int(event.get("sequence", 0) or 0)
+                for event in self.store.read_events(run_id)
+            ),
+            default=0,
+        )
+
+    def active_start_sequence(self, run_id: str) -> int | None:
+        return self._active_start_sequences.get(run_id)
+
     def start(self, run_id: str, coroutine_factory: Any) -> None:
         """Start one background run, rejecting a second concurrent request."""
 
@@ -156,6 +279,9 @@ class RunManager:
                 status_code=409,
                 detail=f"run {self.active_run} is still in progress",
             )
+        stored_sequence = self._stored_sequence(run_id)
+        self._sequences[run_id] = stored_sequence
+        self._active_start_sequences[run_id] = stored_sequence
         self._active_run = run_id
         self._task = asyncio.create_task(self._execute(run_id, coroutine_factory))
 
@@ -230,6 +356,7 @@ class RunManager:
             queue.close()
             await pump
             self._active_run = None
+            self._active_start_sequences.pop(run_id, None)
             self._sequences.pop(run_id, None)
 
     async def _pump(self, run_id: str, queue: _ProgressQueue) -> None:
@@ -390,12 +517,19 @@ def create_app(
         return {"deleted": store.delete(run_id)}
 
     @app.get("/api/runs/{run_id}/events")
-    async def stream_events(run_id: str, request: Request) -> EventSourceResponse:
+    async def stream_events(
+        run_id: str,
+        request: Request,
+        after_sequence: int = Query(default=0, ge=0),
+    ) -> EventSourceResponse:
         _require_run(run_id)
         try:
-            last_event_id = int(request.headers.get("last-event-id", "0") or "0")
+            header_sequence = int(
+                request.headers.get("last-event-id", "0") or "0",
+            )
         except ValueError:
-            last_event_id = 0
+            header_sequence = 0
+        last_event_id = max(after_sequence, header_sequence)
 
         async def publisher() -> AsyncIterator[dict[str, Any]]:
             queue = manager.subscribe(run_id)
@@ -403,14 +537,20 @@ def create_app(
                 # Replay what already happened so a late listener is not blind.
                 replayed_events = store.read_events(run_id)
                 terminal_seen = False
+                active_start_sequence = manager.active_start_sequence(run_id)
                 for event in replayed_events:
-                    if int(event.get("sequence", 0) or 0) <= last_event_id:
-                        if event.get("type") == "run.finished":
+                    event_sequence = int(event.get("sequence", 0) or 0)
+                    stale_terminal = (
+                        event.get("type") == "run.finished"
+                        and active_start_sequence is not None
+                        and event_sequence <= active_start_sequence
+                    )
+                    if event_sequence <= last_event_id or stale_terminal:
+                        if event.get("type") == "run.finished" and not stale_terminal:
                             terminal_seen = True
                         continue
                     yield {
                         "id": str(event.get("sequence", "")),
-                        "event": event.get("type", "message"),
                         "data": _dumps(event),
                     }
                     terminal_seen = terminal_seen or event.get("type") == "run.finished"
@@ -433,7 +573,6 @@ def create_app(
                         if terminal["sequence"] > last_event_id:
                             yield {
                                 "id": str(terminal["sequence"]),
-                                "event": "run.finished",
                                 "data": _dumps(terminal),
                             }
                     return
@@ -443,7 +582,6 @@ def create_app(
                         return
                     yield {
                         "id": str(item.get("sequence", "")),
-                        "event": item.get("type", "message"),
                         "data": _dumps(item),
                     }
                     if item.get("type") == "run.finished":

@@ -27,7 +27,7 @@ from cli_parser_agent import (
     SchemaProposalResult,
 )
 from cli_parser_agent.webui.agent_service import AgentGenerationService
-from cli_parser_agent.webui.app import create_app
+from cli_parser_agent.webui.app import _ProgressQueue, create_app
 from cli_parser_agent.webui.store import RunStore
 
 CLOSED_SCHEMA: dict[str, Any] = {
@@ -36,6 +36,85 @@ CLOSED_SCHEMA: dict[str, Any] = {
     "required": ["value"],
     "additionalProperties": False,
 }
+
+
+async def _drain_queue(queue: _ProgressQueue) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    while True:
+        item = await queue.get()
+        if item is None:
+            return items
+        items.append(item)
+
+
+@pytest.mark.asyncio
+async def test_progress_queue_merges_deltas_within_window_without_loss() -> None:
+    queue = _ProgressQueue(coalesce_window_seconds=0.01)
+    queue.put_nowait(
+        {
+            "type": "agent.text_delta",
+            "block_id": "text",
+            "detail": {"text": "先"},
+        },
+    )
+    queue.put_nowait(
+        {
+            "type": "agent.text_delta",
+            "block_id": "text",
+            "detail": {"text": "检查"},
+        },
+    )
+    await asyncio.sleep(0.02)
+    queue.close()
+
+    assert await _drain_queue(queue) == [
+        {
+            "type": "agent.text_delta",
+            "block_id": "text",
+            "detail": {"text": "先检查", "coalesced": 1},
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_progress_queue_flushes_before_structure_and_splits_size_boundary(
+) -> None:
+    queue = _ProgressQueue(
+        coalesce_window_seconds=0,
+        max_delta_chars=4,
+        max_items=8,
+    )
+    queue.put_nowait(
+        {
+            "type": "agent.thinking_delta",
+            "block_id": "think",
+            "detail": {"text": "abcdef"},
+        },
+    )
+    queue.put_nowait(
+        {
+            "type": "agent.thinking_completed",
+            "block_id": "think",
+        },
+    )
+    queue.close()
+
+    assert await _drain_queue(queue) == [
+        {
+            "type": "agent.thinking_delta",
+            "block_id": "think",
+            "detail": {"text": "abcd"},
+        },
+        {
+            "type": "agent.thinking_delta",
+            "block_id": "think",
+            "detail": {"text": "ef"},
+        },
+        {
+            "type": "agent.thinking_completed",
+            "block_id": "think",
+        },
+    ]
 
 
 def _metadata(**overrides: Any) -> GenerationMetadata:
@@ -193,10 +272,26 @@ def test_edited_schema_is_validated_before_it_is_saved(tmp_path: Path) -> None:
         # The stored schema is untouched by a rejected edit.
         assert client.get(f"/api/runs/{run_id}").json()["schema"] == CLOSED_SCHEMA
 
+        reserved = {
+            "type": "object",
+            "properties": {"ignore": {"type": "string"}},
+            "required": ["ignore"],
+            "additionalProperties": False,
+        }
+        rejected = client.put(
+            f"/api/runs/{run_id}/schema",
+            json={"result_schema": reserved},
+        ).json()
+        assert rejected["saved"] is False
+        assert [issue["code"] for issue in rejected["issues"]] == [
+            "schema.reserved_scalar_field_name",
+        ]
+        assert client.get(f"/api/runs/{run_id}").json()["schema"] == CLOSED_SCHEMA
+
         renamed = {
             "type": "object",
-            "properties": {"name": {"type": "string"}},
-            "required": ["name"],
+            "properties": {"as": {"type": "string"}},
+            "required": ["as"],
             "additionalProperties": False,
         }
         accepted = client.put(
@@ -230,6 +325,39 @@ def test_generate_uses_the_edited_schema(tmp_path: Path) -> None:
     # The reviewer's schema, not the model's original proposal, was used.
     assert generator.received_schema == renamed
     assert payload["result"]["artifact"]["ttp_template"] == "value: {{ value }}"
+
+
+def test_schema_review_then_generation_keeps_sequences_contiguous(
+    tmp_path: Path,
+) -> None:
+    generator = FakeGenerator(
+        events=[
+            ("cli_parser.phase.started", "schema"),
+            ("cli_parser.phase.completed", "schema"),
+        ],
+    )
+    with _client(tmp_path, generator) as client:
+        run_id = client.post(
+            "/api/runs",
+            json={"mode": "propose", "command_outputs": ["value: one"]},
+        ).json()["run_id"]
+        _wait_for_status(client, run_id)
+
+        response = client.post(f"/api/runs/{run_id}/generate")
+        assert response.status_code == 201
+        _wait_for_status(client, run_id)
+
+        events = client.get(f"/api/runs/{run_id}").json()["events"]
+
+    sequences = [event["sequence"] for event in events]
+    assert sequences == list(range(1, len(sequences) + 1))
+    assert [event["type"] for event in events].count("run.finished") == 2
+    assert events[-1]["type"] == "run.finished"
+    assert generator.calls == [
+        "propose_schema",
+        "generate_from_schema",
+        "generate",
+    ]
 
 
 def test_complete_supported_schema_subset_is_saved_and_used(tmp_path: Path) -> None:
@@ -386,8 +514,10 @@ def test_event_stream_forwards_bounded_facts_only(tmp_path: Path) -> None:
         ).json()["run_id"]
 
         received: list[dict[str, Any]] = []
+        raw_lines: list[str] = []
         with client.stream("GET", f"/api/runs/{run_id}/events") as stream:
             for line in stream.iter_lines():
+                raw_lines.append(line)
                 if not line.startswith("data:"):
                     continue
                 event = json.loads(line[len("data:") :].strip())
@@ -401,6 +531,7 @@ def test_event_stream_forwards_bounded_facts_only(tmp_path: Path) -> None:
     assert "cli_parser.phase.started" in types
     assert "cli_parser.phase.completed" in types
     assert types[-1] == "run.finished"
+    assert not any(line.startswith("event:") for line in raw_lines)
     for event in received[:-1]:
         assert set(event) <= {"phase", "elapsed_seconds", "sequence", "type", "detail"}
         assert event["sequence"] >= 1
@@ -463,6 +594,40 @@ def test_event_stream_supports_last_event_id_replay(tmp_path: Path) -> None:
 
     assert received
     assert all(event["sequence"] > 1 for event in received)
+
+
+def test_event_stream_supports_after_sequence_query_without_duplicates(
+    tmp_path: Path,
+) -> None:
+    generator = FakeGenerator(
+        events=[
+            ("cli_parser.phase.started", "schema"),
+            ("cli_parser.phase.completed", "schema"),
+        ],
+    )
+    with _client(tmp_path, generator) as client:
+        run_id = client.post(
+            "/api/runs",
+            json={"command_outputs": ["value: one"]},
+        ).json()["run_id"]
+        _wait_for_status(client, run_id)
+
+        received: list[dict[str, Any]] = []
+        with client.stream(
+            "GET",
+            f"/api/runs/{run_id}/events?after_sequence=1",
+        ) as stream:
+            for line in stream.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                event = json.loads(line[len("data:") :].strip())
+                received.append(event)
+                if event.get("type") == "run.finished":
+                    break
+
+    assert received
+    assert all(event["sequence"] > 1 for event in received)
+    assert len({event["sequence"] for event in received}) == len(received)
 
 
 def test_failed_generation_is_recorded_without_crashing_the_server(

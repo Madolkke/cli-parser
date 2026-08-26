@@ -40,3 +40,42 @@ test("keeps facts and caps the visible timeline", () => {
   assert.equal(entries.length, 120);
   assert.equal(entries[0].detail.status, "ok");
 });
+
+test("appends deltas incrementally and deduplicates sequences in O(1)", () => {
+  const timelineState = timeline.createTimelineState();
+  const tracker = timeline.createSequenceTracker();
+  const first = { type: "agent.text_started", sequence: 1, block_id: "text" };
+  const delta = { type: "agent.text_delta", sequence: 2, block_id: "text", detail: { text: "流式" } };
+  const end = { type: "agent.text_completed", sequence: 3, block_id: "text" };
+
+  assert.equal(tracker.accept(first), true);
+  assert.equal(tracker.accept(delta), true);
+  assert.equal(tracker.accept(delta), false);
+  timeline.appendAgentEvent(timelineState, first);
+  timeline.appendAgentEvent(timelineState, delta);
+  timeline.appendAgentEvent(timelineState, end);
+
+  assert.equal(tracker.highest(), 2);
+  assert.equal(timelineState.entries.length, 1);
+  assert.equal(timelineState.entries[0].text, "流式");
+  assert.equal(timelineState.entries[0].complete, true);
+});
+
+test("coalesces render scheduling to one frame", () => {
+  let callbacks = [];
+  let renders = 0;
+  const scheduler = timeline.createRenderScheduler(
+    () => { renders += 1; },
+    (callback) => { callbacks.push(callback); return callbacks.length; },
+    () => {},
+  );
+
+  scheduler.schedule();
+  scheduler.schedule();
+  assert.equal(callbacks.length, 1);
+  callbacks[0]();
+  assert.equal(renders, 1);
+  scheduler.schedule();
+  callbacks[1]();
+  assert.equal(renders, 2);
+});

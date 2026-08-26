@@ -57,7 +57,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v22-schema-without-evidence-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v23-keyword-field-compatibility-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -85,6 +85,8 @@ cli_parser.final_validation.started|completed
 ```
 
 `scripts/run_agent_tui.py` 使用 Textual 消费该事件流。它只观察一次 `generate()`，为该开发运行单独启用 `stream=True`；本地 WebUI 同样只在启动脚本内启用流式模型请求，可用 `CLI_PARSER_WEBUI_STREAM=false` 降级，库默认、普通 API 和其他脚本仍保持 `stream=False`。界面提供时间线选择、详情滚动、Thinking 折叠和自动跟随，唯一影响生成的按键是 `Ctrl+C` 对整个请求发起正常取消。
+
+WebUI SSE 统一使用默认 `message` 帧，事件类别由 JSON 正文的 `type` 字段分发；历史重放和实时推送使用相同格式，并支持 `Last-Event-ID` 与 `after_sequence`。服务端将同一块的连续增量按 50ms 或 4096 字符合并后再分配本地 sequence、写入 `events.jsonl` 和广播，完整文本可重建但不保留供应商逐 token 边界。
 
 TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events.jsonl`，并在 `result.json` 保存脚本版本与状态、起止时间、模型、输入文件元数据、transcript 路径、可选公共结果，以及有界的 artifact/render/exception 类型。该目录是显式本地完整调试通道，可以包含命令输出、上下文快照、Thinking/文本、工具参数与结果、Schema、TTP、capture 和验证反馈，但不得包含模型或 Laminar API Key、credential/client 对象或未处理异常正文。TUI 与 Laminar 相互独立且可以同时启用；两者都只能观察，任何内容都不得回灌模型上下文。脚本退出码固定为 `0` 成功、`1` 生成/TUI/artifact 故障、`2` 配置或非 TTY、`130` 运行中取消。
 
@@ -180,7 +182,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `agent/session.py` | 阶段类型、最新有效候选、显式完成状态与 validator outcome 协议，以及唯一跨阶段 `GenerationSession` | 否 |
 | `agent/tools.py` | 阶段专属提交/完成工具与有界 TOOL span；通过 session 的窄接口提交候选或显式 finish | 是 |
 | `validation/capture.py` | 为 Laminar、observer/TUI 和评测生成不超过 `32 KiB` 的内部诊断 capture；模型可见结果由工具适配层按输入编码为独立解析结果块 | 否 |
-| `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段证据和 record 校验 | 否 |
+| `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段名兼容性和 record 校验 | 否 |
 | `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema 终验 | 否 |
 | `webui/app.py`、`webui/store.py` | HTTP 路由、单任务后台运行、文件记录和 SSE；只依赖 WebUI 服务协议，不导入 AgentScope 或生成流程类型 | 否 |
 | `webui/contracts.py`、`webui/service.py` | WebUI 自有请求、进度和服务边界契约 | 否 |
@@ -270,7 +272,7 @@ GenerationRequest
     ├─ Schema 阶段从全文独立采样
     │      ├─ 新建 Model + Agent + AgentState + 单工具 Toolkit
     │      ├─ 仅能调用 submit_result_schema
-    │      ├─ 元模式/白名单/全文字段证据校验
+    │      ├─ 元模式/白名单/字段名兼容性校验
     │      └─ 首个有效 Schema 永久冻结并结束 reply
     │
     ├─ 受控交接：仅取冻结 Schema，重新从全文采样
@@ -293,15 +295,15 @@ GenerationRequest
     └─ GenerationResult(success | failed)
 ```
 
-Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。每个叶子路径（包括可选叶子）必须提交至少一条真实存在于指定完整输入中的连续原文证据；同一路径允许多条且逐条验证。
+Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。Python 关键字（例如 `as`、`class`、`for`）符合字段名契约并保持原名；标量 property 名 `ignore` 因与 TTP 特殊变量冲突而以 `schema.reserved_scalar_field_name` 拒绝，object 或 array 容器名 `ignore` 仍允许。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。Schema 提交不再携带逐字段 Evidence。
 
-TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及参数 AST 中的属性访问、下标、运算、推导式和嵌套调用。
+TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。普通裸变量头按 TTP 词法标识符解析，不借用 Python AST，因此 Python 关键字可作为结果字段；特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及属性访问、下标、运算、推导式和嵌套调用。
 
 由于 TTP 0.10.1 会对参数求值并可能把字符串识别为路径，模板和输入在安全检查后以不可成为路径的形式传入，清除模板路径环境变量，并使用临时 `TTPCACHEFOLDER`。每次解析在独立 spawn 进程中执行；超时立即终止，不调用 shell。无法重新导入 `__main__` 的交互式宿主返回 `ttp.worker_host_unsupported`，不会等待完整解析超时。
 
 ## 6. 测试策略
 
-- 确定性单元测试覆盖输入边界、采样、Schema 安全子集与字段证据、TTP 标签/参数攻击、解析超时、嵌套记录、一一映射、Schema 回验、最新有效候选保留、显式 finish、失败候选标记和 observer 缺省行为不变。
+- 确定性单元测试覆盖输入边界、采样、Schema 安全子集与字段名兼容性、TTP 标签/参数攻击、解析超时、嵌套记录、一一映射、Schema 回验、最新有效候选保留、显式 finish、失败候选标记和 observer 缺省行为不变。
 - pytest 中的稳定测试不隐式访问网络或模型；仅 Linux `ip address show` 与 Cisco IOS `show inventory` 两组测试直接读取固定 raw 语料，用真实 TTP 0.10.1 回归 `ignore(...)` 子语言，其余 corpus 仍由独立 runner 管理。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、候选保留、无候选 finish 拒绝、达到有效模板提交上限后的严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。

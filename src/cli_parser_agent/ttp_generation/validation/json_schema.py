@@ -290,6 +290,19 @@ def _walk_schema(
                     ),
                 )
                 continue
+            if (
+                name == "ignore"
+                and isinstance(child, Mapping)
+                and child.get("type") in _SCALAR_TYPES
+            ):
+                issues.append(
+                    _issue(
+                        "schema.reserved_scalar_field_name",
+                        "scalar property name 'ignore' is reserved by TTP",
+                        path=_pointer(child_schema_path),
+                        details={"reserved_name": "ignore"},
+                    ),
+                )
             _walk_schema(
                 child,
                 schema_path=child_schema_path,
