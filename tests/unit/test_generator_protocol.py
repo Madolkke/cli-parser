@@ -686,7 +686,6 @@ async def test_full_workflow_preserves_python_keyword_field_name(
         if phase == "schema":
             candidate = SchemaCandidate(
                 result_schema=frozen_schema,
-                assumptions=(),
                 command_outputs=(command_output,),
             )
             validation = await session.schema_validator(candidate)
@@ -1177,7 +1176,6 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
                     "additionalProperties": False,
                 },
                 records=[{"value": "one"}],
-                assumptions=[],
             ),
             metadata=GenerationMetadata(
                 request_id=request_id,
@@ -1335,7 +1333,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
         phases.append(phase)
         session.record_agent_round("schema")
         session.frozen_schema = _result_schema()
-        session.assumptions = ("kept for review",)
         return AgentRunOutcome(phase_completed=True)
 
     _install_agent_stubs(monkeypatch, run)
@@ -1347,7 +1344,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
     assert result.status == "success"
     assert result.proposal is not None
     assert result.proposal.result_schema == _result_schema()
-    assert result.proposal.assumptions == ["kept for review"]
 
     # The TTP phase never ran, and the metadata identity still holds.
     assert result.metadata.ttp_agent_rounds == 0

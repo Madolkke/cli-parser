@@ -81,7 +81,6 @@ class SchemaSubmission(ContractModel):
     """Internal structured payload accepted by the schema submission tool."""
 
     result_schema: dict[str, JsonValue]
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
@@ -94,7 +93,6 @@ class SchemaProposal(ContractModel):
     """
 
     result_schema: dict[str, JsonValue]
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
@@ -105,7 +103,6 @@ class ArtifactBundle(ContractModel):
     ttp_template: str = Field(min_length=1)
     result_schema: dict[str, JsonValue]
     records: list[dict[str, JsonValue]] = Field(min_length=1)
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 

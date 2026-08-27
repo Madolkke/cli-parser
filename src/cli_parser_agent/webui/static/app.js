@@ -674,7 +674,7 @@ async function refreshRun() {
   const proposal = result && result.proposal;
   const showSchema = Boolean(schema) && meta.mode === "propose" && !(result && result.artifact);
   $("schema-panel").hidden = !showSchema;
-  if (showSchema && (!state.schemaDraft || !state.schemaDirty)) { initialiseSchema(schema); renderAssumptions(proposal ? proposal.assumptions : []); }
+  if (showSchema && (!state.schemaDraft || !state.schemaDirty)) { initialiseSchema(schema); }
   updateRerunAction();
   renderResult(result, inputs, schema); renderIssues(result ? result.issues : []);
   return data;
@@ -824,11 +824,6 @@ function describe(event) {
 function phaseLabel(event) {
   if (event.type === "run.finished") return "已结束";
   return { schema: "Schema 阶段", ttp: "TTP 阶段", generation: "准备中", acceptance: "最终验收" }[event.phase] || "进行中";
-}
-function renderAssumptions(items) {
-  const box = $("assumptions"); box.hidden = !items || !items.length; box.replaceChildren(); if (!items || !items.length) return;
-  const strong = document.createElement("strong"); strong.textContent = "模型假设"; const ul = document.createElement("ul");
-  for (const value of items) { const li = document.createElement("li"); li.textContent = value; ul.append(li); } box.append(strong, ul);
 }
 function renderResult(result, inputs, schema) {
   const artifact = result && result.artifact;

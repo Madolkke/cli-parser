@@ -6,11 +6,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v23-keyword-field-compatibility-zh-cn"
+PROMPT_VERSION = "ttp-generator-v24-no-assumptions-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
-    "请现在只调用 submit_result_schema，并提交 result_schema 和 assumptions。"
+    "请现在只调用 submit_result_schema，并提交 result_schema。"
 )
 TTP_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的可用工具，普通文本不会被视为产物。"
@@ -64,8 +64,6 @@ SCHEMA_SYSTEM_PROMPT = """\
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
-- assumptions 通常提交 []。确有无法避免的不确定性时，最多填写两句简短中文，
-  不包含源文本引文、反引号或换行；不要发明输出中不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
   整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
 """

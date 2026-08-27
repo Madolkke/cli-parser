@@ -4,7 +4,7 @@
 
 Schema proposal 的根 `$schema` 可以省略；显式提供时仍必须声明 Draft 2020-12，
 系统不会修改或自动补全冻结 Schema。Schema proposal 只包含冻结 Schema 和
-assumptions，不再要求模型提交逐叶子 Evidence；模型提交和调用方注入统一使用
+不再要求模型提交逐叶子 Evidence；模型提交和调用方注入统一使用
 同一个受限 Draft 2020-12 Schema 校验。
 
 ## TTP 转换结果的来源追踪

@@ -48,11 +48,6 @@ class SchemaSubmissionInput(ParamsBase):
     result_schema: dict[str, Any] = Field(
         description="描述单个 record 的完整 Draft 2020-12 JSON Schema。",
     )
-    assumptions: list[str] = Field(
-        default_factory=list,
-        max_length=64,
-        description=("简短且保守的中文 assumptions；不需要时优先提交空列表。"),
-    )
 
 
 class TemplateSubmissionInput(ParamsBase):
@@ -428,25 +423,27 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     name = SUBMIT_SCHEMA_TOOL_NAME
     description = (
-        "提交完整的结果 JSON Schema 和必要的 assumptions。Schema 一旦通过便"
+        "提交完整的结果 JSON Schema。Schema 一旦通过便"
         "永久冻结；被拒绝后可以修正并重新提交。"
     )
     input_schema = SchemaSubmissionInput.model_json_schema()
 
     async def call(
         self,
-        result_schema: dict[str, Any],
-        assumptions: list[str] | None = None,
+        result_schema: dict[str, Any] | None = None,
+        **unexpected_arguments: Any,
     ) -> ToolChunk:
+        traced_input: dict[str, Any] = {
+            "result_schema": result_schema,
+        }
+        if unexpected_arguments:
+            traced_input["invalid_tool_arguments"] = True
         return await _run_traced_tool_call(
             name=self.name,
-            input={
-                "result_schema": result_schema,
-                "assumptions": assumptions,
-            },
+            input=traced_input,
             operation=lambda: self._call(
                 result_schema=result_schema,
-                assumptions=assumptions,
+                unexpected_arguments=unexpected_arguments,
             ),
             progress=self.progress,
             phase="schema",
@@ -454,9 +451,28 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     async def _call(
         self,
-        result_schema: dict[str, Any],
-        assumptions: list[str] | None,
+        result_schema: dict[str, Any] | None,
+        unexpected_arguments: Mapping[str, Any],
     ) -> ToolChunk:
+        try:
+            submission = SchemaSubmissionInput.model_validate(
+                {
+                    "result_schema": result_schema,
+                    **unexpected_arguments,
+                },
+            )
+        except ValidationError:
+            issues = (_safe_boundary_issue(phase="schema", failure="input"),)
+            self.session.last_issues = issues
+            return _result_chunk(
+                phase="schema",
+                accepted=False,
+                issues=issues,
+                frozen=False,
+                schema_submission=self.session.schema_submissions,
+                next_action="correct_and_resubmit_schema",
+            )
+
         if self.session.schema_is_frozen:
             return _result_chunk(
                 phase="schema",
@@ -471,26 +487,8 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
                 frozen=True,
             )
 
-        try:
-            submission = SchemaSubmissionInput(
-                result_schema=result_schema,
-                assumptions=[] if assumptions is None else assumptions,
-            )
-        except ValidationError:
-            issues = (_safe_boundary_issue(phase="schema", failure="input"),)
-            self.session.last_issues = issues
-            return _result_chunk(
-                phase="schema",
-                accepted=False,
-                issues=issues,
-                frozen=False,
-                schema_submission=self.session.schema_submissions,
-                next_action="correct_and_resubmit_schema",
-            )
-
         candidate = SchemaCandidate(
             result_schema=deepcopy(submission.result_schema),
-            assumptions=tuple(submission.assumptions),
             command_outputs=tuple(self.session.command_outputs),
         )
 
@@ -517,7 +515,6 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
         if outcome.valid:
             self.session.frozen_schema = deepcopy(candidate.result_schema)
-            self.session.assumptions = candidate.assumptions
 
         return _result_chunk(
             phase="schema",

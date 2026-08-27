@@ -71,7 +71,6 @@ def _success_result(request_id: str) -> GenerationResult:
             ttp_template="value: {{ value }}",
             result_schema=_schema(),
             records=[{"value": "one"}],
-            assumptions=[],
         ),
         metadata=GenerationMetadata(
             request_id=request_id,
@@ -331,7 +330,6 @@ async def test_runner_forwards_model_events_and_emits_debug_context() -> None:
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "assumptions": [],
             },
         ),
     )

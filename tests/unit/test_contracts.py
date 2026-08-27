@@ -18,6 +18,7 @@ from cli_parser_agent.ttp_generation.contracts import (
     GenerationRequest,
     GenerationResult,
     LastAttempt,
+    SchemaProposal,
     SchemaSubmission,
     TemplateRequest,
     ValidationIssue,
@@ -103,10 +104,32 @@ def test_schema_payloads_require_an_object_root() -> None:
     submission = SchemaSubmission(
         result_schema={"type": "object"},
     )
-    assert submission.assumptions == []
+    proposal = SchemaProposal(result_schema={"type": "object"})
+    artifact = ArtifactBundle(
+        ttp_template="{{ value }}",
+        result_schema={"type": "object"},
+        records=[{}],
+    )
 
-    with pytest.raises(ValidationError):
-        SchemaSubmission(result_schema={"type": "object"}, evidence=[])
+    assert submission.model_dump() == {"result_schema": {"type": "object"}}
+    assert proposal.model_dump() == {"result_schema": {"type": "object"}}
+    assert set(artifact.model_dump()) == {
+        "ttp_template",
+        "result_schema",
+        "records",
+    }
+
+    for contract in (SchemaSubmission, SchemaProposal):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            contract(result_schema={"type": "object"}, assumptions=[])
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        ArtifactBundle(
+            ttp_template="{{ value }}",
+            result_schema={"type": "object"},
+            records=[{}],
+            assumptions=[],
+        )
 
     with pytest.raises(ValidationError, match="root type"):
         ArtifactBundle(

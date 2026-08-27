@@ -40,7 +40,6 @@ def _generation_result(prompt_version: str) -> dict[str, object]:
             "ttp_template": "Value: {{ value }}",
             "result_schema": schema,
             "records": [{"value": "one"}],
-            "assumptions": [],
         },
         "issues": [],
         "metadata": {

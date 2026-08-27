@@ -1275,7 +1275,6 @@ class _GenerationWorkflow:
                 ttp_template=self.session.validated_ttp_template,
                 result_schema=deepcopy(self.session.frozen_schema),
                 records=deepcopy(acceptance.records),
-                assumptions=list(self.session.assumptions),
             )
 
         artifact_started = time.monotonic()
@@ -1476,7 +1475,6 @@ class _GenerationWorkflow:
             status="success",
             proposal=SchemaProposal(
                 result_schema=deepcopy(self.session.frozen_schema),
-                assumptions=list(self.session.assumptions),
             ),
             metadata=self._metadata("success"),
         )

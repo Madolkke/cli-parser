@@ -74,7 +74,6 @@ def _schema_call(call_id: str = "schema") -> ChatResponse:
             input=json.dumps(
                 {
                     "result_schema": _schema(),
-                    "assumptions": [],
                 },
             ),
         ),

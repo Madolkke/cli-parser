@@ -89,8 +89,8 @@ class TtpGenerator:
     ) -> SchemaProposalResult:
         """Freeze a result schema without generating a template.
 
-        Runs the Schema phase alone and returns the frozen proposal with its
-        assumptions, so a caller can review or edit it and feed it back through
+        Runs the Schema phase alone and returns the frozen proposal, so a
+        caller can review or edit it and feed it back through
         :meth:`generate_from_schema`.
         """
 

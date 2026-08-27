@@ -18,7 +18,7 @@
 - 一个请求生成一个共享 TTP 模板，而不是为每份输入分别生成模板。
 - Schema 使用 Draft 2020-12，描述一个根 object record，允许嵌套对象和数组。
 - TTP 对每份完整输入必须恰好产生一个根 object；`records[i]` 对应 `command_outputs[i]`。未命名顶层组会让 TTP 多包一层 list，校验器先解包这种单元素外壳再判定根数量。
-- 模型自行保守处理单样例或变量位置不明确的情况，并把不可验证的推断记录在 `assumptions`。
+- 模型自行保守处理单样例或变量位置不明确的情况。
 
 ## 2. AgentScope 设计
 
@@ -28,7 +28,7 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 
 每个 `generate` 调用创建请求级 generation session，并顺序创建两个相互独立的 AgentScope 运行时：`ttp_schema_generator` 与 `ttp_template_generator`。两者分别拥有新的 `OpenAIChatModel`、Agent、`AgentState` 和 Toolkit；不同请求之间不共享任何状态，同一请求的两个阶段也不共享模型消息或 usage。
 
-`GenerationSession` 是唯一受控交接通道：它保存完整输入、冻结 Schema、提交计数、最近模板、结构化问题、最新有效 TTP 候选及其 records，以及显式完成状态。TTP 阶段只把 session 中的冻结 Schema 与从完整输入重新生成的样本序列化为新的 UserMsg；Schema 阶段的 rejected candidate、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 不会复制到新的 `AgentState`。assumptions 仍保留在 session，供 artifact 使用。
+`GenerationSession` 是唯一受控交接通道：它保存完整输入、冻结 Schema、提交计数、最近模板、结构化问题、最新有效 TTP 候选及其 records，以及显式完成状态。TTP 阶段只把 session 中的冻结 Schema 与从完整输入重新生成的样本序列化为新的 UserMsg；Schema 阶段的 rejected candidate、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 不会复制到新的 `AgentState`。
 
 ### 2.2 两阶段硬隔离与语义重试
 
@@ -57,7 +57,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并等待提交 Too
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v23-keyword-field-compatibility-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v24-no-assumptions-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用两个工具之一并说明普通文本会被整条丢弃，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -219,6 +219,10 @@ result   = await generator.generate_from_schema(template_request, observer=obser
 
 `generate` 运行完整的两阶段流程。`propose_schema` 只运行 Schema 阶段并返回冻结提案，供调用方复核或编辑。`generate_from_schema` 接受调用方给定的结果 Schema，跳过 Schema 阶段并只运行 TTP 阶段，返回同一个 `GenerationResult`；它用于固定 Schema 以单独验证模板生成质量。后两者组合起来就是"先提案、人工确认、再生成"的工作流。
 
+`SchemaSubmission`、`SchemaProposal` 和 `ArtifactBundle` 均不包含 `assumptions`。旧字段由 Pydantic 的 `extra="forbid"` 明确拒绝，不提供别名或静默兼容。WebUI 不迁移已有的本地 `result.json`；历史 JSON 仍按原样只读展示，并可继续从其中保存的 Schema 创建独立重执行任务，但旧 artifact 不保证能由当前公共契约重新反序列化。
+
+AgentScope 会把模型工具参数直接展开为 Python 关键字参数，因此 Schema 工具在调用边界显式接收未知参数，再交给 `SchemaSubmissionInput` 拒绝。未知字段统一返回固定的 `schema.submission_invalid`；字段名、字段值和原始异常不会进入 ToolResult 或 TOOL span input，无效调用也不增加 Schema 提交计数。
+
 `ProgressObserver` 是从包顶层导出的 `Callable[[agentscope.event.AgentEvent], None]`。`observer` 是可选的仅关键字调试回调：省略时不创建额外事件转录，现有性能、控制流和公共结果契约保持不变；传入时回调同步接收原始 AgentScope `AgentEvent` 和项目 `CustomEvent`。调用方不得阻塞回调或用它控制生成，业务代码也不得依赖调试事件作为稳定结果格式。
 
 ```text
@@ -231,7 +235,6 @@ TemplateRequest                       # 仅 generate_from_schema 使用
 
 SchemaProposal                        # 仅 propose_schema 返回
   result_schema: dict                 # 已冻结的 Draft 2020-12 根对象
-  assumptions: list[str]
 
 SchemaProposalResult                  # propose_schema 的返回值
   status: success | failed
@@ -243,7 +246,6 @@ ArtifactBundle
   ttp_template: str
   result_schema: dict                 # Draft 2020-12，根 type=object
   records: list[dict]                 # 与 command_outputs 按索引一一对应
-  assumptions: list[str]
 
 GenerationResult
   status: success | failed

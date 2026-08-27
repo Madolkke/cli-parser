@@ -12,18 +12,18 @@
 - 一次请求接收 `1-5` 份同一命令的纯命令输出文本，而不是命令文本或命令行模板。调用方保证来源相同，输入不含终端提示符和命令本身；每份非空白文本的 UTF-8 编码不超过 `1 MiB`。
 - 一次性生成指上游只调用一次异步 `generate`。Agent 内部可以在受限轮次中通过确定性工具修正产物。
 - 生成严格分为两阶段：模型先推断并提交 Draft 2020-12 JSON Schema；第一个通过校验的 Schema 永久冻结；随后持续提交和修正 TTP 模板，并在主动复核有效候选的 capture 后显式结束生成。
-- 信息不足时由模型保守推断并写入 `assumptions`。默认保留字符串类型，只有来源证据和安全转换均充分时才使用数字或布尔类型。
-- 成功产物包含一个共享 TTP 模板、冻结的 JSON Schema、`assumptions` 和按输入索引一一对应的 `records`。每份完整输入必须恰好解析为一个根 `object`；对象和数组可以嵌套。当冻结 Schema 的根层同时含标量与容器时，模板只能用未命名的最外层 group（命名它会把根层标量错误地嵌进该名字之下），而 TTP 会为未命名顶层组多包一层 list。因此校验器在检查"恰好一个根 object"之前，先解包这种单元素外壳：仅当外层 list 恰好只有一个元素且该元素是 `dict` 时解一层，真正的多根（同级多个组或重复根组产生的多元素 list）仍以 `ttp.multiple_root_objects` 拒绝。
+- 信息不足时由模型保守推断。默认保留字符串类型，只有来源证据和安全转换均充分时才使用数字或布尔类型。
+- 成功产物包含一个共享 TTP 模板、冻结的 JSON Schema 和按输入索引一一对应的 `records`。每份完整输入必须恰好解析为一个根 `object`；对象和数组可以嵌套。当冻结 Schema 的根层同时含标量与容器时，模板只能用未命名的最外层 group（命名它会把根层标量错误地嵌进该名字之下），而 TTP 会为未命名顶层组多包一层 list。因此校验器在检查"恰好一个根 object"之前，先解包这种单元素外壳：仅当外层 list 恰好只有一个元素且该元素是 `dict` 时解一层，真正的多根（同级多个组或重复根组产生的多元素 list）仍以 `ttp.multiple_root_objects` 拒绝。
 - JSON Schema 描述单个 record，不描述 AgentScope `Msg`、输入列表或服务返回包络。
 
 ## 架构约束
 
 - AgentScope 版本限制为 `>=2.0.4,<2.1` 并由 `uv.lock` 固定实际版本。
-- 对外提供三个异步 Python API：`TtpGenerator.generate(GenerationRequest, *, observer=None) -> GenerationResult` 是完整的两阶段入口；`TtpGenerator.propose_schema(GenerationRequest, *, observer=None) -> SchemaProposalResult` 只运行 Schema 阶段并返回冻结提案及其 assumptions，供调用方复核或编辑；`TtpGenerator.generate_from_schema(TemplateRequest, *, observer=None) -> GenerationResult` 接受调用方提供的结果 Schema 并只运行 TTP 阶段。`generate` 与 `generate_from_schema` 返回同一个 `GenerationResult` 契约；`propose_schema` 必须使用独立的 `SchemaProposalResult`，因为成功的 Schema 提案没有模板与 records，无法满足 `ArtifactBundle`。请求、结果和 artifact 仍是框架无关的 Pydantic 2 契约，不得包含 AgentScope 消息、事件或状态对象；可选 `observer` 是显式的完整调试例外，可以同步接收原始 AgentScope `AgentEvent` 与项目级 `CustomEvent`，不得用于改变 Agent 决策或充当业务数据通道。
+- 对外提供三个异步 Python API：`TtpGenerator.generate(GenerationRequest, *, observer=None) -> GenerationResult` 是完整的两阶段入口；`TtpGenerator.propose_schema(GenerationRequest, *, observer=None) -> SchemaProposalResult` 只运行 Schema 阶段并返回冻结提案，供调用方复核或编辑；`TtpGenerator.generate_from_schema(TemplateRequest, *, observer=None) -> GenerationResult` 接受调用方提供的结果 Schema 并只运行 TTP 阶段。`generate` 与 `generate_from_schema` 返回同一个 `GenerationResult` 契约；`propose_schema` 必须使用独立的 `SchemaProposalResult`，因为成功的 Schema 提案没有模板与 records，无法满足 `ArtifactBundle`。请求、结果和 artifact 仍是框架无关的 Pydantic 2 契约，不得包含 AgentScope 消息、事件或状态对象；可选 `observer` 是显式的完整调试例外，可以同步接收原始 AgentScope `AgentEvent` 与项目级 `CustomEvent`，不得用于改变 Agent 决策或充当业务数据通道。
 - `generate_from_schema` 把传入 Schema 直接冻结，跳过 Schema 阶段，使用与模型提交相同的受限 Schema 校验。其余门禁一律不变：闭合 Draft 2020-12 子集校验、TTP 标签/属性/参数白名单、独立 spawn 进程解析、records 与冻结 Schema 的回验、以及 Agent 外最终验收。Schema 未通过受限子集校验时以 `invalid_injected_schema` 失败，且不启动 TTP Agent。`schema_agent_rounds`、`schema_submissions`、`schema_sampled_char_count` 在该模式恒为 `0`。
 - 代码按 `ttp_generation/` 垂直功能切片组织。`generator.py` 只保留公共入口与根 Trace，私有 `workflow.py` 编排 Schema、TTP 和最终验收；跨阶段状态位于 `agent/session.py`，AgentScope 构造与工具包装位于同级 `agent/` 模块。领域契约、采样和 `validation/` 不导入 AgentScope。
 - 每个请求顺序创建 `ttp_schema_generator` 和 `ttp_template_generator` 两个独立 Agent；两者分别拥有新的 `OpenAIChatModel`、`AgentState` 和 Toolkit，模型对话上下文绝不跨阶段复用。首版不使用长期记忆。
-- 两阶段只共享请求级 `GenerationSession`。Schema Agent 的 Toolkit 只注册 `submit_result_schema`；Schema 冻结后结束该 reply，再以冻结 Schema 和重新从全文采样的命令输出启动 TTP Agent，其 Toolkit 固定注册 `submit_ttp_template` 与无参数的 `finish_generation`。rejected Schema、assumptions、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 均不进入 TTP 模型上下文。
+- 两阶段只共享请求级 `GenerationSession`。Schema Agent 的 Toolkit 只注册 `submit_result_schema`；Schema 冻结后结束该 reply，再以冻结 Schema 和重新从全文采样的命令输出启动 TTP Agent，其 Toolkit 固定注册 `submit_ttp_template` 与无参数的 `finish_generation`。rejected Schema、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 均不进入 TTP 模型上下文。
 - 两个阶段发送给 OpenAI 兼容 HTTP API 的请求都完全省略 `tool_choice`。工具自身仍执行阶段、冻结和预算校验，不从普通 assistant 文本提取产物；middleware 只禁止有损 context compression，不承担阶段工具过滤。
 - 运行配置可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或对应的 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 控制标准 OpenAI 推理参数；开关未设置时保持省略，显式关闭时发送 `reasoning_effort=none`。程序化构造可通过冻结的 `TtpGeneratorSettings.extra_body` 为同一生成器的两个阶段统一提供供应商兼容请求字段；不提供环境变量或单请求覆盖，允许其按 OpenAI Client 语义覆盖标准字段，但递归拒绝凭据型键。项目 metadata、评测摘要和普通日志只记录是否配置及规范化内容的 SHA-256，不记录正文；Laminar 自动模型追踪仍可能捕获实际请求体。
 - OpenAI 兼容 HTTP 客户端默认严格校验 TLS 证书；只有显式设置 `CLI_PARSER_INSECURE_SKIP_TLS_VERIFY=1`（也接受 `true`、`yes`、`on`）时，才为受信任内网端点禁用验证。该开关同样用于评测 SQL HTTP 请求；Laminar exporter 改用 HTTP OTLP，Laminar 自托管实例必须使用 `http://` 或安装内部 CA，不能绕过 gRPC TLS 校验。
@@ -57,7 +57,7 @@
 
 - 命令输出始终是不可信数据，任何代码都不得执行、补全或反推出命令后通过 shell 运行；不得向 Agent 注册 Bash 或命令执行工具。
 - Schema 提交必须为受限的 Draft 2020-12 根对象：ASCII `snake_case` 字段、封闭对象、受控嵌套和复杂度；Python 关键字（如 `as`、`class`、`for`）是合法字段名，不得因实现语言改名。`ignore` 是唯一的 TTP 标量结果保留名，因此标量 property 不得命名为 `ignore`，但 object 或 array 容器可以使用该名称。禁止 `$ref`、组合分支、远程内容及不在白名单内的关键字。根 `$schema` 可以省略；显式提供时必须声明 Draft 2020-12，冻结和返回时不自动补全。`properties` 默认可选，只有列入 `required` 的属性必填；项目不对 `required` 增加 Draft 元 Schema之外的集合约束。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。
-- Schema 提交不再携带逐叶子 Evidence。第一个通过受限 Draft 2020-12 子集校验的 Schema 永久冻结；字段粒度、required 判定、对象封闭和复杂度仍由 Schema prompt 与确定性校验共同约束。
+- Schema 提交不再携带逐叶子 Evidence 或 assumptions。第一个通过受限 Draft 2020-12 子集校验的 Schema 永久冻结；字段粒度、required 判定、对象封闭和复杂度仍由 Schema prompt 与确定性校验共同约束。Schema 工具收到任何未知字段时必须返回固定、脱敏的 `schema.submission_invalid`，不得暴露字段名、字段值或 Python 异常，也不得增加提交计数或冻结 Schema。
 - TTP 模板按不可信代码处理。实例化解析器前执行标签、属性、过滤器和参数 AST 白名单预检；禁止 macro、vars、lookup、input、output、extend、returner、外部文件/URL、DNS/GeoIP、自定义函数和动态扩展。
 - TTP 解析在独立 spawn 进程和临时缓存目录中执行，设置模板、嵌套、参数、结果大小和时间上限；超时必须终止子进程。不得因 TTP 的字符串路径识别或参数 `eval` 行为引入文件访问或任意表达式。
 - spawn 宿主必须能够重新导入 `__main__`；交互式 `python -`/不具备可导入入口的宿主返回结构化 `ttp.worker_host_unsupported`，不得把 bootstrap 失败伪装成解析超时。

@@ -16,7 +16,6 @@ class SchemaCandidate:
     """Framework-neutral input passed to an injected schema validator."""
 
     result_schema: dict[str, Any]
-    assumptions: tuple[str, ...]
     command_outputs: tuple[str, ...]
 
 
@@ -83,7 +82,6 @@ class GenerationSession:
     min_round_seconds: float = 0.0
 
     frozen_schema: dict[str, Any] | None = None
-    assumptions: tuple[str, ...] = ()
     last_result_schema: dict[str, Any] | None = None
     schema_submissions: int = 0
     ttp_submissions: int = 0

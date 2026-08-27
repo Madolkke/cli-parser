@@ -142,7 +142,6 @@ def _output(records: list[dict[str, Any]], *, schema: dict[str, Any] | None = No
                 "ttp_template": "irrelevant",
                 "result_schema": schema or _schema(),
                 "records": records,
-                "assumptions": [],
             },
             "issues": [],
             "metadata": {

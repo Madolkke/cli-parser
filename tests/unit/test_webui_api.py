@@ -165,7 +165,6 @@ class FakeGenerator:
             status="success",
             proposal=SchemaProposal(
                 result_schema=CLOSED_SCHEMA,
-                assumptions=["reviewed by hand"],
             ),
             metadata=_metadata(),
         )
@@ -210,6 +209,15 @@ def _wait_for_status(client: TestClient, run_id: str, *, timeout: float = 5.0) -
             return payload
         time.sleep(0.02)
     raise AssertionError(f"run {run_id} never finished")
+
+
+def test_index_references_current_static_asset_versions(tmp_path: Path) -> None:
+    with _client(tmp_path, FakeGenerator()) as client:
+        response = client.get("/")
+
+    assert response.status_code == 200
+    assert 'href="/static/style.css?v=3"' in response.text
+    assert 'src="/static/app.js?v=7"' in response.text
 
 
 def test_runtime_config_can_be_overridden_and_is_redacted_from_api(
@@ -284,6 +292,7 @@ def test_full_run_persists_result_and_reports_success(tmp_path: Path) -> None:
     assert payload["meta"]["status"] == "success"
     assert payload["meta"]["elapsed_seconds"] is not None
     assert payload["result"]["artifact"]["ttp_template"] == "value: {{ value }}"
+    assert "assumptions" not in payload["result"]["artifact"]
     assert payload["inputs"] == ["value: one"]
 
 
@@ -299,8 +308,39 @@ def test_propose_run_saves_the_schema_for_review(tmp_path: Path) -> None:
 
     assert generator.calls == ["propose_schema"]
     assert payload["schema"] == CLOSED_SCHEMA
-    assert payload["result"]["proposal"]["assumptions"] == ["reviewed by hand"]
+    assert "assumptions" not in payload["result"]["proposal"]
     assert payload["result"].get("artifact") is None
+
+
+def test_historical_assumptions_remain_readable_and_do_not_block_rerun(
+    tmp_path: Path,
+) -> None:
+    generator = FakeGenerator()
+    with _client(tmp_path, generator) as client:
+        run_id = client.post(
+            "/api/runs",
+            json={"mode": "propose", "command_outputs": ["value: one"]},
+        ).json()["run_id"]
+        source = _wait_for_status(client, run_id)
+        historical_result = dict(source["result"])
+        historical_result["proposal"] = {
+            **historical_result["proposal"],
+            "assumptions": ["legacy local record"],
+        }
+        client.app.state.store.write_result(run_id, historical_result)
+
+        reloaded = client.get(f"/api/runs/{run_id}").json()
+        rerun = client.post(f"/api/runs/{run_id}/rerun")
+        assert rerun.status_code == 201
+        child = _wait_for_status(client, rerun.json()["run_id"])
+
+    assert reloaded["result"]["proposal"]["assumptions"] == [
+        "legacy local record",
+    ]
+    assert generator.received_schema == CLOSED_SCHEMA
+    assert child["meta"]["source_run_id"] == run_id
+    assert child["meta"]["schema_source"] == "saved_schema"
+    assert "assumptions" not in child["result"]["artifact"]
 
 
 def test_edited_schema_is_validated_before_it_is_saved(tmp_path: Path) -> None:

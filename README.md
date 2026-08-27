@@ -71,7 +71,7 @@ per command output, with an explicit `input_index`. The public result keeps its
 ### Proposing a schema for review
 
 `propose_schema()` runs only the Schema phase and returns the frozen proposal
-with its assumptions, so you can review or edit the field names
+so you can review or edit the field names
 before a template is generated:
 
 ```python
@@ -82,13 +82,18 @@ proposal = await TtpGenerator.from_env().propose_schema(
 )
 if proposal.status == "success":
     print(proposal.proposal.result_schema)
-    print(proposal.proposal.assumptions)
 ```
 
 It returns a `SchemaProposalResult` rather than a `GenerationResult`: a
 successful proposal has no template and no records, so it cannot satisfy
 `ArtifactBundle`. Pair it with `generate_from_schema()` below to get a
 propose → review → generate workflow.
+
+`SchemaSubmission`, `SchemaProposal`, and `ArtifactBundle` do not contain an
+`assumptions` field. This is a breaking contract change: payloads from older
+versions that still include the field are rejected by the Pydantic contracts.
+Existing WebUI run files are not migrated; they remain readable as local raw
+history and can still be used as the source of a Schema rerun.
 
 ### Running the TTP phase alone
 
