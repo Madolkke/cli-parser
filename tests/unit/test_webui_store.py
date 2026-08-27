@@ -103,6 +103,74 @@ def test_schema_result_and_events_round_trip(tmp_path: Path) -> None:
     assert [event["type"] for event in store.read_events(run_id)] == ["one", "two"]
 
 
+def test_runtime_config_snapshot_round_trips_with_the_run(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    config = {
+        "version": 1,
+        "source": "env_baseline+overrides",
+        "settings": {"api_key": "local-key", "model_name": "run-model"},
+        "policy": {"max_agent_rounds": 24},
+    }
+
+    run_id = store.create(
+        mode="full",
+        command_outputs=["a"],
+        title="snapshot",
+        config=config,
+    )
+
+    assert store.read_config(run_id) == config
+    assert (store.run_directory(run_id) / "config.json").is_file()
+
+    assert store.delete(run_id) is True
+    assert not (store.runs_root / run_id).exists()
+
+
+def test_runtime_config_status_distinguishes_corrupt_snapshot(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    run_id = store.create(mode="full", command_outputs=["a"], title="snapshot")
+    (store.run_directory(run_id) / "config.json").write_text(
+        "not json\n",
+        encoding="utf-8",
+    )
+
+    config, present = store.read_config_status(run_id)
+
+    assert config is None
+    assert present is True
+
+
+def test_create_schema_rerun_copies_schema_and_records_its_source(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    source_run_id = store.create(
+        mode="propose",
+        command_outputs=["a"],
+        title="source",
+    )
+    schema = {"type": "object", "properties": {}, "additionalProperties": False}
+
+    child_run_id = store.create_schema_rerun(
+        source_run_id=source_run_id,
+        schema=schema,
+        schema_source="saved_schema",
+        command_outputs=["a"],
+        title="source · Schema 重新生成",
+    )
+
+    meta = store.read_meta(child_run_id)
+    assert meta is not None
+    assert meta["mode"] == "schema_rerun"
+    assert meta["execution_kind"] == "schema_rerun"
+    assert meta["source_run_id"] == source_run_id
+    assert meta["schema_source"] == "saved_schema"
+    assert store.read_schema(child_run_id) == schema
+    assert store.read_inputs(child_run_id) == ["a"]
+    assert store.read_result(child_run_id) is None
+    assert store.read_events(child_run_id) == []
+
+
 def test_read_events_skips_corrupt_lines(tmp_path: Path) -> None:
     store = _store(tmp_path)
     run_id = store.create(mode="full", command_outputs=["a"], title="")

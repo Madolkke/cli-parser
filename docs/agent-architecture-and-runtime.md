@@ -196,7 +196,7 @@ uv run --env-file .env python scripts/run_webui.py
 
 SSE 帧统一使用默认 `message` 事件，客户端按 JSON 正文中的 `type` 分发；详情接口加载历史事件后可用 `after_sequence` 避免重复，浏览器自动重连继续使用 `Last-Event-ID`。同一 block 或 tool call 的连续 delta 在服务端按 50ms 或 4096 字符合并，再分配 sequence、写入 `events.jsonl` 并广播。合并不会丢失正常流量的文本内容，但不承诺保留供应商逐 token 边界。
 
-WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具、预算或 finish 协议。事件投影不序列化完整 AgentScope 对象，不发送 system prompt、完整上下文快照或凭据；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
+WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具或 finish 协议。每个新建任务和 Schema 重执行都可以在启动前覆盖标准模型设置与 `GenerationPolicy`，服务端按启动时 `.env` 基线合并并重新校验；`extra_body` 仍只来自环境，`parallel_tool_calls` 固定为 `false`，运行中不动态修改。实际配置写入运行目录的 `config.json`，详情只显示脱敏视图和指纹。按本地单用户的显式选择，该文件可以包含明文 API Key；Key 不进入 `meta.json`、SSE、普通日志或事件投影。事件投影不序列化完整 AgentScope 对象，不发送 system prompt 或完整上下文快照；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
 
 ## 只读 Textual TUI
 

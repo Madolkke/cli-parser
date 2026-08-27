@@ -88,6 +88,16 @@ cli_parser.final_validation.started|completed
 
 WebUI SSE 统一使用默认 `message` 帧，事件类别由 JSON 正文的 `type` 字段分发；历史重放和实时推送使用相同格式，并支持 `Last-Event-ID` 与 `after_sequence`。服务端将同一块的连续增量按 50ms 或 4096 字符合并后再分配本地 sequence、写入 `events.jsonl` 和广播，完整文本可重建但不保留供应商逐 token 边界。
 
+已结束的 WebUI 运行可基于已保存的 `schema.json` 重执行；没有该文件时，成功 artifact 的冻结 Schema 是回退来源。重执行创建新的 `schema_rerun` 目录，复制来源输入与确定后的 Schema，并在 metadata 中保存 `source_run_id`、`execution_kind` 和 `schema_source`。它只通过 `GenerationService.run_from_schema()` 运行 TTP 阶段，拥有从 1 开始的独立事件序列，永不改写来源的 metadata、结果或时间线。
+
+WebUI 还支持运行级参数覆盖。`POST /api/runs`、`/rerun` 和兼容的
+`/generate` 接收 WebUI 自有的 `parameters.settings` 与 `parameters.policy`，服务端将明确
+提供的字段合并到启动时从 `.env` 读取的基线后重新执行现有 Pydantic 校验。模型配置中的
+`extra_body` 仍只能来自环境，`parallel_tool_calls` 固定为 `false`；参数不支持运行中修改。
+每个运行把最终生效配置写入 Git 忽略的 `config.json`，详情接口只返回脱敏投影和配置指纹。
+按照本地单用户的显式选择，运行快照可以包含明文 API Key；它不进入 `meta.json`、SSE、普通
+日志或 WebUI 事件。`GET /api/runtime-config` 提供不含 Key 的启动基线给编辑器。
+
 TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events.jsonl`，并在 `result.json` 保存脚本版本与状态、起止时间、模型、输入文件元数据、transcript 路径、可选公共结果，以及有界的 artifact/render/exception 类型。该目录是显式本地完整调试通道，可以包含命令输出、上下文快照、Thinking/文本、工具参数与结果、Schema、TTP、capture 和验证反馈，但不得包含模型或 Laminar API Key、credential/client 对象或未处理异常正文。TUI 与 Laminar 相互独立且可以同时启用；两者都只能观察，任何内容都不得回灌模型上下文。脚本退出码固定为 `0` 成功、`1` 生成/TUI/artifact 故障、`2` 配置或非 TTY、`130` 运行中取消。
 
 ## 3. 目录与职责
@@ -185,13 +195,14 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `validation/json_schema.py` | Schema 元模式、安全子集、复杂度、字段名兼容性和 record 校验 | 否 |
 | `validation/ttp.py` | TTP 声明子集预检、参数 AST 检查、spawn 隔离解析、Schema 终验 | 否 |
 | `webui/app.py`、`webui/store.py` | HTTP 路由、单任务后台运行、文件记录和 SSE；只依赖 WebUI 服务协议，不导入 AgentScope 或生成流程类型 | 否 |
-| `webui/contracts.py`、`webui/service.py` | WebUI 自有请求、进度和服务边界契约 | 否 |
-| `webui/agent_service.py` | 唯一的 WebUI/Agent 适配器；调用公共 `TtpGenerator` API，并将 AgentScope 事件投影为经凭据过滤、限额的 WebUI 事件 | 是；仅限适配边界 |
+| `webui/contracts.py`、`webui/service.py`、`webui/runtime_config.py` | WebUI 自有请求、运行参数、进度和服务边界契约 | 否 |
+| `webui/agent_service.py` | 唯一的 WebUI/Agent 适配器；按运行创建配置对应的公共 `TtpGenerator`，并将 AgentScope 事件投影为经凭据过滤、限额的 WebUI 事件 | 是；仅限适配边界 |
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
 | `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
 | `scripts/run_live_corpus.py` | 开发期公开语料 preflight、真实模型运行、独立终验与 resume；仅 `run` 路径在退出前 flush | 否；只调用公共 API 和确定性 validation |
 | `scripts/run_agent_evaluation.py` | 物化仓库 Datapoint，通过 Laminar `evaluate(...)` 黑盒调用公共 API，查询遥测并写脱敏摘要 | 否；executor 不传 observer，每 trial 只调用一次 `generate()` |
+| `scripts/run_ttp_template_evaluation.py` | 从外部 manifest 批量注入 Schema，调用 `generate_from_schema()` 并按 expected records 评分，保留完整本地逐例产物 | 否；Laminar Trace 可选，不创建 Evaluation |
 | `evals/ttp_generation/` | 版本化 case manifest、expected records 和封闭 Schema 结构断言；不保存模板或模型输出 | 不适用；不进入 wheel |
 | `docs/skills/generate-cli-parser-eval-cases/` | 可手动安装的 golden 制作 Skill 源码，仅允许从 raw capture 标注并运行离线 preflight | 不适用 |
 | `testdata/real_command_outputs/` | 固定版本的第三方 raw CLI 输出、manifest、来源和许可证 | 不适用；不进入公共包，只有两个确定性 parser 回归由 pytest 直接读取 |

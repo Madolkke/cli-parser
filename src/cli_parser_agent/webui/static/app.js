@@ -2,18 +2,166 @@
 
 const $ = (id) => document.getElementById(id);
 const model = window.SchemaModel;
-const timelineApi = window.AgentTimeline;
+const timelineModule = window.AgentTimeline;
 const MAX_INPUT_BYTES = 1024 * 1024;
 const state = {
   runId: null, stream: null, activeTab: "template", outputs: [{ text: "", scrollTop: 0 }],
   activeOutput: 0, schemaDraft: null, savedSchema: null, schemaDirty: false,
   schemaMode: "visual", schemaErrors: [], schemaExpanded: Object.create(null),
   drawerOpen: false, events: [], followProgress: true,
-  timeline: timelineApi.createTimelineState(),
-  eventTracker: timelineApi.createSequenceTracker(),
+  timeline: timelineModule.createTimelineState(),
+  eventTracker: timelineModule.createSequenceTracker(),
   timelineNodes: new Map(), timelineDirty: new Set(), timelineRemoved: new Set(),
-  timelineScheduler: null,
+  timelineScheduler: null, rerunAvailable: false,
+  runtimeBaseline: null, runtimeReady: false, runtimeError: null,
 };
+
+const RUNTIME_FIELDS = [
+  { group: "settings", name: "model_name", label: "模型名", type: "text" },
+  { group: "settings", name: "base_url", label: "API 地址", type: "text" },
+  { group: "settings", name: "api_key", label: "API Key", type: "password", secret: true },
+  { group: "settings", name: "verify_tls", label: "校验 TLS 证书", type: "boolean" },
+  { group: "settings", name: "stream", label: "模型流式请求", type: "boolean" },
+  { group: "settings", name: "temperature", label: "Temperature", type: "number", step: "0.1", min: "0", max: "2" },
+  { group: "settings", name: "thinking_enable", label: "启用 Thinking", type: "tri-boolean" },
+  { group: "settings", name: "reasoning_effort", label: "推理强度", type: "reasoning" },
+  { group: "settings", name: "max_tokens", label: "最大输出 Token", type: "number", min: "1" },
+  { group: "settings", name: "context_size", label: "上下文长度", type: "number", min: "1" },
+  { group: "settings", name: "model_max_retries", label: "模型重试次数", type: "number", min: "0" },
+  { group: "settings", name: "model_timeout_seconds", label: "单次模型超时（秒）", type: "number", min: "0.1", step: "0.1" },
+  { group: "policy", name: "total_timeout_seconds", label: "总运行超时（秒）", type: "number", min: "0.1", step: "0.1" },
+  { group: "policy", name: "max_agent_rounds", label: "最大 Agent 轮次", type: "number", min: "1" },
+  { group: "policy", name: "max_ttp_submissions", label: "最大 TTP 提交次数", type: "number", min: "1" },
+  { group: "policy", name: "max_schema_no_tool_retries", label: "Schema 无工具重试", type: "number", min: "0" },
+  { group: "policy", name: "max_ttp_no_tool_retries", label: "TTP 无工具重试", type: "number", min: "0" },
+  { group: "policy", name: "ttp_validation_timeout_seconds", label: "TTP 解析超时（秒）", type: "number", min: "0.1", step: "0.1" },
+  { group: "policy", name: "model_input_char_budget", label: "模型输入字符预算", type: "number", min: "1", max: "240000" },
+  { group: "policy", name: "max_ttp_template_bytes", label: "模板大小上限（字节）", type: "number", min: "1", max: "65536" },
+  { group: "policy", name: "max_ttp_group_depth", label: "TTP Group 深度", type: "number", min: "1", max: "16" },
+  { group: "policy", name: "max_ttp_regex_chars", label: "正则字符上限", type: "number", min: "1", max: "2048" },
+  { group: "policy", name: "max_ttp_argument_chars", label: "参数字符上限", type: "number", min: "1", max: "4096" },
+  { group: "policy", name: "max_parse_result_bytes", label: "解析结果上限（字节）", type: "number", min: "1", max: "8388608" },
+  { group: "policy", name: "max_schema_bytes", label: "Schema 大小上限（字节）", type: "number", min: "1", max: "65536" },
+  { group: "policy", name: "max_schema_depth", label: "Schema 深度上限", type: "number", min: "1", max: "16" },
+  { group: "policy", name: "max_schema_properties", label: "Schema 字段上限", type: "number", min: "1", max: "256" },
+];
+
+function runtimeBaselineValue(field) {
+  const group = state.runtimeBaseline && state.runtimeBaseline[field.group];
+  return group ? group[field.name] : undefined;
+}
+
+function runtimeControl(field) {
+  let input;
+  if (field.type === "boolean") {
+    input = document.createElement("input"); input.type = "checkbox";
+    input.checked = Boolean(runtimeBaselineValue(field));
+  } else if (field.type === "tri-boolean") {
+    input = document.createElement("select");
+    input.append(new Option("继承服务默认", ""), new Option("启用", "true"), new Option("关闭", "false"));
+    const value = runtimeBaselineValue(field);
+    input.value = value === null || value === undefined ? "" : String(value);
+  } else if (field.type === "reasoning") {
+    input = document.createElement("select");
+    input.append(new Option("继承服务默认", ""));
+    ["none", "minimal", "low", "medium", "high", "xhigh"].forEach((value) => input.append(new Option(value, value)));
+    input.value = runtimeBaselineValue(field) || "";
+  } else {
+    input = document.createElement("input"); input.type = field.type;
+    if (field.type === "number") { input.min = field.min || ""; input.max = field.max || ""; input.step = field.step || "1"; }
+    const value = field.secret ? "" : runtimeBaselineValue(field);
+    input.value = value === null || value === undefined ? "" : String(value);
+    if (field.secret) input.placeholder = state.runtimeBaseline?.settings?.api_key_configured ? "已配置，留空表示继承" : "留空表示继承服务默认";
+  }
+  input.dataset.runtimeGroup = field.group;
+  input.dataset.runtimeName = field.name;
+  input.dataset.runtimeType = field.type;
+  input.autocomplete = field.secret ? "new-password" : "off";
+  return input;
+}
+
+function renderRuntimeEditors() {
+  for (const hostId of ["new-runtime-editor", "rerun-runtime-editor"]) {
+    const host = $(hostId); if (!host) continue;
+    host.replaceChildren();
+    if (!state.runtimeReady) { host.textContent = state.runtimeError || "正在加载服务默认配置…"; continue; }
+    for (const group of ["settings", "policy"]) {
+      const section = document.createElement("section"); section.className = "runtime-section";
+      const heading = document.createElement("h4"); heading.textContent = group === "settings" ? "模型请求" : "生成预算"; section.append(heading);
+      const grid = document.createElement("div"); grid.className = "runtime-grid";
+      RUNTIME_FIELDS.filter((field) => field.group === group).forEach((field) => {
+        const label = document.createElement("label"); label.className = "runtime-field";
+        const caption = document.createElement("span"); caption.textContent = field.label; label.append(caption, runtimeControl(field));
+        grid.append(label);
+      });
+      section.append(grid); host.append(section);
+    }
+    const note = document.createElement("p"); note.className = "hint runtime-note";
+    note.textContent = "extra_body 继续使用服务环境配置；parallel_tool_calls 固定为 false。空白字段表示沿用服务默认。";
+    host.append(note);
+    const error = document.createElement("p"); error.className = "error runtime-error"; error.hidden = true;
+    host.append(error);
+    host.querySelectorAll("[data-runtime-name]").forEach((input) => {
+      input.addEventListener("input", () => validateRuntimeEditor(host));
+      input.addEventListener("change", () => validateRuntimeEditor(host));
+    });
+    const reset = document.createElement("button"); reset.type = "button"; reset.className = "btn btn-ghost btn-sm runtime-reset"; reset.textContent = "恢复服务默认";
+    reset.onclick = () => renderRuntimeEditors(); host.append(reset);
+  }
+}
+
+function validateRuntimeEditor(host) {
+  const invalid = [...host.querySelectorAll("[data-runtime-name]")].find((input) => !input.checkValidity());
+  const error = host.querySelector(".runtime-error");
+  if (!error) return !invalid;
+  error.hidden = !invalid;
+  error.textContent = invalid ? "请修正运行参数：" + (invalid.validationMessage || invalid.dataset.runtimeName) : "";
+  return !invalid;
+}
+
+function collectRuntimeParameters(hostId) {
+  if (!state.runtimeReady) return null;
+  const parameters = { settings: {}, policy: {} };
+  $(hostId).querySelectorAll("[data-runtime-name]").forEach((input) => {
+    const group = input.dataset.runtimeGroup; const name = input.dataset.runtimeName; const type = input.dataset.runtimeType;
+    let value = input.type === "checkbox" ? input.checked : input.value;
+    if (type === "password") { if (!String(value).trim()) return; value = String(value).trim(); }
+    else if (value === "") return;
+    else if (type === "number") value = input.step && input.step.includes(".") ? Number.parseFloat(value) : Number.parseInt(value, 10);
+    else if (type === "tri-boolean") value = value === "true";
+    const baseline = runtimeBaselineValue({ group, name });
+    if (type !== "password" && String(value) === String(baseline)) return;
+    if (type === "boolean" && Boolean(value) === Boolean(baseline)) return;
+    if (type === "tri-boolean" && value === baseline) return;
+    parameters[group][name] = value;
+  });
+  if (!Object.keys(parameters.settings).length) delete parameters.settings;
+  if (!Object.keys(parameters.policy).length) delete parameters.policy;
+  return Object.keys(parameters).length ? parameters : null;
+}
+
+async function loadRuntimeConfig() {
+  try { state.runtimeBaseline = await api("/api/runtime-config"); state.runtimeReady = true; }
+  catch (error) { state.runtimeError = "运行参数加载失败：" + error.message; }
+  renderRuntimeEditors();
+}
+
+function renderRuntimeSummary(config, configError) {
+  const panel = $("run-runtime-panel");
+  panel.hidden = !config && !configError;
+  if (!config) {
+    $("run-runtime-view").textContent = configError || "没有保存运行配置快照（旧运行记录）";
+    $("run-runtime-summary").textContent = configError || "旧运行记录没有运行配置快照";
+    return;
+  }
+  const host = $("run-runtime-view"); host.replaceChildren();
+  const settings = config.settings || {}; const policy = config.policy || {};
+  const text = document.createElement("p"); text.className = "runtime-summary-line";
+  text.textContent = "模型：" + (settings.model_name || "未配置") + " · API Key：" + (settings.api_key_configured ? "已配置" : "未配置") + " · 指纹：" + (config.configuration_fingerprint || "-"); host.append(text);
+  const details = document.createElement("p"); details.className = "runtime-summary-line";
+  details.textContent = "总超时 " + (policy.total_timeout_seconds ?? "-") + "s · Agent " + (policy.max_agent_rounds ?? "-") + " 轮 · TTP 提交 " + (policy.max_ttp_submissions ?? "-") + " 次"; host.append(details);
+  $("run-runtime-summary").textContent = config.source === "env_baseline" ? "本次实际使用服务默认配置" : "本次实际使用服务默认配置 + 运行覆盖";
+}
 
 async function api(path, options) {
   const response = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
@@ -154,7 +302,8 @@ function showNew() {
   if (!confirmDiscard()) return;
   closeStream();
   state.runId = null;
-  state.schemaDirty = false;
+  state.schemaDirty = false; state.schemaErrors = []; state.schemaDraft = null; state.savedSchema = null;
+  state.rerunAvailable = false;
   setHidden("view-new", false);
   setHidden("view-run", true);
   closeDrawer();
@@ -164,7 +313,8 @@ async function openRun(runId) {
   if (runId !== state.runId && !confirmDiscard()) return;
   closeStream();
   state.runId = runId;
-  state.schemaDirty = false;
+  state.schemaDirty = false; state.schemaErrors = []; state.schemaDraft = null; state.savedSchema = null;
+  state.rerunAvailable = false;
   setHidden("view-new", true);
   setHidden("view-run", false);
   closeDrawer();
@@ -199,7 +349,15 @@ function updateSchemaState() {
   badge.textContent = state.schemaDirty ? "未保存" : "已保存";
   badge.className = "save-state " + (state.schemaDirty ? "dirty" : "saved");
   $("save-schema").disabled = !state.schemaDirty || state.schemaErrors.length > 0;
-  $("run-template").disabled = state.schemaDirty || state.schemaErrors.length > 0;
+  updateRerunAction();
+}
+function updateRerunAction() {
+  const button = $("rerun-schema");
+  button.hidden = !state.rerunAvailable;
+  button.disabled = !state.rerunAvailable || state.schemaDirty || state.schemaErrors.length > 0;
+  button.title = state.schemaDirty || state.schemaErrors.length
+    ? "请先保存没有错误的 Schema"
+    : "以当前已保存的 Schema 创建独立的 TTP 生成任务";
 }
 function clearSchemaMessage() { $("schema-message").hidden = true; }
 function showSchemaMessage(text, kind) {
@@ -484,29 +642,40 @@ async function saveSchema() {
   finally { updateSchemaState(); }
 }
 $("save-schema").onclick = saveSchema;
-$("run-template").onclick = async () => {
+async function rerunFromSchema() {
   if (state.schemaDirty || state.schemaErrors.length) return;
-  $("run-template").disabled = true;
-  try { await api("/api/runs/" + state.runId + "/generate", { method: "POST" }); await refreshRun(); openStream(state.runId); }
+  $("rerun-schema").disabled = true;
+  try {
+    const response = await api("/api/runs/" + state.runId + "/rerun", { method: "POST", body: JSON.stringify({ parameters: collectRuntimeParameters("rerun-runtime-editor") }) });
+    await openRun(response.run_id);
+  }
   catch (error) { showSchemaMessage(error.message, "error"); updateSchemaState(); }
-};
+}
+$("rerun-schema").onclick = rerunFromSchema;
 
 /* Run rendering */
 async function refreshRun() {
   const data = await api("/api/runs/" + state.runId);
-  const { meta, result, schema, inputs, events } = data;
+  const { meta, result, schema, inputs, events, config } = data;
   const timelineEvents = Array.isArray(events) ? events : [];
   $("run-title").textContent = meta.title || "运行";
-  $("run-sub").textContent = meta.run_id + " · " + (meta.mode === "propose" ? "Schema 提案" : "完整生成");
+  const runKind = meta.execution_kind === "schema_rerun"
+    ? "基于 Schema 重新生成 · 来源 " + meta.source_run_id
+    : (meta.mode === "propose" ? "Schema 提案" : "完整生成");
+  $("run-sub").textContent = meta.run_id + " · " + runKind;
   const badge = $("run-status"); badge.className = "badge " + meta.status; badge.textContent = statusLabel(meta.status) + (meta.elapsed_seconds ? " · " + meta.elapsed_seconds.toFixed(1) + "s" : "");
   const running = meta.status === "running";
   $("cancel").hidden = !running; $("delete").hidden = running;
+  const artifactSchema = result && result.artifact && result.artifact.result_schema;
+  state.rerunAvailable = !running && Boolean(schema || artifactSchema);
+  renderRuntimeSummary(config, data.config_error);
   $("progress").hidden = timelineEvents.length === 0 && !running; $("progress").open = running;
   $("bar-fill").classList.toggle("is-done", !running); renderLog(timelineEvents);
   const proposal = result && result.proposal;
   const showSchema = Boolean(schema) && meta.mode === "propose" && !(result && result.artifact);
   $("schema-panel").hidden = !showSchema;
   if (showSchema && (!state.schemaDraft || !state.schemaDirty)) { initialiseSchema(schema); renderAssumptions(proposal ? proposal.assumptions : []); }
+  updateRerunAction();
   renderResult(result, inputs, schema); renderIssues(result ? result.issues : []);
   return data;
 }
@@ -617,7 +786,7 @@ function flushTimelineChanges() {
   if (state.followProgress) host.scrollTop = host.scrollHeight;
 }
 
-state.timelineScheduler = timelineApi.createRenderScheduler(
+state.timelineScheduler = timelineModule.createRenderScheduler(
   flushTimelineChanges,
   (callback) => requestAnimationFrame(callback),
   (handle) => cancelAnimationFrame(handle),
@@ -626,8 +795,8 @@ state.timelineScheduler = timelineApi.createRenderScheduler(
 function resetAgentTimeline(events) {
   state.timelineScheduler.cancel();
   state.events = events.slice();
-  state.eventTracker = timelineApi.createSequenceTracker(events);
-  state.timeline = timelineApi.buildTimeline(events);
+  state.eventTracker = timelineModule.createSequenceTracker(events);
+  state.timeline = timelineModule.buildTimeline(events);
   state.timelineDirty.clear();
   state.timelineRemoved.clear();
   renderTimelineFull();
@@ -636,7 +805,7 @@ function resetAgentTimeline(events) {
 function appendTimelineEvent(event) {
   if (!state.eventTracker.accept(event)) return false;
   state.events.push(event);
-  const change = timelineApi.appendAgentEvent(state.timeline, event);
+  const change = timelineModule.appendAgentEvent(state.timeline, event);
   if (change.removedKey) {
     state.timelineRemoved.add(change.removedKey);
     state.timelineDirty.delete(change.removedKey);
@@ -723,8 +892,12 @@ $("agent-timeline").addEventListener("scroll", () => {
 });
 $("new-run").onclick = showNew; $("refresh").onclick = loadHistory; $("history-toggle").onclick = openDrawer; $("history-close").onclick = closeDrawer; $("drawer-overlay").onclick = closeDrawer;
 $("start").onclick = async () => {
-  if (!validateOutputs()) return; const error = $("new-error"); error.hidden = true; $("start").disabled = true;
-  try { const mode = document.querySelector('input[name="mode"]:checked').value; const created = await api("/api/runs", { method: "POST", body: JSON.stringify({ mode, title: $("title").value, command_outputs: state.outputs.map((item) => item.text) }) }); await openRun(created.run_id); }
+  if (!validateOutputs() || !state.runtimeReady || !validateRuntimeEditor($("new-runtime-editor"))) return; const error = $("new-error"); error.hidden = true; $("start").disabled = true;
+  try {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    const created = await api("/api/runs", { method: "POST", body: JSON.stringify({ mode, title: $("title").value, command_outputs: state.outputs.map((item) => item.text), parameters: collectRuntimeParameters("new-runtime-editor") }) });
+    await openRun(created.run_id);
+  }
   catch (failure) { error.textContent = failure.message; error.hidden = false; }
   finally { validateOutputs(); }
 };
@@ -734,4 +907,4 @@ document.querySelectorAll(".tab").forEach((tab) => { tab.onclick = () => { docum
 document.querySelectorAll(".copy").forEach((button) => { button.onclick = async () => { await navigator.clipboard.writeText($("out-" + button.dataset.copy).textContent); const original = button.textContent; button.textContent = "已复制"; setTimeout(() => { button.textContent = original; }, 1200); }; });
 window.addEventListener("beforeunload", (event) => { if (!state.schemaDirty) return; event.preventDefault(); event.returnValue = ""; });
 
-renderOutputTabs(); validateOutputs(); loadHistory();
+renderOutputTabs(); validateOutputs(); loadRuntimeConfig(); loadHistory();

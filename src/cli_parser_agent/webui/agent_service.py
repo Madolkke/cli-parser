@@ -25,10 +25,17 @@ from agentscope.event import (
     ToolResultTextDeltaEvent,
 )
 
+from ..config import GenerationPolicy, TtpGeneratorSettings
 from ..ttp_generation.contracts import GenerationRequest, TemplateRequest
 from ..ttp_generation.generator import TtpGenerator
 from ..ttp_generation.validation import validate_result_schema
 from .contracts import RunMode, WebUIProgressEvent
+from .runtime_config import (
+    ResolvedRuntimeConfig,
+    RuntimeParameters,
+    public_config_payload,
+    resolve_runtime_config,
+)
 from .service import ProgressObserver
 
 _FORWARDED_EVENTS = frozenset(
@@ -253,11 +260,47 @@ class AgentGenerationService:
 
     def __init__(self, generator: Any | None = None) -> None:
         self.generator = generator if generator is not None else TtpGenerator.from_env()
+        self._base_settings = getattr(self.generator, "settings", None)
+        self._base_policy = getattr(self.generator, "policy", None)
+        # Test adapters may intentionally omit generator configuration. They
+        # still exercise the WebUI boundary without making a model request.
+        if self._base_settings is None:
+            self._base_settings = TtpGeneratorSettings(
+                api_key="webui-test-key",
+                model_name="webui-test-model",
+            )
+        if self._base_policy is None:
+            self._base_policy = GenerationPolicy()
 
     @staticmethod
     def validate_inputs(command_outputs: Sequence[str]) -> list[str]:
         request = GenerationRequest(command_outputs=list(command_outputs))
         return list(request.command_outputs)
+
+    def resolve_runtime_config(
+        self,
+        parameters: RuntimeParameters | None = None,
+    ) -> ResolvedRuntimeConfig:
+        return resolve_runtime_config(
+            self._base_settings,
+            self._base_policy,
+            parameters,
+        )
+
+    def public_runtime_config(self) -> dict[str, Any]:
+        return public_config_payload(self.resolve_runtime_config())
+
+    def _generator_for(self, config: ResolvedRuntimeConfig | None) -> Any:
+        if config is None:
+            return self.generator
+        if (
+            config.settings == self._base_settings
+            and config.policy == self._base_policy
+        ):
+            return self.generator
+        if not isinstance(self.generator, TtpGenerator):
+            return self.generator
+        return TtpGenerator(settings=config.settings, policy=config.policy)
 
     async def run(
         self,
@@ -265,13 +308,15 @@ class AgentGenerationService:
         command_outputs: Sequence[str],
         *,
         observer: ProgressObserver | None = None,
+        runtime_config: ResolvedRuntimeConfig | None = None,
     ) -> dict[str, Any]:
         request = GenerationRequest(command_outputs=list(command_outputs))
         callback = self._observer(observer)
+        generator = self._generator_for(runtime_config)
         if mode == "propose":
-            result = await self.generator.propose_schema(request, observer=callback)
+            result = await generator.propose_schema(request, observer=callback)
         else:
-            result = await self.generator.generate(request, observer=callback)
+            result = await generator.generate(request, observer=callback)
         return result.model_dump(mode="json")
 
     async def run_from_schema(
@@ -280,12 +325,13 @@ class AgentGenerationService:
         result_schema: dict[str, Any],
         *,
         observer: ProgressObserver | None = None,
+        runtime_config: ResolvedRuntimeConfig | None = None,
     ) -> dict[str, Any]:
         request = TemplateRequest(
             command_outputs=list(command_outputs),
             result_schema=result_schema,
         )
-        result = await self.generator.generate_from_schema(
+        result = await self._generator_for(runtime_config).generate_from_schema(
             request,
             observer=self._observer(observer),
         )

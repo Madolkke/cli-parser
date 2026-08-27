@@ -21,6 +21,7 @@ INPUTS_FILE = "inputs.json"
 SCHEMA_FILE = "schema.json"
 RESULT_FILE = "result.json"
 EVENTS_FILE = "events.jsonl"
+CONFIG_FILE = "config.json"
 
 
 class RunStoreError(ValueError):
@@ -80,7 +81,14 @@ class RunStore:
             raise RunStoreError(f"run id escapes the run root: {run_id!r}")
         return candidate
 
-    def create(self, *, mode: str, command_outputs: list[str], title: str) -> str:
+    def create(
+        self,
+        *,
+        mode: str,
+        command_outputs: list[str],
+        title: str,
+        config: dict[str, Any] | None = None,
+    ) -> str:
         """Create one run directory and seed its metadata and inputs.
 
         Two runs started within the same clock tick would otherwise collide:
@@ -118,6 +126,35 @@ class RunStore:
             },
         )
         write_json(directory / INPUTS_FILE, {"command_outputs": command_outputs})
+        if config is not None:
+            self.write_config(run_id, config)
+        return run_id
+
+    def create_schema_rerun(
+        self,
+        *,
+        source_run_id: str,
+        schema: dict[str, Any],
+        schema_source: str,
+        command_outputs: list[str],
+        title: str,
+        config: dict[str, Any] | None = None,
+    ) -> str:
+        """Create an independent TTP-only run from a completed run's Schema."""
+
+        run_id = self.create(
+            mode="schema_rerun",
+            command_outputs=command_outputs,
+            title=title,
+            config=config,
+        )
+        self.write_schema(run_id, schema)
+        self.update_meta(
+            run_id,
+            execution_kind="schema_rerun",
+            source_run_id=source_run_id,
+            schema_source=schema_source,
+        )
         return run_id
 
     def read_meta(self, run_id: str) -> dict[str, Any] | None:
@@ -156,6 +193,27 @@ class RunStore:
     def read_result(self, run_id: str) -> dict[str, Any] | None:
         result = read_json(self.run_directory(run_id) / RESULT_FILE)
         return result if isinstance(result, dict) else None
+
+    def write_config(self, run_id: str, config: dict[str, Any]) -> None:
+        """Persist the exact resolved WebUI configuration for local replay."""
+
+        write_json(self.run_directory(run_id) / CONFIG_FILE, config)
+
+    def read_config(self, run_id: str) -> dict[str, Any] | None:
+        config = read_json(self.run_directory(run_id) / CONFIG_FILE)
+        return config if isinstance(config, dict) else None
+
+    def read_config_status(
+        self,
+        run_id: str,
+    ) -> tuple[dict[str, Any] | None, bool]:
+        """Read a config and distinguish a missing snapshot from a corrupt one."""
+
+        path = self.run_directory(run_id) / CONFIG_FILE
+        if not path.is_file():
+            return None, False
+        config = read_json(path)
+        return (config if isinstance(config, dict) else None), True
 
     def append_event(self, run_id: str, event: dict[str, Any]) -> None:
         """Append one sanitized, size-bounded WebUI event to the transcript."""

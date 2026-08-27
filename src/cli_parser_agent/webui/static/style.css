@@ -225,6 +225,26 @@ textarea { resize: vertical; font-family: var(--mono); font-size: 12.5px; line-h
 .message.error { background: var(--err-soft); color: var(--err); }
 .message.success { background: var(--ok-soft); color: var(--ok); }
 .schema-actions { padding: 13px 16px; border-top: 1px solid var(--border); justify-content: flex-end; }
+.runtime-panel { margin-top: 14px; border: 1px solid var(--border); border-radius: 7px; background: #fbfcfe; overflow: hidden; }
+.runtime-panel > summary { padding: 11px 13px; display: flex; align-items: center; gap: 12px; cursor: pointer; list-style: none; }
+.runtime-panel > summary::-webkit-details-marker { display: none; }
+.runtime-panel > summary::before { content: "›"; color: var(--muted); transition: transform .12s; }
+.runtime-panel[open] > summary::before { transform: rotate(90deg); }
+.runtime-panel > summary .hint { margin-left: auto; }
+.runtime-editor { padding: 0 13px 13px; border-top: 1px solid var(--border); }
+.runtime-section { padding-top: 12px; }
+.runtime-section + .runtime-section { margin-top: 4px; border-top: 1px solid var(--border); }
+.runtime-section h4 { margin: 0 0 9px; color: var(--text); font-size: 12px; }
+.runtime-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 9px; }
+.runtime-field { display: flex; min-width: 0; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10.5px; }
+.runtime-field input, .runtime-field select { min-height: 31px; width: 100%; padding: 5px 8px; font-size: 12px; }
+.runtime-field input:invalid, .runtime-field select:invalid { border-color: #e5aab0; box-shadow: 0 0 0 2px var(--err-soft); }
+.runtime-field input[type="checkbox"] { width: 17px; min-height: 17px; accent-color: var(--accent); }
+.runtime-note { margin: 12px 0 0; }
+.runtime-reset { margin-top: 10px; }
+.run-runtime-panel { margin-top: 12px; padding: 0; }
+.runtime-summary { padding: 0 13px 5px; }
+.runtime-summary-line { margin: 7px 0; color: var(--muted); font: 11px/1.5 var(--mono); overflow-wrap: anywhere; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .result-panel { padding: 14px; }
 .tabs { display: flex; gap: 2px; overflow-x: auto; margin: -4px -4px 12px; border-bottom: 1px solid var(--border); }
@@ -275,6 +295,7 @@ table.records td { font-family: var(--mono); }
   .schema-field-head { grid-template-columns: 28px minmax(110px, 1fr) 95px 32px; }
   .required-toggle { grid-column: 2 / 4; }
   .schema-options-grid { grid-template-columns: 1fr; }
+  .runtime-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .schema-children, .schema-array-item { margin-left: 7px; padding-left: 7px; }
   .editor-toolbar { align-items: flex-start; flex-wrap: wrap; }
   .schema-actions { flex-direction: column-reverse; }
@@ -288,6 +309,7 @@ table.records td { font-family: var(--mono); }
   .mark { width: 26px; height: 26px; }
   .schema-field-head { grid-template-columns: 26px minmax(90px, 1fr) 88px 30px; gap: 5px; }
   .input-tab { min-width: 82px; }
+  .runtime-grid { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

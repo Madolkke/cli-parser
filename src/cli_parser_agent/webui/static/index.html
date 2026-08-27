@@ -54,6 +54,10 @@
             <label><input type="radio" name="mode" value="propose"><span>先提案 Schema</span></label>
           </div>
         </fieldset>
+        <details class="runtime-panel">
+          <summary><strong>运行参数</strong><span class="hint">默认使用服务启动时的 .env 配置，可为本次运行覆盖</span></summary>
+          <div id="new-runtime-editor" class="runtime-editor"></div>
+        </details>
         <p id="new-error" class="error" hidden></p>
         <div class="form-actions"><button id="start" class="btn btn-primary btn-lg">开始生成</button></div>
       </div>
@@ -61,8 +65,13 @@
     <section id="view-run" class="view" hidden>
       <div class="run-head">
         <div><h2 id="run-title">运行</h2><p id="run-sub" class="sub"></p></div>
-        <div class="run-actions"><span id="run-status" class="badge"></span><button id="cancel" class="btn btn-danger btn-sm" hidden>取消</button><button id="delete" class="btn btn-ghost btn-sm" hidden>删除</button></div>
+        <div class="run-actions"><span id="run-status" class="badge"></span><button id="rerun-schema" class="btn btn-primary btn-sm" hidden>以此 Schema 重新生成</button><button id="cancel" class="btn btn-danger btn-sm" hidden>取消</button><button id="delete" class="btn btn-ghost btn-sm" hidden>删除</button></div>
       </div>
+      <details id="run-runtime-panel" class="panel runtime-panel run-runtime-panel" hidden>
+        <summary><strong>运行参数</strong><span id="run-runtime-summary" class="hint">本次实际生效配置</span></summary>
+        <div id="run-runtime-view" class="runtime-summary"></div>
+        <div id="rerun-runtime-editor" class="runtime-editor"></div>
+      </details>
       <details id="progress" class="panel progress-panel" hidden>
         <summary><span id="progress-phase" class="phase-pill">准备中</span><span id="progress-elapsed" class="mono"></span></summary>
         <div class="progress-body">
@@ -84,7 +93,7 @@
             <div id="schema-json" hidden><textarea id="schema-editor" class="editor" spellcheck="false"></textarea><button id="format-schema" class="btn btn-ghost btn-sm format-button">格式化 JSON</button></div>
             <div id="schema-errors" class="schema-errors" hidden></div>
             <p id="schema-message" class="message" hidden></p>
-            <div class="row schema-actions"><button id="save-schema" class="btn btn-secondary">保存 Schema</button><button id="run-template" class="btn btn-primary">使用此 Schema 生成</button></div>
+            <div class="row schema-actions"><button id="save-schema" class="btn btn-secondary">保存 Schema</button></div>
           </div>
         </details>
       </section>
@@ -101,6 +110,6 @@
 </main>
 <script src="/static/agent-timeline.js?v=1"></script>
 <script src="/static/schema-model.js?v=3"></script>
-<script src="/static/app.js?v=3"></script>
+<script src="/static/app.js?v=6"></script>
 </body>
 </html>

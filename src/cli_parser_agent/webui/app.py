@@ -22,11 +22,23 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sse_starlette.sse import EventSourceResponse
 
-from .contracts import CreateRunRequest, SaveSchemaRequest, WebUIProgressEvent
+from .contracts import (
+    CreateRunRequest,
+    RerunRunRequest,
+    SaveSchemaRequest,
+    WebUIProgressEvent,
+)
+from .runtime_config import (
+    RuntimeConfigError,
+    RuntimeParameters,
+    full_config_payload,
+    public_config_snapshot,
+)
 from .service import GenerationService
 from .store import RunStore, RunStoreError
 
 STATIC_DIRECTORY = Path(__file__).resolve().parent / "static"
+TERMINAL_RUN_STATUSES = frozenset({"success", "failed", "cancelled"})
 
 
 class _ProgressQueue:
@@ -386,6 +398,35 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _schema_for_rerun(
+    store: RunStore,
+    run_id: str,
+) -> tuple[dict[str, Any], str] | None:
+    """Return the reviewed Schema first, then a completed artifact Schema."""
+
+    saved_schema = store.read_schema(run_id)
+    if saved_schema is not None:
+        return saved_schema, "saved_schema"
+    result = store.read_result(run_id)
+    artifact = result.get("artifact") if isinstance(result, dict) else None
+    artifact_schema = (
+        artifact.get("result_schema") if isinstance(artifact, dict) else None
+    )
+    if isinstance(artifact_schema, dict):
+        return artifact_schema, "artifact_schema"
+    return None
+
+
+def _schema_rerun_title(meta: dict[str, Any]) -> str:
+    """Derive a bounded, locally meaningful title for a rerun child."""
+
+    source_title = str(meta.get("title", "")).strip()
+    suffix = "Schema 重新生成"
+    if not source_title:
+        return suffix
+    return f"{source_title[: 200 - len(suffix) - 3]} · {suffix}"
+
+
 def create_app(
     *,
     store: RunStore,
@@ -407,9 +448,26 @@ def create_app(
             raise HTTPException(status_code=404, detail="run not found")
         return meta
 
+    def _public_run_config(
+        run_id: str,
+    ) -> tuple[dict[str, Any] | None, str | None]:
+        raw_config, present = store.read_config_status(run_id)
+        if not present:
+            return None, None
+        if raw_config is None:
+            return None, "runtime configuration snapshot is corrupt"
+        try:
+            return public_config_snapshot(raw_config), None
+        except (KeyError, TypeError, ValueError):
+            return None, "runtime configuration snapshot is invalid"
+
     @app.get("/api/runs")
     def list_runs() -> dict[str, Any]:
         return {"runs": store.list_runs(), "active_run": manager.active_run}
+
+    @app.get("/api/runtime-config")
+    def runtime_config() -> dict[str, Any]:
+        return service.public_runtime_config()
 
     @app.post("/api/runs", status_code=201)
     async def create_run(payload: CreateRunRequest) -> dict[str, Any]:
@@ -422,25 +480,41 @@ def create_app(
             command_outputs = service.validate_inputs(payload.command_outputs)
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
+        try:
+            runtime_config = service.resolve_runtime_config(payload.parameters)
+        except RuntimeConfigError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        public_config = public_config_snapshot(full_config_payload(runtime_config))
 
         run_id = store.create(
             mode=payload.mode,
             command_outputs=command_outputs,
             title=payload.title.strip(),
+            config=full_config_payload(runtime_config),
+        )
+        store.update_meta(
+            run_id,
+            runtime_config_source=runtime_config.source,
+            runtime_model_name=runtime_config.settings.model_name,
+            runtime_configuration_fingerprint=public_config[
+                "configuration_fingerprint"
+            ],
         )
         if payload.mode == "propose":
             def factory(observer: Any) -> Any:
                 return service.run(
                     "propose",
-                    payload.command_outputs,
+                    command_outputs,
                     observer=observer,
+                    runtime_config=runtime_config,
                 )
         else:
             def factory(observer: Any) -> Any:
                 return service.run(
                     "full",
-                    payload.command_outputs,
+                    command_outputs,
                     observer=observer,
+                    runtime_config=runtime_config,
                 )
 
         manager.start(run_id, factory)
@@ -449,11 +523,14 @@ def create_app(
     @app.get("/api/runs/{run_id}")
     def read_run(run_id: str) -> dict[str, Any]:
         meta = _require_run(run_id)
+        config, config_error = _public_run_config(run_id)
         return {
             "meta": meta,
             "inputs": store.read_inputs(run_id),
             "schema": store.read_schema(run_id),
             "result": store.read_result(run_id),
+            "config": config,
+            "config_error": config_error,
             "events": store.read_events(run_id),
             "active": manager.active_run == run_id,
         }
@@ -470,26 +547,56 @@ def create_app(
         store.write_schema(run_id, payload.result_schema)
         return {"saved": True, "issues": []}
 
-    @app.post("/api/runs/{run_id}/generate", status_code=201)
-    async def generate_from_saved_schema(run_id: str) -> dict[str, Any]:
-        _require_run(run_id)
+    async def _start_schema_rerun(
+        run_id: str,
+        parameters: RuntimeParameters | None = None,
+    ) -> dict[str, Any]:
+        source_meta = _require_run(run_id)
         if manager.active_run is not None:
             raise HTTPException(
                 status_code=409,
                 detail=f"run {manager.active_run} is still in progress",
             )
-        schema = store.read_schema(run_id)
-        if schema is None:
-            raise HTTPException(status_code=400, detail="run has no saved schema")
-        outputs = store.read_inputs(run_id)
+        if source_meta.get("status") not in TERMINAL_RUN_STATUSES:
+            raise HTTPException(status_code=409, detail="source run is not finished")
+        schema_info = _schema_for_rerun(store, run_id)
+        if schema_info is None:
+            raise HTTPException(
+                status_code=400,
+                detail="source run has no usable schema",
+            )
+        schema, schema_source = schema_info
+        if service.validate_schema(schema):
+            raise HTTPException(status_code=400, detail="source run schema is invalid")
+        try:
+            outputs = service.validate_inputs(store.read_inputs(run_id))
+        except ValueError as error:
+            raise HTTPException(
+                status_code=400,
+                detail="source run inputs are invalid",
+            ) from error
+        try:
+            runtime_config = service.resolve_runtime_config(parameters)
+        except RuntimeConfigError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        full_config = full_config_payload(runtime_config)
+        public_config = public_config_snapshot(full_config)
 
+        child_run_id = store.create_schema_rerun(
+            source_run_id=run_id,
+            schema=schema,
+            schema_source=schema_source,
+            command_outputs=outputs,
+            title=_schema_rerun_title(source_meta),
+            config=full_config,
+        )
         store.update_meta(
-            run_id,
-            status="running",
-            mode="propose",
-            stage="template",
-            finished_at=None,
-            termination_reason=None,
+            child_run_id,
+            runtime_config_source=runtime_config.source,
+            runtime_model_name=runtime_config.settings.model_name,
+            runtime_configuration_fingerprint=public_config[
+                "configuration_fingerprint"
+            ],
         )
 
         def factory(observer: Any) -> Any:
@@ -497,10 +604,39 @@ def create_app(
                 outputs,
                 schema,
                 observer=observer,
+                runtime_config=runtime_config,
             )
 
-        manager.start(run_id, factory)
-        return {"run_id": run_id, "stage": "template"}
+        manager.start(child_run_id, factory)
+        return {
+            "run_id": child_run_id,
+            "source_run_id": run_id,
+            "stage": "template",
+        }
+
+    @app.post("/api/runs/{run_id}/rerun", status_code=201)
+    async def rerun_from_schema(
+        run_id: str,
+        payload: RerunRunRequest | None = None,
+    ) -> dict[str, Any]:
+        """Start an independent TTP-only child run from a stored Schema."""
+
+        return await _start_schema_rerun(
+            run_id,
+            payload.parameters if payload is not None else None,
+        )
+
+    @app.post("/api/runs/{run_id}/generate", status_code=201)
+    async def generate_from_saved_schema(
+        run_id: str,
+        payload: RerunRunRequest | None = None,
+    ) -> dict[str, Any]:
+        """Compatibility alias for the independent Schema rerun endpoint."""
+
+        return await _start_schema_rerun(
+            run_id,
+            payload.parameters if payload is not None else None,
+        )
 
     @app.post("/api/runs/{run_id}/cancel")
     async def cancel_run(run_id: str) -> dict[str, Any]:
@@ -609,4 +745,10 @@ def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False)
 
 
-__all__ = ["CreateRunRequest", "RunManager", "SaveSchemaRequest", "create_app"]
+__all__ = [
+    "CreateRunRequest",
+    "RunManager",
+    "RerunRunRequest",
+    "SaveSchemaRequest",
+    "create_app",
+]

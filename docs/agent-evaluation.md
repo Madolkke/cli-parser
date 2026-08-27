@@ -56,6 +56,10 @@ uv run python scripts/run_agent_evaluation.py run --suite smoke --template-only
 
 该模式在本地摘要中记为 `template_only: true`。它的分数只与同模式运行可比，不能与两阶段结果直接比较，也不替代两阶段的最终验收。默认仍是两阶段模式。
 
+### 外部 Schema 的 TTP-only 评分
+
+`scripts/run_ttp_template_evaluation.py` 面向调用方维护的外部 fixture，和本页的 Laminar black-box evaluation 分开。它的每个 case 明确指定 Schema、`1-5` 份输入和 expected records，调用公共 `generate_from_schema()` 后按 records 严格比较并重复 Agent 外全文验收。Laminar Key 存在时可产生普通 Trace，但不是运行前提，也不会创建 Evaluation 或 telemetry 完整性门槛。详见 [TTP-only evaluation](ttp-template-evaluation.md)。
+
 ### 高预算诊断运行
 
 默认 `900` 秒、`13` 轮和 `9` 次 TTP 提交用于常规验收。需要观察完整修正链时，使用独立进程和单并发的高预算配置；诊断主运行固定为总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交和单次模型超时 `120` 秒，避免时间预算放大后仍被较小的阶段预算截断：
