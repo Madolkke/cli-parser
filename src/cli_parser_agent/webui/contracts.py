@@ -10,6 +10,8 @@ from typing import Any, Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .runtime_config import RuntimeParameters
+
 RunMode = Literal["full", "propose"]
 
 
@@ -21,6 +23,15 @@ class CreateRunRequest(BaseModel):
     mode: RunMode = "full"
     title: str = Field(default="", max_length=200)
     command_outputs: list[str] = Field(min_length=1, max_length=5)
+    parameters: RuntimeParameters | None = None
+
+
+class RerunRunRequest(BaseModel):
+    """Optional runtime overrides for a Schema-only rerun."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    parameters: RuntimeParameters | None = None
 
 
 class SaveSchemaRequest(BaseModel):
@@ -46,7 +57,9 @@ class WebUIProgressEvent(TypedDict, total=False):
 
 __all__ = [
     "CreateRunRequest",
+    "RerunRunRequest",
     "RunMode",
+    "RuntimeParameters",
     "SaveSchemaRequest",
     "WebUIProgressEvent",
 ]

@@ -2,7 +2,6 @@
 
 from .contracts import (
     ArtifactBundle,
-    FieldEvidence,
     GenerationMetadata,
     GenerationRequest,
     GenerationResult,
@@ -19,7 +18,6 @@ from .progress import ProgressObserver
 
 __all__ = [
     "ArtifactBundle",
-    "FieldEvidence",
     "GenerationMetadata",
     "GenerationRequest",
     "GenerationResult",

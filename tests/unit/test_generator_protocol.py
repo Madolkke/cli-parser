@@ -15,13 +15,14 @@ from cli_parser_agent import (
     GenerationPolicy,
     GenerationRequest,
     GenerationResult,
+    TemplateRequest,
     TtpGenerator,
     TtpGeneratorSettings,
     ValidationIssue,
 )
 from cli_parser_agent.ttp_generation import generator as generator_module
 from cli_parser_agent.ttp_generation import workflow as workflow_module
-from cli_parser_agent.ttp_generation.agent import AgentRunOutcome
+from cli_parser_agent.ttp_generation.agent import AgentRunOutcome, SchemaCandidate
 
 
 def _result_schema() -> dict[str, Any]:
@@ -499,11 +500,6 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     monkeypatch.setattr(workflow_module, "run_generation_phase", run)
     monkeypatch.setattr(
         workflow_module,
-        "validate_schema_proposal",
-        lambda *_args, **_kwargs: [],
-    )
-    monkeypatch.setattr(
-        workflow_module,
         "validate_ttp_template",
         lambda *_args, **_kwargs: SimpleNamespace(
             valid=True,
@@ -530,7 +526,6 @@ async def test_successful_workflow_resamples_and_records_phase_metadata(
     assert result.metadata.schema_agent_rounds == 1
     assert result.metadata.ttp_agent_rounds == 2
     assert result.metadata.agent_rounds == 3
-    assert span_starts[0]["attributes"]["policy_max_schema_evidence"] == 256
     assert [(item["name"], item["parent"]) for item in span_starts] == [
         ("ttp.generate", None),
         ("schema.phase", "ttp.generate"),
@@ -597,15 +592,6 @@ PID: {{ pid | ORPHRASE }}
         if phase == "schema":
             session.schema_submissions = 1
             session.frozen_schema = frozen_schema
-            session.field_evidence = (
-                {"path": "/inventory/*/name", "output_index": 0, "excerpt": "first"},
-                {
-                    "path": "/inventory/*/name",
-                    "output_index": 0,
-                    "excerpt": "second",
-                },
-                {"path": "/inventory/*/pid", "output_index": 0, "excerpt": "one"},
-            )
             return AgentRunOutcome(phase_completed=True)
 
         session.ttp_submissions = 1
@@ -654,9 +640,6 @@ async def test_workflow_accepts_literal_empty_string_allowed_by_schema(
         if phase == "schema":
             session.schema_submissions = 1
             session.frozen_schema = frozen_schema
-            session.field_evidence = (
-                {"path": "/pid", "output_index": 0, "excerpt": "PID: ,"},
-            )
             return AgentRunOutcome(phase_completed=True)
 
         session.ttp_submissions = 1
@@ -677,6 +660,131 @@ async def test_workflow_accepts_literal_empty_string_allowed_by_schema(
     assert result.status == "success"
     assert result.artifact is not None
     assert result.artifact.records == list(expected_records)
+
+
+async def test_full_workflow_preserves_python_keyword_field_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command_output = "Value: alpha"
+    frozen_schema = {
+        "type": "object",
+        "properties": {"as": {"type": "string"}},
+        "required": ["as"],
+        "additionalProperties": False,
+    }
+    template = "Value: {{ as | WORD }}"
+    expected_records = ({"as": "alpha"},)
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        session.record_agent_round(phase)
+        if phase == "schema":
+            candidate = SchemaCandidate(
+                result_schema=frozen_schema,
+                command_outputs=(command_output,),
+            )
+            validation = await session.schema_validator(candidate)
+            assert validation.valid
+            session.schema_submissions = 1
+            session.frozen_schema = frozen_schema
+            return AgentRunOutcome(phase_completed=True)
+
+        session.ttp_submissions = 1
+        session.validated_ttp_template = template
+        session.records = expected_records
+        session.first_ttp_valid = True
+        session.last_issues = ()
+        session.generation_finished = True
+        session.terminal_reason = "success"
+        return AgentRunOutcome(phase_completed=True)
+
+    _install_agent_stubs(monkeypatch, run)
+
+    result = await _generator().generate(
+        GenerationRequest(command_outputs=[command_output]),
+    )
+
+    assert result.status == "success"
+    assert result.artifact is not None
+    assert result.artifact.records == list(expected_records)
+    assert result.artifact.result_schema == frozen_schema
+
+
+async def test_template_only_workflow_preserves_python_keyword_field_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    command_output = "Value: alpha"
+    frozen_schema = {
+        "type": "object",
+        "properties": {"as": {"type": "string"}},
+        "required": ["as"],
+        "additionalProperties": False,
+    }
+    template = "Value: {{ as | WORD }}"
+
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        assert phase == "ttp"
+        session.record_agent_round(phase)
+        session.ttp_submissions = 1
+        session.validated_ttp_template = template
+        session.records = ({"as": "alpha"},)
+        session.first_ttp_valid = True
+        session.last_issues = ()
+        session.generation_finished = True
+        session.terminal_reason = "success"
+        return AgentRunOutcome(phase_completed=True)
+
+    _install_agent_stubs(monkeypatch, run)
+
+    result = await _generator().generate_from_schema(
+        TemplateRequest(
+            command_outputs=[command_output],
+            result_schema=frozen_schema,
+        ),
+    )
+
+    assert result.status == "success"
+    assert result.artifact is not None
+    assert result.artifact.records == [{"as": "alpha"}]
+
+
+async def test_template_only_rejects_scalar_ignore_before_starting_ttp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def run(*_: Any, **__: Any) -> AgentRunOutcome:
+        raise AssertionError("TTP phase must not start for an invalid injected schema")
+
+    _install_agent_stubs(monkeypatch, run)
+
+    result = await _generator().generate_from_schema(
+        TemplateRequest(
+            command_outputs=["Value: alpha"],
+            result_schema={
+                "type": "object",
+                "properties": {"ignore": {"type": "string"}},
+                "required": ["ignore"],
+                "additionalProperties": False,
+            },
+        ),
+    )
+
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "invalid_injected_schema"
+    assert result.metadata.ttp_agent_rounds == 0
+    assert [issue.code for issue in result.issues] == [
+        "schema.reserved_scalar_field_name",
+    ]
 
 
 async def test_valid_ttp_candidate_without_finish_does_not_build_artifact(
@@ -823,9 +931,6 @@ async def test_schema_acceptance_on_last_round_does_not_build_ttp_agent(
         session.record_agent_round("schema")
         session.schema_submissions = 1
         session.frozen_schema = _result_schema()
-        session.field_evidence = (
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-        )
         return AgentRunOutcome(phase_completed=True)
 
     monkeypatch.setattr(workflow_module, "build_agent", build)
@@ -1071,7 +1176,6 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
                     "additionalProperties": False,
                 },
                 records=[{"value": "one"}],
-                assumptions=[],
             ),
             metadata=GenerationMetadata(
                 request_id=request_id,
@@ -1229,10 +1333,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
         phases.append(phase)
         session.record_agent_round("schema")
         session.frozen_schema = _result_schema()
-        session.field_evidence = (
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-        )
-        session.assumptions = ("kept for review",)
         return AgentRunOutcome(phase_completed=True)
 
     _install_agent_stubs(monkeypatch, run)
@@ -1244,8 +1344,6 @@ async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(
     assert result.status == "success"
     assert result.proposal is not None
     assert result.proposal.result_schema == _result_schema()
-    assert [item.path for item in result.proposal.evidence] == ["/value"]
-    assert result.proposal.assumptions == ["kept for review"]
 
     # The TTP phase never ran, and the metadata identity still holds.
     assert result.metadata.ttp_agent_rounds == 0

@@ -142,7 +142,6 @@ def _output(records: list[dict[str, Any]], *, schema: dict[str, Any] | None = No
                 "ttp_template": "irrelevant",
                 "result_schema": schema or _schema(),
                 "records": records,
-                "assumptions": [],
             },
             "issues": [],
             "metadata": {
@@ -183,26 +182,18 @@ def _evaluation_environment() -> dict[str, str]:
     }
 
 
-def test_versioned_manifest_preflights_smoke_and_baseline_suites() -> None:
+def test_versioned_manifest_preflights_corpus_and_smoke_suites() -> None:
     manifest = load_evaluation_manifest(PROJECT_ROOT, MANIFEST_PATH)
     smoke = select_cases(manifest, suite="smoke", case_ids=())
-    baseline = select_cases(manifest, suite="baseline", case_ids=())
+    corpus = select_cases(manifest, suite="all", case_ids=())
 
-    assert len(manifest.cases) == 15
-    assert sum(len(case.inputs) for case in manifest.cases) == 15
-    assert len(smoke) == 12
-    assert sum(len(case.inputs) for case in smoke) == 12
-    assert [case.id for case in baseline] == [
-        "ntc.cisco_ios.show_ip_interface_brief",
-        "ttp.cisco_ios.show_inventory.single_basic",
-        "ttp.cisco_ios.show_running_config_pipe_section_interface.single_qinq",
-    ]
-    assert sum(len(case.inputs) for case in baseline) == 3
-    assert all(len(case.inputs) == 1 for case in baseline)
-    assert all(
-        {"baseline", "single-input"}.issubset(case.tags)
-        for case in baseline
-    )
+    assert len(manifest.cases) == 31
+    assert sum(len(case.inputs) for case in manifest.cases) == 31
+    assert len(corpus) == 31
+    assert sum(len(case.inputs) for case in corpus) == 31
+    assert len(smoke) == 5
+    assert sum(len(case.inputs) for case in smoke) == 5
+    assert all("single-input" in case.tags for case in corpus)
     assert all(len(case.inputs) == 1 for case in manifest.cases)
     assert all(len(case.target.records) == 1 for case in manifest.cases)
 

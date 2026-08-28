@@ -14,12 +14,15 @@ from typing import Any, Literal
 
 from cli_parser_agent import GenerationPolicy, GenerationResult
 from cli_parser_agent.ttp_generation.validation import (
+    validate_records_against_schema,
     validate_result_schema,
     validate_ttp_template,
 )
 
 MANIFEST_VERSION = 1
 MAX_INPUTS = 1
+TTP_TEMPLATE_MANIFEST_VERSION = 1
+MAX_TTP_TEMPLATE_INPUTS = 5
 MAX_INPUT_BYTES = 1024 * 1024
 SUPPORTED_NODE_TYPES = frozenset(
     {"object", "array", "string", "integer", "number", "boolean"},
@@ -130,6 +133,39 @@ class EvaluationManifest:
     cases: tuple[EvaluationCase, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class TtpTemplateTarget:
+    """Expected records for a caller-supplied TTP-only schema case."""
+
+    records: tuple[JsonObject, ...]
+    path: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class TtpTemplateCase:
+    """One external-schema TTP-only evaluation case."""
+
+    id: str
+    suites: tuple[str, ...]
+    tags: tuple[str, ...]
+    schema: JsonObject
+    schema_path: str
+    schema_sha256: str
+    inputs: tuple[EvaluationInput, ...]
+    target: TtpTemplateTarget
+
+
+@dataclass(frozen=True, slots=True)
+class TtpTemplateManifest:
+    """Fully preflighted external-schema TTP-only test manifest."""
+
+    version: int
+    path: Path
+    sha256: str
+    cases: tuple[TtpTemplateCase, ...]
+
+
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -186,6 +222,27 @@ def _string_list(
 ) -> tuple[str, ...]:
     if not isinstance(value, list) or not value:
         raise HarnessError(f"{label} must be a non-empty array")
+    result: list[str] = []
+    for index, item in enumerate(value):
+        text = _require_string(item, f"{label}[{index}]")
+        if not pattern.fullmatch(text):
+            raise HarnessError(f"{label}[{index}] has an unsupported identifier")
+        result.append(text)
+    if len({item.casefold() for item in result}) != len(result):
+        raise HarnessError(f"{label} must not contain duplicates")
+    return tuple(result)
+
+
+def _optional_string_list(
+    value: Any,
+    label: str,
+    *,
+    pattern: re.Pattern[str],
+) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise HarnessError(f"{label} must be an array")
     result: list[str] = []
     for index, item in enumerate(value):
         text = _require_string(item, f"{label}[{index}]")
@@ -559,6 +616,246 @@ def select_cases(
     suite: str | None,
     case_ids: Sequence[str],
 ) -> tuple[EvaluationCase, ...]:
+    if (suite is None) == (not case_ids):
+        raise HarnessError("select exactly one of --suite or --case")
+    if suite is not None:
+        selected = tuple(case for case in manifest.cases if suite in case.suites)
+        if not selected:
+            raise HarnessError(f"suite does not select any cases: {suite}")
+        return selected
+    by_id = {case.id: case for case in manifest.cases}
+    missing = sorted(set(case_ids) - by_id.keys())
+    if missing:
+        raise HarnessError(f"unknown case IDs: {', '.join(missing)}")
+    if len(set(case_ids)) != len(case_ids):
+        raise HarnessError("--case must not contain duplicate IDs")
+    return tuple(by_id[case_id] for case_id in case_ids)
+
+
+def _safe_manifest_path(
+    root: Path,
+    value: Any,
+    label: str,
+) -> tuple[str, Path]:
+    """Resolve a traversal-free relative path from an external manifest."""
+
+    text = _require_string(value, label)
+    if "\\" in text or ":" in text:
+        raise HarnessError(f"{label} must use a relative POSIX path")
+    relative = PurePosixPath(text)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
+        raise HarnessError(f"{label} must be a traversal-free relative path")
+    resolved_root = root.resolve()
+    candidate = resolved_root.joinpath(*relative.parts).resolve()
+    if not candidate.is_relative_to(resolved_root):
+        raise HarnessError(f"{label} resolves outside the manifest directory")
+    return text, candidate
+
+
+def _load_template_input(
+    path: Path,
+    expected_sha256: str,
+    label: str,
+) -> str:
+    if not path.is_file():
+        raise HarnessError(f"{label} does not identify a file")
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise HarnessError(f"{label} could not be read") from error
+    if _sha256(payload) != expected_sha256:
+        raise HarnessError(f"{label} SHA-256 does not match")
+    if not payload or len(payload) > MAX_INPUT_BYTES:
+        raise HarnessError(f"{label} must contain 1 to {MAX_INPUT_BYTES} bytes")
+    if payload.startswith(b"\xef\xbb\xbf"):
+        raise HarnessError(f"{label} must not contain a UTF-8 BOM")
+    try:
+        text = payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise HarnessError(f"{label} is not strict UTF-8") from error
+    if not text.strip():
+        raise HarnessError(f"{label} must not contain only whitespace")
+    return text
+
+
+def _load_ttp_template_schema(
+    root: Path,
+    raw_schema: Any,
+    label: str,
+) -> tuple[JsonObject, str, str]:
+    if not isinstance(raw_schema, Mapping):
+        raise HarnessError(f"{label} must be an object")
+    _require_exact_keys(raw_schema, {"path", "sha256"}, label)
+    path_text, path = _safe_manifest_path(root, raw_schema["path"], f"{label}.path")
+    expected_sha256 = _validate_sha256(raw_schema["sha256"], f"{label}.sha256")
+    value, payload = _read_json(path, f"{label}.file")
+    if _sha256(payload) != expected_sha256:
+        raise HarnessError(f"{label}.file SHA-256 does not match")
+    if not isinstance(value, dict):
+        raise HarnessError(f"{label}.file root must be an object")
+    issues = validate_result_schema(value)
+    if issues:
+        raise HarnessError(f"{label}.file is not a supported result schema")
+    return value, path_text, expected_sha256
+
+
+def _load_ttp_template_target(
+    root: Path,
+    raw_target: Any,
+    schema: Mapping[str, Any],
+    inputs: tuple[EvaluationInput, ...],
+    label: str,
+) -> TtpTemplateTarget:
+    if not isinstance(raw_target, Mapping):
+        raise HarnessError(f"{label} must be an object")
+    _require_exact_keys(raw_target, {"path", "sha256"}, label)
+    path_text, path = _safe_manifest_path(root, raw_target["path"], f"{label}.path")
+    expected_sha256 = _validate_sha256(raw_target["sha256"], f"{label}.sha256")
+    value, payload = _read_json(path, f"{label}.file")
+    if _sha256(payload) != expected_sha256:
+        raise HarnessError(f"{label}.file SHA-256 does not match")
+    if not isinstance(value, list) or len(value) != len(inputs):
+        raise HarnessError(f"{label}.file must correspond one-to-one with inputs")
+    if any(not isinstance(record, dict) for record in value):
+        raise HarnessError(f"{label}.file must contain only object records")
+    issues = validate_records_against_schema(value, schema)
+    if issues:
+        raise HarnessError(f"{label}.file records do not satisfy the schema")
+    return TtpTemplateTarget(
+        records=tuple(value),
+        path=path_text,
+        sha256=expected_sha256,
+    )
+
+
+def load_ttp_template_manifest(manifest_path: Path) -> TtpTemplateManifest:
+    """Load an external, caller-owned TTP-only manifest without networking."""
+
+    path = manifest_path.expanduser().resolve()
+    raw, payload = _read_json(path, "TTP template manifest")
+    if not isinstance(raw, Mapping):
+        raise HarnessError("TTP template manifest root must be an object")
+    _require_exact_keys(raw, {"version", "cases"}, "TTP template manifest")
+    if raw["version"] != TTP_TEMPLATE_MANIFEST_VERSION:
+        raise HarnessError(
+            "TTP template manifest version must be "
+            f"{TTP_TEMPLATE_MANIFEST_VERSION}",
+        )
+    raw_cases = raw["cases"]
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raise HarnessError("TTP template manifest cases must be a non-empty array")
+
+    root = path.parent
+    cases: list[TtpTemplateCase] = []
+    seen_ids: set[str] = set()
+    for index, raw_case in enumerate(raw_cases):
+        label = f"TTP template manifest cases[{index}]"
+        if not isinstance(raw_case, Mapping):
+            raise HarnessError(f"{label} must be an object")
+        required_keys = {"id", "suites", "schema", "inputs", "expected_records"}
+        allowed_keys = required_keys | {"tags"}
+        missing = required_keys - raw_case.keys()
+        extra = raw_case.keys() - allowed_keys
+        if missing or extra:
+            details = []
+            if missing:
+                details.append(f"missing keys: {', '.join(sorted(missing))}")
+            if extra:
+                details.append(f"unsupported keys: {', '.join(sorted(extra))}")
+            raise HarnessError(f"{label} {'; '.join(details)}")
+        case_id = _require_string(raw_case["id"], f"{label}.id")
+        if not _ID_RE.fullmatch(case_id) or case_id in seen_ids:
+            raise HarnessError(f"{label}.id is invalid or duplicated")
+        seen_ids.add(case_id)
+        suites = _string_list(raw_case["suites"], f"{label}.suites", pattern=_TAG_RE)
+        tags = _optional_string_list(
+            raw_case.get("tags"),
+            f"{label}.tags",
+            pattern=_TAG_RE,
+        )
+        schema, schema_path, schema_sha256 = _load_ttp_template_schema(
+            root,
+            raw_case["schema"],
+            f"{label}.schema",
+        )
+        raw_inputs = raw_case["inputs"]
+        if (
+            not isinstance(raw_inputs, list)
+            or not 1 <= len(raw_inputs) <= MAX_TTP_TEMPLATE_INPUTS
+        ):
+            raise HarnessError(
+                f"{label}.inputs must contain 1 to {MAX_TTP_TEMPLATE_INPUTS} items",
+            )
+        inputs: list[EvaluationInput] = []
+        input_paths: set[str] = set()
+        for input_index, raw_input in enumerate(raw_inputs):
+            input_label = f"{label}.inputs[{input_index}]"
+            if not isinstance(raw_input, Mapping):
+                raise HarnessError(f"{input_label} must be an object")
+            _require_exact_keys(raw_input, {"path", "sha256"}, input_label)
+            input_path, absolute_path = _safe_manifest_path(
+                root,
+                raw_input["path"],
+                f"{input_label}.path",
+            )
+            if input_path.casefold() in input_paths:
+                raise HarnessError(f"{label}.inputs must not repeat a path")
+            input_paths.add(input_path.casefold())
+            input_sha256 = _validate_sha256(
+                raw_input["sha256"],
+                f"{input_label}.sha256",
+            )
+            inputs.append(
+                EvaluationInput(
+                    path=input_path,
+                    sha256=input_sha256,
+                    absolute_path=absolute_path,
+                    text=_load_template_input(
+                        absolute_path,
+                        input_sha256,
+                        f"{input_label}.file",
+                    ),
+                ),
+            )
+        target = _load_ttp_template_target(
+            root,
+            raw_case["expected_records"],
+            schema,
+            tuple(inputs),
+            f"{label}.expected_records",
+        )
+        cases.append(
+            TtpTemplateCase(
+                id=case_id,
+                suites=suites,
+                tags=tags,
+                schema=schema,
+                schema_path=schema_path,
+                schema_sha256=schema_sha256,
+                inputs=tuple(inputs),
+                target=target,
+            ),
+        )
+    return TtpTemplateManifest(
+        version=TTP_TEMPLATE_MANIFEST_VERSION,
+        path=path,
+        sha256=_sha256(payload),
+        cases=tuple(cases),
+    )
+
+
+def select_ttp_template_cases(
+    manifest: TtpTemplateManifest,
+    *,
+    suite: str | None,
+    case_ids: Sequence[str],
+) -> tuple[TtpTemplateCase, ...]:
+    """Select one suite or a deduplicated set of TTP-only case IDs."""
+
     if (suite is None) == (not case_ids):
         raise HarnessError("select exactly one of --suite or --case")
     if suite is not None:
@@ -1099,6 +1396,129 @@ def score_records_by_input(
     return diagnostics
 
 
+def score_ttp_template_output(
+    output: Any,
+    expected_records: Sequence[Any],
+) -> dict[str, Any]:
+    """Score a TTP-only trial without treating its supplied Schema as a metric."""
+
+    zero_metrics = {
+        "candidate_pass": 0.0,
+        "generation_success": 0.0,
+        "independent_acceptance": 0.0,
+        "record_count_match": 0.0,
+        "records_exact_match": 0.0,
+        "leaf_precision": 0.0,
+        "leaf_recall": 0.0,
+        "leaf_f1": 0.0,
+        "input_count": float(len(expected_records)),
+        "input_present_count": 0.0,
+        "input_exact_match_count": 0.0,
+        "input_exact_match_rate": 0.0,
+        "input_leaf_precision_macro": 0.0,
+        "input_leaf_recall_macro": 0.0,
+        "input_leaf_f1_macro": 0.0,
+        "finish_called": 0.0,
+        "first_ttp_passed": 0.0,
+        "elapsed_seconds": 0.0,
+        "agent_rounds": 0.0,
+        "ttp_agent_rounds": 0.0,
+        "tool_call_starts": 0.0,
+        "tool_result_errors": 0.0,
+        "ttp_submissions": 0.0,
+        "ttp_no_tool_responses": 0.0,
+        "ttp_no_tool_retries": 0.0,
+        "model_retries_observed": 0.0,
+    }
+    raw_result = (
+        output.get("generation_result") if isinstance(output, Mapping) else None
+    )
+    acceptance = (
+        output.get("independent_acceptance")
+        if isinstance(output, Mapping)
+        else None
+    )
+    if not isinstance(raw_result, Mapping) or not isinstance(acceptance, Mapping):
+        return {
+            "metrics": zero_metrics,
+            "inputs": score_records_by_input((), expected_records),
+        }
+
+    artifact = raw_result.get("artifact")
+    actual_records = (
+        artifact.get("records")
+        if isinstance(artifact, Mapping) and isinstance(artifact.get("records"), list)
+        else []
+    )
+    generation_success = raw_result.get("status") == "success"
+    acceptance_valid = acceptance.get("valid") is True
+    count_matches = len(actual_records) == len(expected_records)
+    records_exact = _canonical_json(actual_records) == _canonical_json(expected_records)
+    leaf_precision, leaf_recall, leaf_f1 = _precision_recall_f1(
+        _leaf_counter(actual_records),
+        _leaf_counter(expected_records),
+    )
+    diagnostics = score_records_by_input(actual_records, expected_records)
+    input_count = len(diagnostics)
+    exact_count = sum(item["records_exact_match"] for item in diagnostics)
+    present_count = sum(item["actual_present"] for item in diagnostics)
+    metadata = raw_result.get("metadata")
+    if not isinstance(metadata, Mapping):
+        metadata = {}
+    metrics = dict(zero_metrics)
+    metrics.update(
+        candidate_pass=float(generation_success and acceptance_valid and records_exact),
+        generation_success=float(generation_success),
+        independent_acceptance=float(acceptance_valid),
+        record_count_match=float(count_matches),
+        records_exact_match=float(records_exact),
+        leaf_precision=leaf_precision,
+        leaf_recall=leaf_recall,
+        leaf_f1=leaf_f1,
+        input_present_count=float(present_count),
+        input_exact_match_count=float(exact_count),
+        input_exact_match_rate=float(exact_count / input_count) if input_count else 0.0,
+        input_leaf_precision_macro=(
+            sum(item["leaf_precision"] for item in diagnostics) / input_count
+            if input_count
+            else 0.0
+        ),
+        input_leaf_recall_macro=(
+            sum(item["leaf_recall"] for item in diagnostics) / input_count
+            if input_count
+            else 0.0
+        ),
+        input_leaf_f1_macro=(
+            sum(item["leaf_f1"] for item in diagnostics) / input_count
+            if input_count
+            else 0.0
+        ),
+        finish_called=float(
+            generation_success and metadata.get("termination_reason") == "success",
+        ),
+        first_ttp_passed=float(metadata.get("first_ttp_passed") is True),
+    )
+    for name in (
+        "elapsed_seconds",
+        "agent_rounds",
+        "ttp_agent_rounds",
+        "tool_call_starts",
+        "tool_result_errors",
+        "ttp_submissions",
+        "ttp_no_tool_responses",
+        "ttp_no_tool_retries",
+        "model_retries_observed",
+    ):
+        value = metadata.get(name, 0)
+        if isinstance(value, int | float) and not isinstance(value, bool):
+            metrics[name] = float(value)
+    return {
+        "metrics": metrics,
+        "inputs": diagnostics,
+        "extra_actual_input_count": max(0, len(actual_records) - len(expected_records)),
+    }
+
+
 def _json_mapping(value: Any) -> Mapping[str, Any]:
     if isinstance(value, Mapping):
         return value
@@ -1191,7 +1611,7 @@ def project_candidate_quality(
 
 
 def _project_schema_quality(span: Mapping[str, Any]) -> dict[str, Any]:
-    """Project a Schema submission without retaining schema/evidence data."""
+    """Project a Schema submission without retaining raw schema data."""
 
     payload = _candidate_payload(span)
     issue_values = payload.get("issues")

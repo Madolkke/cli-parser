@@ -22,7 +22,6 @@ GenerationStatus = Literal["success", "failed"]
 IssueSeverity = Literal["error", "warning"]
 
 _ISSUE_CODE_RE = re.compile(r"^[a-z][a-z0-9_.-]*$")
-_FIELD_SEGMENT_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class ContractModel(BaseModel):
@@ -78,42 +77,10 @@ class TemplateRequest(ContractModel):
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
 
-class FieldEvidence(ContractModel):
-    """Source evidence for one inferred leaf field in a result schema.
-
-    ``path`` is a JSON-path-like pointer whose object keys are ASCII snake_case and
-    whose array positions are represented by ``*`` (for example,
-    ``/interfaces/*/name``).
-    """
-
-    path: str = Field(min_length=2, max_length=2_048)
-    output_index: int = Field(ge=0, lt=MAX_COMMAND_OUTPUTS)
-    excerpt: str = Field(min_length=1, max_length=4_096)
-
-    @field_validator("path")
-    @classmethod
-    def path_uses_supported_segments(cls, value: str) -> str:
-        if not value.startswith("/") or value.endswith("/"):
-            raise ValueError("evidence path must start with '/' and not end with '/'")
-        segments = value[1:].split("/")
-        if segments[0] == "*":
-            raise ValueError("evidence path must begin with an object field")
-        if any(
-            segment != "*" and not _FIELD_SEGMENT_RE.fullmatch(segment)
-            for segment in segments
-        ):
-            raise ValueError(
-                "evidence path segments must be '*' or ASCII snake_case field names",
-            )
-        return value
-
-
 class SchemaSubmission(ContractModel):
     """Internal structured payload accepted by the schema submission tool."""
 
     result_schema: dict[str, JsonValue]
-    evidence: list[FieldEvidence] = Field(min_length=1, max_length=256)
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
@@ -126,8 +93,6 @@ class SchemaProposal(ContractModel):
     """
 
     result_schema: dict[str, JsonValue]
-    evidence: list[FieldEvidence] = Field(default_factory=list)
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
@@ -138,7 +103,6 @@ class ArtifactBundle(ContractModel):
     ttp_template: str = Field(min_length=1)
     result_schema: dict[str, JsonValue]
     records: list[dict[str, JsonValue]] = Field(min_length=1)
-    assumptions: list[str] = Field(default_factory=list)
 
     _root_schema = field_validator("result_schema")(_validate_root_object_schema)
 
@@ -291,7 +255,6 @@ Metadata = GenerationMetadata
 
 __all__ = [
     "ArtifactBundle",
-    "FieldEvidence",
     "GenerationMetadata",
     "GenerationRequest",
     "GenerationResult",

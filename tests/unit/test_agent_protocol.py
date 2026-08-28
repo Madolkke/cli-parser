@@ -144,7 +144,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v21-separated-record-blocks-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v24-no-assumptions-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -155,7 +155,8 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "只在部分实例出现的字段应保持可选" in SCHEMA_SYSTEM_PROMPT
     assert "省略该键" in SCHEMA_SYSTEM_PROMPT
     assert "允许忠实使用空 string" in SCHEMA_SYSTEM_PROMPT
-    assert "中文" in SCHEMA_SYSTEM_PROMPT
+    assert "Python 关键字也是合法字段名" in SCHEMA_SYSTEM_PROMPT
+    assert "标量字段不能命名为 `ignore`" in SCHEMA_SYSTEM_PROMPT
     assert "1-3" not in SCHEMA_SYSTEM_PROMPT
     assert "TTP" not in SCHEMA_SYSTEM_PROMPT
     assert "submit_ttp_template" not in SCHEMA_SYSTEM_PROMPT
@@ -204,6 +205,7 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "未命名的最外层 group 对应根 object 本身" in TTP_SYSTEM_PROMPT
     assert '{{ ignore("\\s*") }}' in TTP_SYSTEM_PROMPT
     assert "吸收可变前导空白" in TTP_SYSTEM_PROMPT
+    assert "Python 关键字字段" in TTP_SYSTEM_PROMPT
     # Every reply must call exactly one tool; plain text is discarded and only
     # burns budget (0.67 mean no-tool TTP responses observed per trial).
     assert "必须恰好调用这两个工具之一" in TTP_SYSTEM_PROMPT
@@ -216,18 +218,12 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
     assert "只有每行都有的列才是" in SCHEMA_SYSTEM_PROMPT
     assert "submit_result_schema" not in TTP_SYSTEM_PROMPT
+    assert "evidence" not in SCHEMA_SYSTEM_PROMPT
     assert "evidence" not in TTP_SYSTEM_PROMPT
+    assert "assumptions" not in SCHEMA_SYSTEM_PROMPT
     assert "assumptions" not in TTP_SYSTEM_PROMPT
 
-    schema_tokens = (
-        "JSON Schema",
-        "evidence_not_found",
-        "required_action",
-        "replace_excerpt",
-        "change_output_index",
-        "matching_output_indexes",
-        "/interfaces/*/name",
-    )
+    schema_tokens = ("JSON Schema", "required 的判定必须逐实例枚举")
     for token in schema_tokens:
         assert token in SCHEMA_SYSTEM_PROMPT
 
@@ -265,28 +261,11 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert "submit_ttp_template" not in schema_protocol
     assert set(schema_contract["properties"]) == {
         "result_schema",
-        "evidence",
-        "assumptions",
     }
     for property_schema in schema_contract["properties"].values():
         assert _contains_chinese(property_schema["description"])
 
-    evidence_contract = schema_contract["$defs"]["FieldEvidenceInput"]
-    assert set(evidence_contract["properties"]) == {
-        "path",
-        "output_index",
-        "excerpt",
-    }
-    for property_schema in evidence_contract["properties"].values():
-        assert _contains_chinese(property_schema["description"])
-    assert "恰好一条" not in schema_protocol
-    assert "至少" in schema_contract["properties"]["evidence"]["description"]
-    assert "maxItems" not in schema_contract["properties"]["evidence"]
-
-    assumptions_description = schema_contract["properties"]["assumptions"][
-        "description"
-    ]
-    assert "中文 assumptions" in assumptions_description
+    assert "$defs" not in schema_contract
 
     template_contract = SubmitTtpTemplateTool.input_schema
     template_protocol = SubmitTtpTemplateTool.description + json.dumps(
@@ -370,7 +349,6 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
 
     rejected = await tool.call(
         result_schema=_schema("wrong"),
-        evidence=[{"path": "/wrong", "output_index": 0, "excerpt": "one"}],
     )
     assert _payload(rejected)["accepted"] is False
     assert session.frozen_schema is None
@@ -378,28 +356,15 @@ async def test_schema_rejection_can_be_corrected_then_frozen_once() -> None:
     accepted_schema = _schema()
     accepted = await tool.call(
         result_schema=accepted_schema,
-        evidence=[
-            {"path": "/value", "output_index": 0, "excerpt": "one"},
-            {"path": "/value", "output_index": 1, "excerpt": "two"},
-        ],
-        assumptions=["这些值按标签处理。"],
     )
     assert _payload(accepted)["accepted"] is True
     assert _payload(accepted)["next_action"] == "finish_schema"
     assert session.schema_submissions == 2
     assert session.frozen_schema == _schema()
-    assert session.field_evidence == (
-        {"path": "/value", "output_index": 0, "excerpt": "one"},
-        {"path": "/value", "output_index": 1, "excerpt": "two"},
-    )
-    assert session.assumptions == ("这些值按标签处理。",)
     assert seen[-1].command_outputs == ("value: one", "value: two")
     accepted_schema["properties"]["value"]["type"] = "integer"
     replacement = await tool.call(
         result_schema=_schema("replacement"),
-        evidence=[
-            {"path": "/replacement", "output_index": 0, "excerpt": "one"},
-        ],
     )
     replacement_payload = _payload(replacement)
     assert replacement_payload["accepted"] is False
@@ -434,12 +399,8 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
         template_validator=_unused_template_validator,
     )
     schema = _schema()
-    evidence = [{"path": "/value", "output_index": 0, "excerpt": "one"}]
-
     result = await SubmitResultSchemaTool(session).call(
         result_schema=schema,
-        evidence=evidence,
-        assumptions=["按字符串处理。"],
     )
     payload = _payload(result)
 
@@ -448,8 +409,6 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
             "name": SUBMIT_SCHEMA_TOOL_NAME,
             "input": {
                 "result_schema": schema,
-                "evidence": evidence,
-                "assumptions": ["按字符串处理。"],
             },
             "span_type": "TOOL",
         },
@@ -468,8 +427,25 @@ async def test_schema_tool_span_records_the_full_submission_and_result(
 
 
 @pytest.mark.asyncio
-async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> None:
-    secret = "schema-evidence-secret-7b459b"
+async def test_legacy_schema_arguments_are_rejected_without_disclosure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_value = "schema-legacy-secret-7b459b"
+    secret_field = "legacy_secret_field_c52679"
+    starts: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
+
+    @contextmanager
+    def start(name: str, **kwargs: Any) -> Any:
+        starts.append({"name": name, **kwargs})
+        yield object()
+
+    monkeypatch.setattr(tools_module, "start_laminar_span", start)
+    monkeypatch.setattr(
+        tools_module,
+        "finish_laminar_span",
+        lambda **kwargs: finishes.append(kwargs),
+    )
     session = GenerationSession(
         command_outputs=["value: one"],
         schema_validator=_unused_schema_validator,
@@ -481,13 +457,8 @@ async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> Non
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "evidence": [
-                    {
-                        "path": "/value",
-                        "output_index": 0,
-                        "excerpt": {"untrusted": secret},
-                    },
-                ],
+                "assumptions": [secret_value],
+                secret_field: "another-secret-value",
             },
         ),
     )
@@ -497,10 +468,42 @@ async def test_invalid_schema_input_is_redacted_from_tool_result_events() -> Non
     text = _event_text(events)
     payload = cast(dict[str, Any], json.loads(text))
     assert payload["accepted"] is False
-    assert payload["issues"][0]["code"] == "schema.submission_invalid"
-    assert secret not in text
-    assert "input_value" not in text
+    assert payload["issues"] == [
+        {
+            "code": "schema.submission_invalid",
+            "stage": "schema",
+            "message": "Schema submission does not satisfy the tool contract.",
+        },
+    ]
+    diagnostic_text = json.dumps(
+        {"events": text, "starts": starts, "finishes": finishes},
+        ensure_ascii=False,
+    )
+    for sensitive_text in (
+        "assumptions",
+        secret_value,
+        secret_field,
+        "another-secret-value",
+    ):
+        assert sensitive_text not in diagnostic_text
+    assert starts == [
+        {
+            "name": SUBMIT_SCHEMA_TOOL_NAME,
+            "input": {
+                "result_schema": _schema(),
+                "invalid_tool_arguments": True,
+            },
+            "span_type": "TOOL",
+        },
+    ]
+    assert any(
+        isinstance(event, ToolResultEndEvent)
+        and event.state == ToolResultState.SUCCESS
+        for event in events
+    )
     assert session.schema_submissions == 0
+    assert session.last_result_schema is None
+    assert session.frozen_schema is None
     assert session.last_issues == tuple(payload["issues"])
 
 
@@ -509,7 +512,7 @@ async def test_schema_validator_exception_is_redacted_from_agent_events() -> Non
     secret = "schema-validator-secret-c52679"
 
     def fail_with_candidate(candidate: SchemaCandidate) -> ValidatorOutcome:
-        raise RuntimeError(f"{secret}: {candidate.evidence!r}")
+        raise RuntimeError(f"{secret}: {candidate.result_schema!r}")
 
     session = GenerationSession(
         command_outputs=["value: one"],
@@ -522,13 +525,6 @@ async def test_schema_validator_exception_is_redacted_from_agent_events() -> Non
         input=json.dumps(
             {
                 "result_schema": _schema(),
-                "evidence": [
-                    {
-                        "path": "/value",
-                        "output_index": 0,
-                        "excerpt": secret,
-                    },
-                ],
             },
         ),
     )
@@ -564,9 +560,6 @@ async def test_schema_validator_cancellation_propagates() -> None:
     with pytest.raises(asyncio.CancelledError):
         await SubmitResultSchemaTool(session).call(
             result_schema=_schema(),
-            evidence=[
-                {"path": "/value", "output_index": 0, "excerpt": "one"},
-            ],
         )
 
     assert session.schema_submissions == 1

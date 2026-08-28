@@ -74,14 +74,6 @@ def _schema_call(call_id: str = "schema") -> ChatResponse:
             input=json.dumps(
                 {
                     "result_schema": _schema(),
-                    "evidence": [
-                        {
-                            "path": "/value",
-                            "output_index": 0,
-                            "excerpt": "one",
-                        },
-                    ],
-                    "assumptions": [],
                 },
             ),
         ),

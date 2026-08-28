@@ -21,7 +21,7 @@ Read `AGENTS.md`, `docs/agent-evaluation.md`, and [references/run-and-analyze.md
 
 ## Operating Rules
 
-- Official evaluation assets are single-input: `baseline` is 3 cases and `smoke` is 12 cases. The runner's public API boundary remains unchanged.
+- Official evaluation assets are single-input: the complete `all` suite is 31 cases and `smoke` is 5 cases. The runner's public API boundary remains unchanged.
 - A live run requires a model configuration plus `LMNR_PROJECT_API_KEY`, `LMNR_BASE_URL`, `LMNR_HTTP_PORT`, `LMNR_GRPC_PORT`, and `LMNR_FRONTEND_PORT`.
 - Treat a one-trial result as diagnostic evidence, not a reliability claim. Use repeated trials for rates or configuration comparisons, and state the sample count.
 - Keep high-budget diagnostics isolated from default acceptance runs. The documented diagnostic profile is `7200s / 32 rounds / 24 submissions / 120s model timeout`.

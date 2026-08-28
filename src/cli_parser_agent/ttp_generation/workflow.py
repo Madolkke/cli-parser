@@ -36,7 +36,6 @@ from .agent import (
 )
 from .contracts import (
     ArtifactBundle,
-    FieldEvidence,
     GenerationMetadata,
     GenerationRequest,
     GenerationResult,
@@ -53,7 +52,6 @@ from .sampling import (
 )
 from .validation import (
     validate_result_schema,
-    validate_schema_proposal,
     validate_ttp_template,
 )
 
@@ -625,41 +623,11 @@ class _GenerationWorkflow:
         self,
         candidate: SchemaCandidate,
     ) -> ValidatorOutcome:
-        evidence: list[FieldEvidence] = []
-        evidence_issues: list[ValidationIssue] = []
-        for item in candidate.evidence:
-            try:
-                parsed = FieldEvidence.model_validate(item)
-            except ValidationError:
-                evidence_issues.append(
-                    _issue(
-                        "schema.invalid_evidence",
-                        "Field evidence does not satisfy the submission contract.",
-                        stage="schema",
-                    ),
-                )
-                continue
-            if len(parsed.excerpt) > self.policy.max_evidence_excerpt_chars:
-                evidence_issues.append(
-                    _issue(
-                        "schema.evidence_excerpt_too_long",
-                        "Field evidence exceeds the configured character limit.",
-                        stage="schema",
-                    ),
-                )
-                continue
-            evidence.append(parsed)
-        if evidence_issues:
-            return ValidatorOutcome(valid=False, issues=tuple(evidence_issues))
-
-        issues = validate_schema_proposal(
+        issues = validate_result_schema(
             candidate.result_schema,
-            evidence,
-            candidate.command_outputs,
             max_schema_bytes=self.policy.max_schema_bytes,
             max_schema_depth=self.policy.max_schema_depth,
             max_schema_properties=self.policy.max_schema_properties,
-            max_schema_evidence=self.policy.max_schema_evidence,
         )
         return ValidatorOutcome(valid=not issues, issues=tuple(issues))
 
@@ -755,10 +723,9 @@ class _GenerationWorkflow:
     ) -> GenerationResult | None:
         """Validate and freeze a caller-supplied schema, or fail the request.
 
-        Evidence is absent by construction here, so this runs the schema-only
-        closed-subset check rather than ``validate_schema_proposal``.  Every
-        later gate (TTP AST allowlist, record re-verification, acceptance) is
-        untouched.
+        The schema-only closed-subset check is the shared Schema gate for both
+        inferred and caller-supplied schemas. Every later gate (TTP AST
+        allowlist, record re-verification, acceptance) is untouched.
         """
 
         issues = validate_result_schema(
@@ -1177,38 +1144,11 @@ class _GenerationWorkflow:
         )
 
     def _validate_frozen_schema(self) -> list[ValidationIssue]:
-        if self.mode == "template_only":
-            # A caller-supplied schema has no per-leaf evidence by construction,
-            # so acceptance re-runs the schema-only closed-subset check.  Every
-            # other gate (TTP allowlist, spawn isolation, record re-validation)
-            # is unchanged.
-            return validate_result_schema(
-                self.session.frozen_schema,
-                max_schema_bytes=self.policy.max_schema_bytes,
-                max_schema_depth=self.policy.max_schema_depth,
-                max_schema_properties=self.policy.max_schema_properties,
-            )
-        try:
-            frozen_evidence = [
-                FieldEvidence.model_validate(item)
-                for item in self.session.field_evidence
-            ]
-        except ValidationError:
-            return [
-                _issue(
-                    "schema.invalid_frozen_evidence",
-                    "Frozen field evidence failed final validation.",
-                    stage="acceptance",
-                ),
-            ]
-        return validate_schema_proposal(
+        return validate_result_schema(
             self.session.frozen_schema,
-            frozen_evidence,
-            tuple(self.request.command_outputs),
             max_schema_bytes=self.policy.max_schema_bytes,
             max_schema_depth=self.policy.max_schema_depth,
             max_schema_properties=self.policy.max_schema_properties,
-            max_schema_evidence=self.policy.max_schema_evidence,
         )
 
     async def _accept_artifact_impl(
@@ -1335,7 +1275,6 @@ class _GenerationWorkflow:
                 ttp_template=self.session.validated_ttp_template,
                 result_schema=deepcopy(self.session.frozen_schema),
                 records=deepcopy(acceptance.records),
-                assumptions=list(self.session.assumptions),
             )
 
         artifact_started = time.monotonic()
@@ -1536,11 +1475,6 @@ class _GenerationWorkflow:
             status="success",
             proposal=SchemaProposal(
                 result_schema=deepcopy(self.session.frozen_schema),
-                evidence=[
-                    FieldEvidence.model_validate(item)
-                    for item in self.session.field_evidence
-                ],
-                assumptions=list(self.session.assumptions),
             ),
             metadata=self._metadata("success"),
         )

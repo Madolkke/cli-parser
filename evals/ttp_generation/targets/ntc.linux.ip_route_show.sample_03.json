@@ -1,0 +1,25 @@
+{
+  "records": [
+    {
+      "routes": [
+        {"destination": "default", "via": "192.168.1.1", "dev": "enp0s25", "proto": "dhcp", "scope": "link", "src": "192.168.1.19", "metric": "100"},
+        {"destination": "192.168.1.0/24", "dev": "enp0s25", "proto": "kernel", "scope": "link", "src": "192.168.1.19", "metric": "100"},
+        {"destination": "192.168.88.0/24", "dev": "br0", "proto": "kernel", "scope": "link", "src": "192.168.88.254", "metric": "425", "linkdown": true},
+        {"destination": "192.168.122.0/24", "dev": "virbr0", "proto": "kernel", "scope": "link", "src": "192.168.122.1", "linkdown": true}
+      ]
+    }
+  ],
+  "schema_contract": [
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/routes", "type": "array", "required": true},
+    {"path": "/routes/*", "type": "object", "required": false},
+    {"path": "/routes/*/destination", "type": "string", "required": true},
+    {"path": "/routes/*/via", "type": "string", "required": false},
+    {"path": "/routes/*/dev", "type": "string", "required": true},
+    {"path": "/routes/*/proto", "type": "string", "required": true},
+    {"path": "/routes/*/scope", "type": "string", "required": true},
+    {"path": "/routes/*/src", "type": "string", "required": true},
+    {"path": "/routes/*/metric", "type": "string", "required": false},
+    {"path": "/routes/*/linkdown", "type": "boolean", "required": false}
+  ]
+}

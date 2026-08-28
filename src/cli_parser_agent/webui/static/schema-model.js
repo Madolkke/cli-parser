@@ -27,6 +27,13 @@
     for (const key of COMMON) if (Object.prototype.hasOwnProperty.call(node, key)) next[key] = clone(node[key]);
     return next;
   }
+  function renameProperty(properties, oldName, newName) {
+    if (oldName === newName) return { ok: true, properties };
+    if (!newName) return { ok: false, reason: "empty" };
+    if (Object.prototype.hasOwnProperty.call(properties, newName)) return { ok: false, reason: "duplicate" };
+    const next = Object.fromEntries(Object.entries(properties).map(([key, value]) => [key === oldName ? newName : key, value]));
+    return { ok: true, properties: next };
+  }
   function normalise(schema) {
     const rootNode = normaliseNode(schema);
     if (rootNode.type !== "object") throw new Error("根节点必须是 object");
@@ -84,5 +91,5 @@
       return null;
     }).filter(Boolean);
   }
-  return { TYPES, FIELD_RE, TYPE_KEYS, createNode, changeType, clone, normalise, validate, validateInputs, utf8Bytes };
+  return { TYPES, FIELD_RE, TYPE_KEYS, createNode, changeType, renameProperty, clone, normalise, validate, validateInputs, utf8Bytes };
 });

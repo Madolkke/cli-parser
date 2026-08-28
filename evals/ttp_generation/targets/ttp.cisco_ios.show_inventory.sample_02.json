@@ -1,92 +1,60 @@
 {
   "records": [
     {
-      "inventory": [
+      "inventory_items": [
         {
           "name": "LAB2921/K9",
-          "description": "LAB2921/K9 chassis, Hw Serial#: FOC1234L0AB, Hw Revision: 1.0",
+          "descr": "LAB2921/K9 chassis, Hw Serial#: FOC1234L0AB, Hw Revision: 1.0",
           "pid": "LAB2921/K9",
           "vid": "V08",
-          "serial_number": "FOC1234L0AB"
+          "sn": "FOC1234L0AB"
         },
         {
           "name": "4 Port GE Non-POE EHWIC Switch on Slot 0 SubSlot 0",
-          "description": "4 Port GE Non-POE EHWIC Switch",
+          "descr": "4 Port GE Non-POE EHWIC Switch",
           "pid": "LAB-EHWIC-4GE",
           "vid": "V01",
-          "serial_number": "FOC2345M1BC"
+          "sn": "FOC2345M1BC"
         },
         {
           "name": "4G WWAN EHWIC - Lab Region Multimode LTE/DC-HSPA+/HSPA+/HSPA/UMTS/EDGE/GPRS on Slot 0 SubSlot 1",
-          "description": "4G WWAN EHWIC - Lab Region Multimode LTE/DC-HSPA+/HSPA+/HSPA/UMTS/EDGE/GPRS",
+          "descr": "4G WWAN EHWIC - Lab Region Multimode LTE/DC-HSPA+/HSPA+/HSPA/UMTS/EDGE/GPRS",
           "pid": "LAB-EHWIC-LTE",
           "vid": "V01",
-          "serial_number": "FOC3456N2CD"
+          "sn": "FOC3456N2CD"
         },
         {
           "name": "Modem 0 on Cellular0/1/0",
-          "description": "Lab Wireless MC7354 LTE",
+          "descr": "Lab Wireless MC7354 LTE",
           "pid": "MC7354-LAB-LTE",
           "vid": "1.0",
-          "serial_number": "FOC4567P3DE"
+          "sn": "FOC4567P3DE"
         },
         {
           "name": "LAB-SM-48-P: EtherSwitch SM L3 + PoEPlus + MACSec + 48 10/100/1000 + 2 SFP on Slot 1",
-          "description": "LAB-SM-48-P: EtherSwitch SM L3 + PoEPlus + MACSec + 48 10/100/1000 + 2 SFP",
+          "descr": "LAB-SM-48-P: EtherSwitch SM L3 + PoEPlus + MACSec + 48 10/100/1000 + 2 SFP",
           "pid": "LAB-SM-48-P",
           "vid": "V01",
-          "serial_number": "FOC5678Q4EF"
+          "sn": "FOC5678Q4EF"
         },
         {
           "name": "LAB2921/LAB2951 AC-POE Power Supply",
-          "description": "LAB2921/LAB2951 AC-POE Power Supply",
+          "descr": "LAB2921/LAB2951 AC-POE Power Supply",
           "pid": "LAB-PWR-POE",
           "vid": "V03",
-          "serial_number": "FOC6789R5FG"
+          "sn": "FOC6789R5FG"
         }
       ]
     }
   ],
   "schema_contract": [
-    {
-      "path": "/",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/inventory",
-      "type": "array",
-      "required": true
-    },
-    {
-      "path": "/inventory/*",
-      "type": "object",
-      "required": false
-    },
-    {
-      "path": "/inventory/*/name",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/description",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/pid",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/vid",
-      "type": "string",
-      "required": true
-    },
-    {
-      "path": "/inventory/*/serial_number",
-      "type": "string",
-      "required": true
-    }
+    {"path": "/", "type": "object", "required": false},
+    {"path": "/inventory_items", "type": "array", "required": true},
+    {"path": "/inventory_items/*", "type": "object", "required": false},
+    {"path": "/inventory_items/*/name", "type": "string", "required": true},
+    {"path": "/inventory_items/*/descr", "type": "string", "required": true},
+    {"path": "/inventory_items/*/pid", "type": "string", "required": true},
+    {"path": "/inventory_items/*/vid", "type": "string", "required": true},
+    {"path": "/inventory_items/*/sn", "type": "string", "required": true}
   ]
 }

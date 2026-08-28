@@ -89,9 +89,9 @@ class TtpGenerator:
     ) -> SchemaProposalResult:
         """Freeze a result schema without generating a template.
 
-        Runs the Schema phase alone and returns the frozen proposal with its
-        evidence and assumptions, so a caller can review or edit it and feed it
-        back through :meth:`generate_from_schema`.
+        Runs the Schema phase alone and returns the frozen proposal, so a
+        caller can review or edit it and feed it back through
+        :meth:`generate_from_schema`.
         """
 
         return await self._traced_generate(
@@ -152,7 +152,6 @@ class TtpGenerator:
                 self.policy.ttp_validation_timeout_seconds
             ),
             "policy_model_input_char_budget": self.policy.model_input_char_budget,
-            "policy_max_schema_evidence": self.policy.max_schema_evidence,
             "generation_mode": mode,
         }
         if progress.enabled:

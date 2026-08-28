@@ -427,18 +427,44 @@ def test_injected_schema_still_enforces_the_closed_subset() -> None:
     assert workflow.session.frozen_schema is None
 
 
-def test_template_only_acceptance_does_not_require_field_evidence() -> None:
-    """Regression guard for the one deliberate validation difference.
+def test_injected_schema_accepts_python_keyword_field_name() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"as": {"type": "string"}},
+        "required": ["as"],
+        "additionalProperties": False,
+    }
+    workflow = _template_only_workflow(schema)
 
-    A caller-supplied schema has no per-leaf evidence, so acceptance must run
-    the schema-only check.  Restoring ``validate_schema_proposal`` here would
-    fail every leaf with ``schema.evidence_missing``.
-    """
+    assert workflow._freeze_injected_schema(workflow.injected_schema) is None
+    assert workflow.session.frozen_schema == schema
+
+
+def test_injected_schema_rejects_scalar_ignore_before_ttp_phase() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"ignore": {"type": "string"}},
+        "required": ["ignore"],
+        "additionalProperties": False,
+    }
+    workflow = _template_only_workflow(schema)
+
+    result = workflow._freeze_injected_schema(workflow.injected_schema)
+
+    assert result is not None
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "invalid_injected_schema"
+    assert [issue.code for issue in result.issues] == [
+        "schema.reserved_scalar_field_name",
+    ]
+    assert workflow.session.frozen_schema is None
+
+
+def test_template_only_acceptance_uses_the_closed_schema_check() -> None:
+    """Caller-supplied schemas use the same closed-subset check as inference."""
 
     workflow = _template_only_workflow(_closed_schema())
     assert workflow._freeze_injected_schema(workflow.injected_schema) is None
-    assert workflow.session.field_evidence == ()
-
     assert workflow._validate_frozen_schema() == []
 
 

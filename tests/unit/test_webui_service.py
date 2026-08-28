@@ -25,8 +25,14 @@ from agentscope.event import (
 from agentscope.message import ToolResultState
 from fastapi.testclient import TestClient
 
+from cli_parser_agent.config import GenerationPolicy, TtpGeneratorSettings
 from cli_parser_agent.webui.agent_service import project_agent_event
 from cli_parser_agent.webui.app import create_app
+from cli_parser_agent.webui.runtime_config import (
+    RuntimeParameters,
+    public_config_payload,
+    resolve_runtime_config,
+)
 from cli_parser_agent.webui.store import RunStore
 
 SCHEMA = {
@@ -42,6 +48,20 @@ class StubService:
 
     def __init__(self) -> None:
         self.calls: list[tuple[Any, ...]] = []
+        self.settings = TtpGeneratorSettings(
+            api_key="stub-key",
+            model_name="stub-model",
+        )
+        self.policy = GenerationPolicy()
+
+    def resolve_runtime_config(
+        self,
+        parameters: RuntimeParameters | None = None,
+    ) -> Any:
+        return resolve_runtime_config(self.settings, self.policy, parameters)
+
+    def public_runtime_config(self) -> dict[str, Any]:
+        return public_config_payload(self.resolve_runtime_config())
 
     def validate_inputs(self, command_outputs: list[str]) -> list[str]:
         return list(command_outputs)
@@ -52,6 +72,7 @@ class StubService:
         command_outputs: list[str],
         *,
         observer: Any = None,
+        runtime_config: Any = None,
     ) -> dict[str, Any]:
         self.calls.append((mode, list(command_outputs)))
         return {
@@ -72,6 +93,7 @@ class StubService:
         result_schema: dict[str, Any],
         *,
         observer: Any = None,
+        runtime_config: Any = None,
     ) -> dict[str, Any]:
         self.calls.append(("from_schema", list(command_outputs), result_schema))
         return await self.run("from_schema", command_outputs, observer=observer)

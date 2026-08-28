@@ -71,7 +71,7 @@ per command output, with an explicit `input_index`. The public result keeps its
 ### Proposing a schema for review
 
 `propose_schema()` runs only the Schema phase and returns the frozen proposal
-with its evidence and assumptions, so you can review or edit the field names
+so you can review or edit the field names
 before a template is generated:
 
 ```python
@@ -82,13 +82,18 @@ proposal = await TtpGenerator.from_env().propose_schema(
 )
 if proposal.status == "success":
     print(proposal.proposal.result_schema)
-    print(proposal.proposal.assumptions)
 ```
 
 It returns a `SchemaProposalResult` rather than a `GenerationResult`: a
 successful proposal has no template and no records, so it cannot satisfy
 `ArtifactBundle`. Pair it with `generate_from_schema()` below to get a
 propose → review → generate workflow.
+
+`SchemaSubmission`, `SchemaProposal`, and `ArtifactBundle` do not contain an
+`assumptions` field. This is a breaking contract change: payloads from older
+versions that still include the field are rejected by the Pydantic contracts.
+Existing WebUI run files are not migrated; they remain readable as local raw
+history and can still be used as the source of a Schema rerun.
 
 ### Running the TTP phase alone
 
@@ -126,9 +131,13 @@ result = await TtpGenerator.from_env().generate_from_schema(
 ```
 
 The schema must satisfy the same closed Draft 2020-12 subset the Schema phase
-produces. Per-leaf source evidence is not required here, since the schema is given
-rather than inferred; every other check — TTP allowlist, isolated parsing, and record
+produces. The Schema phase and caller-supplied mode use the same schema-only
+validation; every other check — TTP allowlist, isolated parsing, and record
 re-validation against the schema — is unchanged.
+ASCII `snake_case` Python keywords such as `as`, `class`, and `for` are valid
+field names and are preserved in TTP records. The scalar property name `ignore`
+is reserved by TTP and is rejected during schema validation; object and array
+containers named `ignore` remain valid.
 
 ## Zero-argument development run
 
@@ -150,6 +159,19 @@ uv run --env-file .env python scripts/run_ttp_phase_once.py
 
 Results are written under `.artifacts/ttp-phase-once/`.
 
+For repeatable, scored TTP-only tests, provide an external manifest with a
+schema file, one to five input files, and expected records per case:
+
+```powershell
+uv run --env-file .env python scripts/run_ttp_template_evaluation.py preflight --manifest C:\fixtures\ttp-eval\manifest.json
+uv run --env-file .env python scripts/run_ttp_template_evaluation.py run --manifest C:\fixtures\ttp-eval\manifest.json --suite smoke
+```
+
+`list` and `preflight` are offline. `run` calls only `generate_from_schema()`
+and writes complete per-case results under `.artifacts/ttp-template-evaluation/`.
+See [TTP-only evaluation](docs/ttp-template-evaluation.md) for the manifest
+format and artifact boundary.
+
 ## Local WebUI
 
 设置模型环境变量后启动本地界面：
@@ -169,7 +191,22 @@ uv run --env-file .env python scripts/run_webui.py
 
 生成在后台执行，进度经 SSE 实时推送，可随时取消。每次运行保存在被 Git 忽略的
 `data/runs/<UTC 时间戳>/` 下（`meta.json`、`inputs.json`、`schema.json`、
-`result.json`、`events.jsonl`），历史列表就是目录扫描，删除即删目录。
+`result.json`、`events.jsonl`、`config.json`），历史列表就是目录扫描，删除即删目录。
+已结束的任务若有已保存 Schema，或成功结果中有冻结 Schema，可在详情页创建独立的
+“以此 Schema 重新生成”任务。它只运行 TTP 阶段，复制来源输入与 Schema，在 metadata
+中记录来源任务；来源任务的结果与事件记录不会被覆盖。
+
+新建任务和 Schema 重新生成都可以展开“运行参数”面板，覆盖本次使用的模型配置和
+`GenerationPolicy`。空白项继承 WebUI 启动时从 `.env` 读取的基线；参数只在任务启动前
+生效。`extra_body` 继续只从环境配置读取，`parallel_tool_calls` 固定为 `false`。
+实际生效配置保存到该运行的 `config.json`，用于复现；在本地单用户约束下，用户明确提供
+的 API Key 也会以明文写入这个 Git 忽略文件。历史接口、SSE、普通日志和事件投影只返回
+脱敏配置，不返回 Key。
+
+WebUI 的 SSE 使用浏览器默认 `message` 事件，业务事件类型由 JSON 正文的 `type`
+字段分发；断线可通过 `Last-Event-ID` 或 `after_sequence` 继续重放。Thinking、
+模型文本和工具增量在服务端按 50ms 或 4 KiB 合并后再分配 sequence、落盘和广播，
+因此文本完整且顺序可重建，但不保留供应商逐 token 的边界。
 
 同一时刻只允许一次生成在跑。这是单用户本地工具：只绑回环地址、无鉴权、无并发
 隔离，不是部署形态。

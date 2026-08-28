@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "smoke.test.show_interfaces_status",
+      "suites": ["smoke"],
+      "tags": ["cisco-ios", "fixed-width-table"],
+      "schema": {
+        "path": ".artifacts/test/schema.json",
+        "sha256": "3a8080dfcb16194832ef049b7ddf36864fe5027d1702ea13ef1bb4789f16a678"
+      },
+      "inputs": [
+        {
+          "path": "testdata/real_command_outputs/ntc_templates/cisco_ios/show_interfaces_status/cisco_ios_show_interfaces_status.raw",
+          "sha256": "bea3ff9aa7321fbac39583b3deb5e671c6926b1d7d36e0c4abafabbccbb08814"
+        }
+      ],
+      "expected_records": {
+        "path": ".artifacts/test/expected.json",
+        "sha256": "df4918bd52963d235a98b18784d731e80fbcdd05e7a3b3003c100cf7c10e2112"
+      }
+    }
+  ]
+}

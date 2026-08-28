@@ -13,13 +13,13 @@ Do not display values of keys. Let the private environment or explicitly request
 
 ## Select A Run Shape
 
-Use a single case for a canary, latency diagnosis, or controlled configuration comparison. Use `baseline` before `smoke` when checking a new configuration. Set concurrency to one whenever timing, traces, candidates, or reasoning behavior is under analysis.
+Use a single case for a canary, latency diagnosis, or controlled configuration comparison. Use `smoke` before the complete `all` suite when checking a new configuration. Set concurrency to one whenever timing, traces, candidates, or reasoning behavior is under analysis.
 
 | Purpose | Selection | Trials | Configuration rule |
 | --- | --- | --- | --- |
 | Offline asset check | `list`, then `preflight` | n/a | No model or Laminar configuration needed. |
 | Canary | one `--case` | 1 | Keep defaults unless diagnosing one variable. |
-| Low-ambiguity baseline | `--suite baseline` | 1-3 | Start with documented defaults or one controlled profile. |
+| Smoke baseline | `--suite smoke` | 1 | Start with documented defaults or one controlled profile. |
 | Configuration comparison | the same one `--case` | 3+ if practical | Change exactly one variable per arm; retain model, prompt version, input, budgets, and concurrency otherwise. |
 | Convergence diagnosis | one `--case` | 1 | Use the high-budget profile and concurrency 1. |
 

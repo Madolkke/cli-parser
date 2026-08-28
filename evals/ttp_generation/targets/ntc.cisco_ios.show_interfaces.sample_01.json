@@ -1,0 +1,593 @@
+{
+  "records": [
+    {
+      "interfaces": [
+        {
+          "interface": "TenGigabitEthernet0/1",
+          "status": "down",
+          "line_protocol": "down",
+          "hardware": "SFP-Plus management port",
+          "address": "74ad.abcd.dcba",
+          "bia": "74ad.abcd.abcd",
+          "mtu": "1500 bytes",
+          "bandwidth": "10000000 Kbit/sec",
+          "delay": "10 usec",
+          "encapsulation": "ARPA",
+          "loopback": "not set",
+          "keepalive": "set (10 sec)",
+          "duplex": "Unknown",
+          "speed": "Unknown",
+          "link_type": "auto",
+          "media_type": "unknown media type",
+          "output_flow_control": "unsupported",
+          "input_flow_control": "unsupported",
+          "arp_type": "ARPA",
+          "arp_timeout": "04:00:00",
+          "last_input": "never",
+          "last_output": "never",
+          "output_hang": "never",
+          "last_clearing": "never",
+          "input_queue_size": "0",
+          "input_queue_max": "75",
+          "input_queue_drops": "0",
+          "input_queue_flushes": "0",
+          "total_output_drops": "0",
+          "queueing_strategy": "fifo",
+          "output_queue_size": "0",
+          "output_queue_max": "40",
+          "rate_interval": "5 minute",
+          "input_rate_bits": "0 bits/sec",
+          "input_rate_packets": "0 packets/sec",
+          "output_rate_bits": "0 bits/sec",
+          "output_rate_packets": "0 packets/sec",
+          "packets_input": "0",
+          "bytes_input": "0",
+          "no_buffer": "0",
+          "received_broadcasts": "0",
+          "received_multicasts": "0",
+          "runts": "0",
+          "giants": "0",
+          "throttles": "0",
+          "input_errors": "0",
+          "crc": "0",
+          "frame": "0",
+          "overrun": "0",
+          "ignored": "0",
+          "watchdog": "0",
+          "multicast": "0",
+          "pause_input": "0",
+          "packets_output": "0",
+          "bytes_output": "0",
+          "underruns": "0",
+          "output_broadcasts": "0",
+          "output_multicasts": "0",
+          "output_errors": "0",
+          "collisions": "0",
+          "interface_resets": "0",
+          "unknown_protocol_drops": "0",
+          "babbles": "0",
+          "late_collision": "0",
+          "deferred": "0",
+          "lost_carrier": "0",
+          "no_carrier": "0",
+          "pause_output": "0",
+          "output_buffer_failures": "0",
+          "output_buffers_swapped_out": "0"
+        },
+        {
+          "interface": "GigabitEthernet0/0/0",
+          "status": "administratively down",
+          "line_protocol": "down",
+          "hardware": "ISR4461-4x1G-2xTG",
+          "address": "c4f7.d514.6900",
+          "bia": "c4f7.d514.6900",
+          "internet_address": "111.222.0.37/30",
+          "mtu": "1500 bytes",
+          "bandwidth": "1000000 Kbit/sec",
+          "delay": "10 usec",
+          "encapsulation": "ARPA",
+          "loopback": "not set",
+          "keepalive": "not supported",
+          "duplex": "Full Duplex",
+          "speed": "1000Mbps",
+          "link_type": "auto",
+          "media_type": "Auto Select",
+          "output_flow_control": "on",
+          "input_flow_control": "on",
+          "arp_type": "ARPA",
+          "arp_timeout": "04:00:00",
+          "last_input": "3y16w",
+          "last_output": "3y16w",
+          "output_hang": "never",
+          "last_clearing": "never",
+          "input_queue_size": "0",
+          "input_queue_max": "375",
+          "input_queue_drops": "0",
+          "input_queue_flushes": "0",
+          "total_output_drops": "0",
+          "queueing_strategy": "fifo",
+          "output_queue_size": "0",
+          "output_queue_max": "40",
+          "rate_interval": "5 minute",
+          "input_rate_bits": "0 bits/sec",
+          "input_rate_packets": "0 packets/sec",
+          "output_rate_bits": "0 bits/sec",
+          "output_rate_packets": "0 packets/sec",
+          "packets_input": "49132",
+          "bytes_input": "9286676",
+          "no_buffer": "0",
+          "received_broadcasts": "7",
+          "received_multicasts": "0",
+          "runts": "0",
+          "giants": "0",
+          "throttles": "0",
+          "input_errors": "0",
+          "crc": "0",
+          "frame": "0",
+          "overrun": "0",
+          "ignored": "0",
+          "watchdog": "0",
+          "multicast": "4669",
+          "pause_input": "0",
+          "packets_output": "49347",
+          "bytes_output": "7905236",
+          "underruns": "0",
+          "output_errors": "0",
+          "collisions": "0",
+          "interface_resets": "4",
+          "unknown_protocol_drops": "0",
+          "babbles": "0",
+          "late_collision": "0",
+          "deferred": "0",
+          "lost_carrier": "4",
+          "no_carrier": "0",
+          "pause_output": "0",
+          "output_buffer_failures": "0",
+          "output_buffers_swapped_out": "0"
+        },
+        {
+          "interface": "TenGigabitEthernet0/0/13",
+          "status": "down",
+          "line_protocol": "down",
+          "hardware": "12xGE-2x10GE-FIXED",
+          "address": "4c77.abcd.1212",
+          "bia": "4c77.abcd.1212",
+          "mtu": "1500 bytes",
+          "bandwidth": "10000000 Kbit/sec",
+          "delay": "10 usec",
+          "encapsulation": "ARPA",
+          "loopback": "not set",
+          "keepalive": "set (10 sec)",
+          "duplex": "Full Duplex",
+          "speed": "10000Mbps",
+          "link_type": "auto",
+          "media_type": "unknown media type",
+          "output_flow_control": "unsupported",
+          "input_flow_control": "on",
+          "arp_type": "ARPA",
+          "arp_timeout": "04:00:00",
+          "last_input": "never",
+          "last_output": "never",
+          "output_hang": "never",
+          "last_clearing": "never",
+          "input_queue_size": "0",
+          "input_queue_max": "375",
+          "input_queue_drops": "0",
+          "input_queue_flushes": "0",
+          "total_output_drops": "0",
+          "queueing_strategy": "fifo",
+          "output_queue_size": "0",
+          "output_queue_max": "40",
+          "rate_interval": "5 minute",
+          "input_rate_bits": "0 bits/sec",
+          "input_rate_packets": "0 packets/sec",
+          "output_rate_bits": "0 bits/sec",
+          "output_rate_packets": "0 packets/sec",
+          "packets_input": "0",
+          "bytes_input": "0",
+          "no_buffer": "0",
+          "received_broadcasts": "0",
+          "received_multicasts": "0",
+          "runts": "0",
+          "giants": "0",
+          "throttles": "0",
+          "input_errors": "0",
+          "crc": "0",
+          "frame": "0",
+          "overrun": "0",
+          "ignored": "0",
+          "watchdog": "0",
+          "multicast": "0",
+          "pause_input": "0",
+          "packets_output": "0",
+          "bytes_output": "0",
+          "underruns": "0",
+          "output_errors": "0",
+          "collisions": "0",
+          "interface_resets": "1",
+          "unknown_protocol_drops": "0",
+          "babbles": "0",
+          "late_collision": "0",
+          "deferred": "0",
+          "lost_carrier": "0",
+          "no_carrier": "0",
+          "pause_output": "0",
+          "output_buffer_failures": "0",
+          "output_buffers_swapped_out": "0"
+        }
+      ]
+    }
+  ],
+  "schema_contract": [
+    {
+      "path": "/",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/interfaces",
+      "type": "array",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*",
+      "type": "object",
+      "required": false
+    },
+    {
+      "path": "/interfaces/*/interface",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/status",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/line_protocol",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/hardware",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/address",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/bia",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/mtu",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/bandwidth",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/delay",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/encapsulation",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/loopback",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/keepalive",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/duplex",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/speed",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/link_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/media_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_flow_control",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_flow_control",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/arp_type",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/arp_timeout",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/last_input",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/last_output",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_hang",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/last_clearing",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_queue_size",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_queue_max",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_queue_drops",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_queue_flushes",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/total_output_drops",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/queueing_strategy",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_queue_size",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_queue_max",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/rate_interval",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_rate_bits",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_rate_packets",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_rate_bits",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_rate_packets",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/packets_input",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/bytes_input",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/no_buffer",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/received_broadcasts",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/received_multicasts",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/runts",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/giants",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/throttles",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/input_errors",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/crc",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/frame",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/overrun",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/ignored",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/watchdog",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/multicast",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/pause_input",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/packets_output",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/bytes_output",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/underruns",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_broadcasts",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/interfaces/*/output_multicasts",
+      "type": "string",
+      "required": false
+    },
+    {
+      "path": "/interfaces/*/output_errors",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/collisions",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/interface_resets",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/unknown_protocol_drops",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/babbles",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/late_collision",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/deferred",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/lost_carrier",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/no_carrier",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/pause_output",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_buffer_failures",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/output_buffers_swapped_out",
+      "type": "string",
+      "required": true
+    },
+    {
+      "path": "/interfaces/*/internet_address",
+      "type": "string",
+      "required": false
+    }
+  ]
+}

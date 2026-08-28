@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import keyword
 import time
 from pathlib import Path
 
@@ -10,6 +11,10 @@ from cli_parser_agent.ttp_generation.validation import (
     inspect_ttp_template,
     validate_records_against_schema,
     validate_ttp_template,
+)
+
+_PYTHON_SNAKE_CASE_KEYWORDS = tuple(
+    field_name for field_name in keyword.kwlist if field_name.islower()
 )
 
 
@@ -244,6 +249,61 @@ def test_duplicate_variable_on_one_line_is_rejected_before_ttp() -> None:
         issue for issue in issues if issue.code == "ttp.duplicate_line_variable"
     )
     assert duplicate.details == {"variable": "_line_"}
+
+
+@pytest.mark.parametrize("field_name", _PYTHON_SNAKE_CASE_KEYWORDS)
+def test_python_keywords_are_valid_ttp_result_fields(field_name: str) -> None:
+    assert inspect_ttp_template(f"{{{{ {field_name} | WORD }}}}") == []
+
+
+def test_python_keyword_field_is_parsed_without_renaming() -> None:
+    result = validate_ttp_template(
+        "Value: {{ as | WORD }}",
+        ["Value: alpha"],
+        _line_schema("as"),
+    )
+
+    assert result.valid
+    assert result.records == [{"as": "alpha"}]
+
+
+def test_python_keyword_field_is_preserved_in_nested_group() -> None:
+    result = validate_ttp_template(
+        '<group name="details">Value: {{ class | WORD }}</group>',
+        ["Value: router"],
+        {
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "object",
+                    "properties": {"class": {"type": "string"}},
+                    "required": ["class"],
+                    "additionalProperties": False,
+                },
+            },
+            "required": ["details"],
+            "additionalProperties": False,
+        },
+    )
+
+    assert result.valid
+    assert result.records == [{"details": {"class": "router"}}]
+
+
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "value.attribute",
+        "value[0]",
+        "value + other",
+        "value()",
+        "__import__('os')",
+    ],
+)
+def test_non_bare_variable_heads_remain_rejected(expression: str) -> None:
+    issues = inspect_ttp_template(f"{{{{ {expression} | WORD }}}}")
+
+    assert _codes(issues) == {"ttp.invalid_field_name"}
 
 
 def test_supported_ignore_forms_may_repeat_without_creating_result_fields() -> None:

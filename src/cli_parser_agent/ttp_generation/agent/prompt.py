@@ -6,11 +6,11 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v21-separated-record-blocks-zh-cn"
+PROMPT_VERSION = "ttp-generator-v24-no-assumptions-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
-    "请现在只调用 submit_result_schema，并提交完整参数。"
+    "请现在只调用 submit_result_schema，并提交 result_schema。"
 )
 TTP_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的可用工具，普通文本不会被视为产物。"
@@ -36,7 +36,10 @@ SCHEMA_SYSTEM_PROMPT = """\
 - 使用 JSON Schema Draft 2020-12，根类型必须是 object。它描述单份命令输出的
   一个解析后 record，而不是服务响应或样例列表。
 - 每个 object 都要将 additionalProperties 设置为 false。字段名必须是英文 ASCII
-  snake_case。只把在该 object 的每个实例中都存在的 properties 列入 required；
+  snake_case。`as`、`class`、`for` 等 Python 关键字也是合法字段名，必须按业务语义
+  保留，不能因实现语言擅自改名。标量字段不能命名为 `ignore`，因为它是解析器的保留
+  变量；确有该业务含义时改用明确且非保留的语义名称。名为 `ignore` 的 object 或
+  array 容器不受此限制。只把在该 object 的每个实例中都存在的 properties 列入 required；
   只在部分实例中出现的明确业务字段保留为可选 property，也可以省略 required。
   同一字段标签或值槽在每个实例中都存在但某次字面值为空时，可以仍为 required
   string 并忠实表示为 ""；字段标签、值槽或所属可选行不存在时才视为缺失。
@@ -61,15 +64,6 @@ SCHEMA_SYSTEM_PROMPT = """\
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
-- 每个叶子字段至少提供一条 evidence；同一个 path 可以根据多个样例提供多条
-  evidence。array 条目的 path 使用 *，例如 /interfaces/*/name。填写从零开始的
-  output_index，并从同一样例原样复制连续 excerpt。优先使用短的字面数据 token，
-  不要使用重构后的短语、规范化间距或虚构占位符。同一条数据行可为多个相关字段
-  分别提供证据。
-- 收到 evidence_not_found 后遵循 required_action：replace_excerpt 表示彻底替换
-  excerpt；change_output_index 表示使用 matching_output_indexes 中的索引。
-- assumptions 通常提交 []。确有无法避免的不确定性时，最多填写两句简短中文，
-  不包含源文本引文、反引号或换行；不要发明输出中不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
   整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
 """
@@ -188,8 +182,10 @@ finish_generation。每次模型回复最多调用一个工具；必须等提交
   导致只匹配到表头行而一条数据都捕获不到。数据行存在缩进时，在该行第一个字段
   前加 `{{ ignore("\\s*") }}` 吸收可变前导空白。加上它以后表头行也可能开始匹配，
   此时按上面的表头规则在真实字段 pipeline 上用 `exclude` 排除表头字面量。
-- 保持冻结字段名、嵌套结构和标量类型不变。TTP `DIGIT` 的结果是文本；冻结字段
-  为 integer 时在 `DIGIT` 后添加 `to_int`，其他转换同理。
+- 保持冻结字段名、嵌套结构和标量类型不变。Python 关键字字段（例如 `as`、
+  `class`、`for`）在 TTP 变量中仍按普通字段名原样使用，绝不能擅自重命名。
+  TTP `DIGIT` 的结果是文本；冻结字段为 integer 时在 `DIGIT` 后添加 `to_int`，
+  其他转换同理。
 - 冻结 Schema 中未列入 required 的字段可以在对应原文不存在时缺失。模板必须让
   TTP 省略未匹配的可选键，不能用空 string 或 null 代替不存在的字段，也不能因
   可选行不存在而丢弃其父 object、同级必填字段或整条业务记录。原文字段槽明确存在

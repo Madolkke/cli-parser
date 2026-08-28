@@ -30,8 +30,6 @@ _SCHEMA_FREE_TEXT_MARKER = "schema-free-text-only-7c134b"
 _SCHEMA_THINKING_MARKER = "schema-thinking-only-0ab218"
 _SCHEMA_RETRY_MARKER = "schema-retry-only-b47d5f"
 _REJECTED_SCHEMA_MARKER = "rejected-schema-only-5a106e"
-_REJECTED_EVIDENCE_MARKER = "rejected-evidence-only-264df7"
-_REJECTED_ASSUMPTION_MARKER = "rejected-assumption-only-e0b731"
 _REJECTION_ISSUE_MARKER = "schema-issue-only-d28547"
 _SCHEMA_USAGE_NUMBERS = (810_031, 810_032, 1_620_063)
 
@@ -121,25 +119,9 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
             **frozen_schema,
             "title": _REJECTED_SCHEMA_MARKER,
         },
-        "evidence": [
-            {
-                "path": "/value",
-                "output_index": 0,
-                "excerpt": _REJECTED_EVIDENCE_MARKER,
-            },
-        ],
-        "assumptions": [_REJECTED_ASSUMPTION_MARKER],
     }
     accepted_submission = {
         "result_schema": frozen_schema,
-        "evidence": [
-            {
-                "path": "/value",
-                "output_index": 0,
-                "excerpt": "one",
-            },
-        ],
-        "assumptions": [],
     }
 
     async def create_completion(**kwargs: Any) -> ChatCompletion:
@@ -230,11 +212,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         "SCHEMA_NO_TOOL_RETRY_PROMPT",
         _SCHEMA_RETRY_MARKER,
     )
-    monkeypatch.setattr(
-        workflow_module,
-        "validate_schema_proposal",
-        validate_schema,
-    )
+    monkeypatch.setattr(workflow_module, "validate_result_schema", validate_schema)
     monkeypatch.setattr(
         workflow_module,
         "validate_ttp_template",
@@ -261,8 +239,6 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     final_schema_request = _request_text(schema_requests[2])
     for marker in (
         _REJECTED_SCHEMA_MARKER,
-        _REJECTED_EVIDENCE_MARKER,
-        _REJECTED_ASSUMPTION_MARKER,
         _REJECTION_ISSUE_MARKER,
     ):
         assert marker in final_schema_request
@@ -310,8 +286,6 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         _SCHEMA_THINKING_MARKER,
         _SCHEMA_RETRY_MARKER,
         _REJECTED_SCHEMA_MARKER,
-        _REJECTED_EVIDENCE_MARKER,
-        _REJECTED_ASSUMPTION_MARKER,
         _REJECTION_ISSUE_MARKER,
     ):
         assert marker not in ttp_wire_text
@@ -324,8 +298,6 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         _SCHEMA_THINKING_MARKER,
         _SCHEMA_RETRY_MARKER,
         _REJECTED_SCHEMA_MARKER,
-        _REJECTED_EVIDENCE_MARKER,
-        _REJECTED_ASSUMPTION_MARKER,
         _REJECTION_ISSUE_MARKER,
     ):
         assert marker not in second_ttp_wire_text

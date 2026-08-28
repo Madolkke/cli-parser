@@ -39,6 +39,7 @@ MAX_TTP_VALIDATION_ISSUES = 100
 DEFAULT_TTP_TIMEOUT_SECONDS = 20.0
 
 _FIELD_NAME_RE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+_BARE_VARIABLE_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _GROUP_SEGMENT_RE = re.compile(
     r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*(?:\*)?$",
 )
@@ -247,25 +248,32 @@ def _validate_regex(pattern: Any, limits: _TtpLimits) -> None:
 def _parse_variable_head(text: str, limits: _TtpLimits) -> _ParsedVariableHead:
     """Parse a result variable or TTP's special ignore capture."""
 
+    stripped = text.strip()
     mentions_ignore = bool(
-        re.search(r"(?<![A-Za-z0-9_])ignore(?![A-Za-z0-9_])", text),
+        re.search(r"(?<![A-Za-z0-9_])ignore(?![A-Za-z0-9_])", stripped),
     )
     if len(text) > limits.attribute_chars:
         if mentions_ignore:
             raise _InvalidIgnoreSyntax
         raise ValueError("variable expression is too long")
-    try:
-        expression = ast.parse(text.strip(), mode="eval").body
-    except (SyntaxError, ValueError) as exc:
-        if mentions_ignore:
-            raise _InvalidIgnoreSyntax from exc
-        raise ValueError("variable expression is not valid") from exc
 
-    if isinstance(expression, ast.Name):
+    # TTP result names are identifiers in its own template language, not
+    # Python expressions. Parse them lexically so Python keywords remain valid
+    # field names while preserving TTP's underscore-prefixed control names.
+    if _BARE_VARIABLE_NAME_RE.fullmatch(stripped):
         return _ParsedVariableHead(
-            name=expression.id,
-            is_ignore=expression.id == "ignore",
+            name=stripped,
+            is_ignore=stripped == "ignore",
         )
+
+    # Only the special ignore(...) form needs expression parsing. Everything
+    # else that is not a bare identifier remains outside the safe subset.
+    if not mentions_ignore:
+        raise ValueError("variable must be a simple name or supported ignore call")
+    try:
+        expression = ast.parse(stripped, mode="eval").body
+    except (SyntaxError, ValueError) as exc:
+        raise _InvalidIgnoreSyntax from exc
 
     if (
         isinstance(expression, ast.Call)
@@ -285,12 +293,12 @@ def _parse_variable_head(text: str, limits: _TtpLimits) -> _ParsedVariableHead:
             return _ParsedVariableHead(name="ignore", is_ignore=True)
         raise _InvalidIgnoreSyntax
 
-    if mentions_ignore or any(
+    if any(
         isinstance(node, ast.Name) and node.id == "ignore"
         for node in ast.walk(expression)
     ):
         raise _InvalidIgnoreSyntax
-    raise ValueError("variable must be a simple name or supported ignore call")
+    raise _InvalidIgnoreSyntax
 
 
 def _invalid_ignore_issue() -> ValidationIssue:
