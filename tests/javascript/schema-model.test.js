@@ -33,6 +33,21 @@ test("changeType keeps common metadata and removes incompatible structure", () =
   });
 });
 
+test("renameProperty rejects duplicates without changing the source", () => {
+  const properties = { hostname: { type: "string" }, status: { type: "string" } };
+  const result = model.renameProperty(properties, "status", "hostname");
+  assert.deepEqual(result, { ok: false, reason: "duplicate" });
+  assert.deepEqual(properties, { hostname: { type: "string" }, status: { type: "string" } });
+});
+
+test("renameProperty returns a new property map for a valid rename", () => {
+  const properties = { hostname: { type: "string" }, status: { type: "string" } };
+  const result = model.renameProperty(properties, "status", "state");
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.properties, { hostname: { type: "string" }, state: { type: "string" } });
+  assert.ok(Object.prototype.hasOwnProperty.call(properties, "status"));
+});
+
 test("validation reports field names, required paths, and invalid ranges", () => {
   const schema = {
     type: "object",

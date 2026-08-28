@@ -23,7 +23,26 @@ function eventKey(event, kind) {
 }
 
 function createTimelineState(maxEntries = 120) {
-  return { entries: [], byKey: new Map(), maxEntries };
+  return { entries: [], byKey: new Map(), maxEntries, latestStreamingKey: null };
+}
+
+function sanitizeDisplayDetail(detail) {
+  if (!detail || typeof detail !== "object" || Array.isArray(detail)) return {};
+  const displayDetail = { ...detail };
+  delete displayDetail.text;
+  delete displayDetail.coalesced;
+  return displayDetail;
+}
+
+function isLatestStreamingEntry(timeline, entry) {
+  return Boolean(entry && !entry.complete && timeline.latestStreamingKey === entry.key);
+}
+
+function shouldOpenEntry(timeline, entry) {
+  if (isLatestStreamingEntry(timeline, entry)) return true;
+  if (entry.manualOpen !== null) return entry.manualOpen;
+  if (entry.kind === "text") return true;
+  return !entry.complete && ["thinking", "tool_call", "tool_result"].includes(entry.kind);
 }
 
 function appendAgentEvent(timeline, event) {
@@ -33,6 +52,7 @@ function appendAgentEvent(timeline, event) {
   const isEnd = type.endsWith("_completed");
   const detail = event.detail || {};
   const key = eventKey(event, kind);
+  const previousLatestStreamingKey = timeline.latestStreamingKey;
   let entry = timeline.byKey.get(key);
   let created = false;
   let removedKey = null;
@@ -48,6 +68,7 @@ function appendAgentEvent(timeline, event) {
       const removed = timeline.entries.shift();
       removedKey = removed.key;
       timeline.byKey.delete(removed.key);
+      if (timeline.latestStreamingKey === removed.key) timeline.latestStreamingKey = null;
     }
   }
   entry.phase = event.phase || entry.phase;
@@ -59,11 +80,11 @@ function appendAgentEvent(timeline, event) {
   else if (kind === "model") entry.title = "模型请求";
   else entry.title = describeEvent(event);
   if (typeof detail.text === "string") entry.text += detail.text;
-  const structuredDetail = { ...detail };
-  delete structuredDetail.text;
+  const structuredDetail = sanitizeDisplayDetail(detail);
   if (Object.keys(structuredDetail).length) entry.detail = { ...(entry.detail || {}), ...structuredDetail };
   if (isEnd || type === "run.finished" || type === "cli_parser.phase.completed") entry.complete = true;
-  return { entry, created, removedKey, isDelta };
+  if (isDelta) timeline.latestStreamingKey = key;
+  return { entry, created, removedKey, isDelta, previousLatestStreamingKey };
 }
 
 function buildTimeline(events, maxEntries = 120) {
@@ -118,7 +139,10 @@ const timelineApi = {
   createSequenceTracker,
   createTimelineState,
   eventKind,
+  isLatestStreamingEntry,
   reduceAgentEvents,
+  sanitizeDisplayDetail,
+  shouldOpenEntry,
 };
 if (typeof window !== "undefined") window.AgentTimeline = timelineApi;
 if (typeof module !== "undefined") module.exports = timelineApi;

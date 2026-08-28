@@ -4,14 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLI Parser Agent</title>
-<link rel="stylesheet" href="/static/style.css?v=3">
+<link rel="stylesheet" href="/static/style.css?v=6">
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="mark">C</span><h1>CLI Parser Agent</h1></div>
+  <div class="brand">
+    <span class="mark" aria-hidden="true"><span data-icon="wrench" data-icon-size="15"></span></span>
+    <h1>CLI Parser Agent</h1>
+  </div>
   <div class="top-actions">
-    <button id="history-toggle" class="btn btn-ghost icon-btn mobile-only" title="打开历史记录" aria-label="打开历史记录">☰</button>
-    <button id="new-run" class="btn btn-primary">新建生成</button>
+    <button id="history-toggle" class="btn btn-ghost icon-btn mobile-only" title="打开历史记录" aria-label="打开历史记录"><span data-icon="menu" data-icon-size="18"></span></button>
+    <button id="new-run" class="btn btn-primary"><span data-icon="plus" data-icon-size="15"></span><span class="btn-label">新建生成</span></button>
   </div>
 </header>
 <div id="drawer-overlay" class="drawer-overlay" hidden></div>
@@ -20,8 +23,20 @@
     <div class="sidebar-head">
       <h2>运行历史</h2>
       <div class="sidebar-actions">
-        <button id="refresh" class="btn btn-ghost icon-btn" title="刷新历史记录" aria-label="刷新历史记录">↻</button>
-        <button id="history-close" class="btn btn-ghost icon-btn mobile-only" title="关闭历史记录" aria-label="关闭历史记录">×</button>
+        <button id="refresh" class="btn btn-ghost icon-btn" title="刷新历史记录" aria-label="刷新历史记录"><span data-icon="refresh" data-icon-size="16"></span></button>
+        <button id="history-close" class="btn btn-ghost icon-btn mobile-only" title="关闭历史记录" aria-label="关闭历史记录"><span data-icon="close" data-icon-size="16"></span></button>
+      </div>
+    </div>
+    <div class="history-tools">
+      <label class="history-search">
+        <span class="search-icon" aria-hidden="true"><span data-icon="search" data-icon-size="14"></span></span>
+        <input id="history-search" type="text" aria-label="搜索标题或运行 ID" placeholder="搜索标题或运行 ID" autocomplete="off">
+      </label>
+      <div id="history-filters" class="history-filters" role="group" aria-label="按状态筛选">
+        <button type="button" class="filter-chip is-active" data-filter="all">全部</button>
+        <button type="button" class="filter-chip" data-filter="running">运行中</button>
+        <button type="button" class="filter-chip" data-filter="success">成功</button>
+        <button type="button" class="filter-chip" data-filter="failed">失败</button>
       </div>
     </div>
     <p id="history-state" class="history-state">正在加载…</p>
@@ -29,7 +44,7 @@
   </aside>
   <section class="content">
     <section id="view-new" class="view">
-      <div class="page-head"><div><h2>新建生成</h2><p>创建一份共享模板与结果 Schema</p></div></div>
+      <div class="page-head"><div><h2>新建生成</h2><p>粘贴 1–5 份同一命令的输出，生成共享 TTP 模板与结果 JSON Schema</p></div></div>
       <div class="form-section">
         <label class="field">
           <span class="label">标题 <em>可选</em></span>
@@ -39,11 +54,11 @@
           <div class="field-head"><span class="label">命令输出</span><span id="output-count" class="field-count">1 / 5</span></div>
           <div class="input-tabs-row">
             <div id="output-tabs" class="input-tabs" role="tablist" aria-label="命令输出"></div>
-            <button id="add-output" class="btn btn-ghost btn-sm">＋ 添加输入</button>
+            <button id="add-output" class="btn btn-ghost btn-sm"><span data-icon="plus" data-icon-size="13"></span>添加输入</button>
           </div>
           <div class="input-editor-shell">
             <textarea id="output-editor" spellcheck="false" placeholder="粘贴一份完整的命令输出…"></textarea>
-            <div class="input-editor-meta"><span id="output-size">0 字符 · 0 B</span><button id="remove-output" class="text-danger" hidden>删除当前输入</button></div>
+            <div class="input-editor-meta"><span id="output-size">0 字符 · 0 B</span><button id="remove-output" class="text-danger" hidden><span data-icon="trash" data-icon-size="13"></span>删除当前输入</button></div>
           </div>
           <p id="output-error" class="error" hidden></p>
         </div>
@@ -53,30 +68,54 @@
             <label><input type="radio" name="mode" value="full" checked><span>完整生成</span></label>
             <label><input type="radio" name="mode" value="propose"><span>先提案 Schema</span></label>
           </div>
+          <p class="mode-hint">完整生成一次产出模板与 records；先提案 Schema 会在冻结提案后暂停，供你复核或编辑。</p>
         </fieldset>
         <details class="runtime-panel">
           <summary><strong>运行参数</strong><span class="hint">默认使用服务启动时的 .env 配置，可为本次运行覆盖</span></summary>
           <div id="new-runtime-editor" class="runtime-editor"></div>
         </details>
         <p id="new-error" class="error" hidden></p>
-        <div class="form-actions"><button id="start" class="btn btn-primary btn-lg">开始生成</button></div>
+        <div class="form-actions"><button id="start" class="btn btn-primary btn-lg"><span data-icon="play" data-icon-size="15"></span>开始生成</button></div>
       </div>
     </section>
     <section id="view-run" class="view" hidden>
+      <div id="run-loading" class="run-loading" hidden>
+        <div class="skeleton skeleton-title"></div>
+        <div class="skeleton skeleton-block"></div>
+        <div class="skeleton skeleton-block"></div>
+      </div>
+      <div id="run-body" class="run-body" hidden>
       <div class="run-head">
         <div><h2 id="run-title">运行</h2><p id="run-sub" class="sub"></p></div>
-        <div class="run-actions"><span id="run-status" class="badge"></span><button id="rerun-schema" class="btn btn-primary btn-sm" hidden>以此 Schema 重新生成</button><button id="cancel" class="btn btn-danger btn-sm" hidden>取消</button><button id="delete" class="btn btn-ghost btn-sm" hidden>删除</button></div>
+        <div class="run-actions"><span id="run-status" class="badge"></span><button id="rerun-schema" class="btn btn-primary btn-sm" hidden><span data-icon="refresh" data-icon-size="13"></span>以此 Schema 重新生成</button><button id="cancel" class="btn btn-danger btn-sm" hidden><span data-icon="stop" data-icon-size="13"></span>取消</button><button id="delete" class="btn btn-ghost btn-sm" hidden><span data-icon="trash" data-icon-size="13"></span>删除</button></div>
       </div>
+      <section id="run-summary" class="panel summary-panel" hidden>
+        <h3 class="summary-heading"><span class="summary-icon" aria-hidden="true"><span data-icon="clock" data-icon-size="15"></span></span>运行摘要</h3>
+        <dl id="summary-grid" class="summary-grid"></dl>
+      </section>
       <details id="run-runtime-panel" class="panel runtime-panel run-runtime-panel" hidden>
         <summary><strong>运行参数</strong><span id="run-runtime-summary" class="hint">本次实际生效配置</span></summary>
         <div id="run-runtime-view" class="runtime-summary"></div>
         <div id="rerun-runtime-editor" class="runtime-editor"></div>
       </details>
       <details id="progress" class="panel progress-panel" hidden>
-        <summary><span id="progress-phase" class="phase-pill">准备中</span><span id="progress-elapsed" class="mono"></span></summary>
+        <summary>
+          <span class="progress-summary-main">
+            <span id="progress-phase" class="phase-pill">准备中</span>
+            <span id="stream-state" class="stream-state" hidden></span>
+          </span>
+          <span id="progress-elapsed" class="mono"></span>
+        </summary>
         <div class="progress-body">
+          <ol id="progress-steps" class="steps" aria-label="生成阶段">
+            <li class="step" data-step="generation"><span class="step-dot" aria-hidden="true"></span><span class="step-label">准备</span></li>
+            <li class="step" data-step="schema"><span class="step-dot" aria-hidden="true"></span><span class="step-label">Schema 阶段</span></li>
+            <li class="step" data-step="ttp"><span class="step-dot" aria-hidden="true"></span><span class="step-label">TTP 阶段</span></li>
+            <li class="step" data-step="acceptance"><span class="step-dot" aria-hidden="true"></span><span class="step-label">最终验收</span></li>
+            <li class="step" data-step="done"><span class="step-dot" aria-hidden="true"></span><span class="step-label">完成</span></li>
+          </ol>
           <div class="bar"><div id="bar-fill" class="bar-fill"></div></div>
-          <div class="progress-toolbar"><span class="label">Agent 过程</span><button id="progress-follow" class="btn btn-ghost btn-sm" type="button">跟随最新</button></div>
+          <div class="progress-toolbar"><span class="label">Agent 过程</span><button id="progress-follow" class="btn btn-ghost btn-sm" type="button"><span data-icon="chevronDown" data-icon-size="13"></span>跟随最新</button></div>
           <div id="agent-timeline" class="agent-timeline" aria-live="polite"></div>
         </div>
       </details>
@@ -85,8 +124,8 @@
           <summary class="schema-summary"><span><strong>Schema 提案</strong><small>Schema 来自模型初始提案，编辑后不会改写原始生成结果。</small></span><span id="schema-state" class="save-state saved">已保存</span></summary>
           <div class="schema-panel-content">
             <div class="editor-toolbar">
-              <div class="segmented compact" role="tablist" aria-label="Schema 编辑模式"><button id="schema-mode-visual" class="is-active" role="tab">可视化</button><button id="schema-mode-json" role="tab">JSON</button></div>
-              <button id="add-root-field" class="btn btn-ghost btn-sm">＋ 添加根字段</button>
+              <div class="segmented compact" role="tablist" aria-label="Schema 编辑模式"><button id="schema-mode-visual" class="is-active" role="tab" aria-selected="true" aria-controls="schema-visual">可视化</button><button id="schema-mode-json" role="tab" aria-selected="false" aria-controls="schema-json">JSON</button></div>
+              <button id="add-root-field" class="btn btn-ghost btn-sm"><span data-icon="plus" data-icon-size="13"></span>添加根字段</button>
             </div>
             <div id="schema-visual" class="schema-visual"></div>
             <div id="schema-json" hidden><textarea id="schema-editor" class="editor" spellcheck="false"></textarea><button id="format-schema" class="btn btn-ghost btn-sm format-button">格式化 JSON</button></div>
@@ -97,18 +136,21 @@
         </details>
       </section>
       <section id="result-panel" class="panel result-panel" hidden>
-        <div class="tabs" role="tablist"><button class="tab is-active" data-tab="template">TTP 模板</button><button class="tab" data-tab="records">Records</button><button class="tab" data-tab="schema">Schema</button><button class="tab" data-tab="inputs">原始输入</button></div>
-        <div id="tab-template" class="tabpane"><button class="btn btn-ghost btn-sm copy" data-copy="template">复制</button><pre id="out-template" class="code"></pre></div>
-        <div id="tab-records" class="tabpane" hidden><div id="out-records"></div></div>
-        <div id="tab-schema" class="tabpane" hidden><button class="btn btn-ghost btn-sm copy" data-copy="schema">复制</button><pre id="out-schema" class="code"></pre></div>
-        <div id="tab-inputs" class="tabpane" hidden><pre id="out-inputs" class="code"></pre></div>
+        <div class="tabs" role="tablist"><button class="tab is-active" role="tab" aria-selected="true" aria-controls="tab-template" data-tab="template">TTP 模板</button><button class="tab" role="tab" aria-selected="false" aria-controls="tab-records" data-tab="records">Records</button><button class="tab" role="tab" aria-selected="false" aria-controls="tab-schema" data-tab="schema">Schema</button><button class="tab" role="tab" aria-selected="false" aria-controls="tab-inputs" data-tab="inputs">原始输入</button></div>
+        <div id="tab-template" class="tabpane" role="tabpanel"><div class="pane-toolbar"><button class="btn btn-ghost btn-sm copy" data-copy="template"><span data-icon="copy" data-icon-size="13"></span>复制</button></div><pre id="out-template" class="code" tabindex="0"></pre></div>
+        <div id="tab-records" class="tabpane" role="tabpanel" hidden><div class="pane-toolbar"><button class="btn btn-ghost btn-sm copy" data-copy="records"><span data-icon="copy" data-icon-size="13"></span>复制 JSON</button></div><div id="out-records"></div></div>
+        <div id="tab-schema" class="tabpane" role="tabpanel" hidden><div class="pane-toolbar"><button class="btn btn-ghost btn-sm copy" data-copy="schema"><span data-icon="copy" data-icon-size="13"></span>复制</button></div><pre id="out-schema" class="code" tabindex="0"></pre></div>
+        <div id="tab-inputs" class="tabpane" role="tabpanel" hidden><div class="pane-toolbar"><button class="btn btn-ghost btn-sm copy" data-copy="inputs"><span data-icon="copy" data-icon-size="13"></span>复制全部</button></div><pre id="out-inputs" class="code" tabindex="0"></pre></div>
       </section>
       <section id="issues-panel" class="panel" hidden><h3>问题</h3><ul id="issues" class="issues"></ul></section>
+      </div>
     </section>
   </section>
 </main>
-<script src="/static/agent-timeline.js?v=1"></script>
+<script src="/static/agent-timeline.js?v=3"></script>
 <script src="/static/schema-model.js?v=3"></script>
-<script src="/static/app.js?v=7"></script>
+<script src="/static/highlight.js?v=1"></script>
+<script src="/static/ui.js?v=1"></script>
+<script src="/static/app.js?v=10"></script>
 </body>
 </html>

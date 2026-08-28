@@ -216,8 +216,26 @@ def test_index_references_current_static_asset_versions(tmp_path: Path) -> None:
         response = client.get("/")
 
     assert response.status_code == 200
-    assert 'href="/static/style.css?v=3"' in response.text
-    assert 'src="/static/app.js?v=7"' in response.text
+    assert 'href="/static/style.css?v=6"' in response.text
+    assert 'src="/static/app.js?v=10"' in response.text
+    assert 'src="/static/agent-timeline.js?v=3"' in response.text
+    assert 'src="/static/highlight.js?v=1"' in response.text
+    assert 'src="/static/ui.js?v=1"' in response.text
+
+
+def test_index_static_dependencies_are_served(tmp_path: Path) -> None:
+    with _client(tmp_path, FakeGenerator()) as client:
+        paths = (
+            "/static/style.css",
+            "/static/agent-timeline.js",
+            "/static/schema-model.js",
+            "/static/highlight.js",
+            "/static/ui.js",
+            "/static/app.js",
+        )
+        for path in paths:
+            response = client.get(path)
+            assert response.status_code == 200, path
 
 
 def test_runtime_config_can_be_overridden_and_is_redacted_from_api(

@@ -28,6 +28,22 @@ test("reduces streamed thinking, text, tool call, and result blocks", () => {
   assert.equal(entries.every((entry) => entry.complete), true);
 });
 
+test("hides coalescing diagnostics from display details without mutating events", () => {
+  const event = {
+    type: "agent.text_delta",
+    sequence: 1,
+    block_id: "text",
+    detail: { text: "内容", coalesced: 9, status: "streaming" },
+  };
+  const state = timeline.createTimelineState();
+  timeline.appendAgentEvent(state, event);
+
+  assert.deepEqual(state.entries[0].detail, { status: "streaming" });
+  assert.equal(event.detail.coalesced, 9);
+  assert.equal(event.detail.text, "内容");
+  assert.deepEqual(timeline.sanitizeDisplayDetail({ coalesced: 3 }), {});
+});
+
 test("keeps facts and caps the visible timeline", () => {
   const events = Array.from({ length: 130 }, (_, index) => ({
     type: "cli_parser.phase.started",
@@ -59,6 +75,55 @@ test("appends deltas incrementally and deduplicates sequences in O(1)", () => {
   assert.equal(timelineState.entries.length, 1);
   assert.equal(timelineState.entries[0].text, "流式");
   assert.equal(timelineState.entries[0].complete, true);
+});
+
+test("tracks the latest streaming block and releases it after completion", () => {
+  const state = timeline.createTimelineState();
+  const first = { type: "agent.text_delta", sequence: 1, block_id: "text-1", detail: { text: "第一段" } };
+  const second = { type: "agent.thinking_delta", sequence: 2, block_id: "think-1", detail: { text: "思考" } };
+  const complete = { type: "agent.thinking_completed", sequence: 3, block_id: "think-1" };
+
+  timeline.appendAgentEvent(state, first);
+  assert.equal(state.latestStreamingKey, "text:text-1");
+  assert.equal(timeline.isLatestStreamingEntry(state, state.entries[0]), true);
+
+  const change = timeline.appendAgentEvent(state, second);
+  assert.equal(state.latestStreamingKey, "thinking:think-1");
+  assert.equal(change.previousLatestStreamingKey, "text:text-1");
+  assert.equal(timeline.isLatestStreamingEntry(state, state.entries[0]), false);
+  assert.equal(timeline.isLatestStreamingEntry(state, state.entries[1]), true);
+
+  timeline.appendAgentEvent(state, complete);
+  assert.equal(timeline.isLatestStreamingEntry(state, state.entries[1]), false);
+  assert.equal(state.entries[1].text, "思考");
+});
+
+test("opens active conversation blocks while keeping diagnostic facts collapsed", () => {
+  const state = timeline.createTimelineState();
+  const fact = timeline.appendAgentEvent(state, {
+    type: "cli_parser.generation.started",
+    sequence: 1,
+    detail: { request: { command_outputs: ["large input"] } },
+  }).entry;
+  const text = timeline.appendAgentEvent(state, {
+    type: "agent.text_completed",
+    sequence: 2,
+    block_id: "text",
+    detail: { text: "完成输出" },
+  }).entry;
+  const thinking = timeline.appendAgentEvent(state, {
+    type: "agent.thinking_delta",
+    sequence: 3,
+    block_id: "thinking",
+    detail: { text: "持续更新" },
+  }).entry;
+
+  assert.equal(timeline.shouldOpenEntry(state, fact), false);
+  assert.equal(timeline.shouldOpenEntry(state, text), true);
+  thinking.manualOpen = false;
+  assert.equal(timeline.shouldOpenEntry(state, thinking), true);
+  thinking.complete = true;
+  assert.equal(timeline.shouldOpenEntry(state, thinking), false);
 });
 
 test("coalesces render scheduling to one frame", () => {
