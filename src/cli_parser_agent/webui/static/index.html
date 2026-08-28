@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CLI Parser Agent</title>
-<link rel="stylesheet" href="/static/style.css?v=6">
+<link rel="stylesheet" href="/static/style.css?v=9">
 </head>
 <body>
 <header class="topbar">
@@ -115,7 +115,13 @@
             <li class="step" data-step="done"><span class="step-dot" aria-hidden="true"></span><span class="step-label">完成</span></li>
           </ol>
           <div class="bar"><div id="bar-fill" class="bar-fill"></div></div>
-          <div class="progress-toolbar"><span class="label">Agent 过程</span><button id="progress-follow" class="btn btn-ghost btn-sm" type="button"><span data-icon="chevronDown" data-icon-size="13"></span>跟随最新</button></div>
+          <div class="progress-toolbar"><span class="label">Agent 交互</span><button id="progress-follow" class="btn btn-ghost btn-sm" type="button"><span data-icon="chevronDown" data-icon-size="13"></span>跟随最新</button></div>
+          <div id="timeline-filters" class="timeline-filters" role="toolbar" aria-label="Agent 阶段导航">
+            <button class="timeline-filter is-active" type="button" data-phase="all" aria-pressed="true">全部</button>
+            <button class="timeline-filter" type="button" data-phase="schema" aria-pressed="false">Schema 阶段</button>
+            <button class="timeline-filter" type="button" data-phase="ttp" aria-pressed="false">TTP 阶段</button>
+            <button class="timeline-filter" type="button" data-phase="acceptance" aria-pressed="false">最终验收</button>
+          </div>
           <div id="agent-timeline" class="agent-timeline" aria-live="polite"></div>
         </div>
       </details>
@@ -147,10 +153,10 @@
     </section>
   </section>
 </main>
-<script src="/static/agent-timeline.js?v=3"></script>
+<script src="/static/agent-timeline.js?v=6"></script>
 <script src="/static/schema-model.js?v=3"></script>
 <script src="/static/highlight.js?v=1"></script>
 <script src="/static/ui.js?v=1"></script>
-<script src="/static/app.js?v=10"></script>
+<script src="/static/app.js?v=13"></script>
 </body>
 </html>

@@ -216,9 +216,9 @@ def test_index_references_current_static_asset_versions(tmp_path: Path) -> None:
         response = client.get("/")
 
     assert response.status_code == 200
-    assert 'href="/static/style.css?v=6"' in response.text
-    assert 'src="/static/app.js?v=10"' in response.text
-    assert 'src="/static/agent-timeline.js?v=3"' in response.text
+    assert 'href="/static/style.css?v=9"' in response.text
+    assert 'src="/static/app.js?v=13"' in response.text
+    assert 'src="/static/agent-timeline.js?v=6"' in response.text
     assert 'src="/static/highlight.js?v=1"' in response.text
     assert 'src="/static/ui.js?v=1"' in response.text
 

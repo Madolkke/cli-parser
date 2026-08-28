@@ -11,6 +11,7 @@ const state = {
   activeOutput: 0, schemaDraft: null, savedSchema: null, schemaDirty: false,
   schemaMode: "visual", schemaErrors: [], schemaExpanded: Object.create(null),
   drawerOpen: false, events: [], followProgress: true,
+  timelinePhaseFilter: "all", timelineUnread: { schema: 0, ttp: 0, acceptance: 0 },
   timeline: timelineModule.createTimelineState(),
   eventTracker: timelineModule.createSequenceTracker(),
   timelineNodes: new Map(), timelineDirty: new Set(), timelineRemoved: new Set(),
@@ -936,13 +937,23 @@ function updateProgressSummary(event) {
 
 /* --------------------------------------------------------------- timeline */
 
-const TIMELINE_ICONS = { thinking: "brain", text: "chat", tool_call: "wrench", tool_result: "check", model: "play", fact: "clock" };
+const TIMELINE_ICONS = { thinking: "brain", text: "chat", tool: "wrench", retry: "refresh", status: "close", terminal: "check" };
 
 function preferredEntryOpen(entry) {
   return timelineModule.shouldOpenEntry(state.timeline, entry);
 }
 
 function createTimelineNode(entry) {
+  if (entry.kind === "phase") {
+    const node = document.createElement("div");
+    node.className = "agent-phase";
+    const title = document.createElement("span"); title.className = "agent-phase-title";
+    const meta = document.createElement("span"); meta.className = "agent-phase-meta";
+    node.append(title, meta);
+    const refs = { node, title, meta };
+    state.timelineNodes.set(entry.key, refs);
+    return refs;
+  }
   const details = document.createElement("details");
   details.className = "agent-entry " + entry.kind;
   const summary = document.createElement("summary");
@@ -951,9 +962,11 @@ function createTimelineNode(entry) {
   icon.append(ui.svgIcon(TIMELINE_ICONS[entry.kind] || "clock", 13));
   const title = document.createElement("span");
   title.className = "agent-entry-title";
+  const status = document.createElement("span");
+  status.className = "agent-entry-status";
   const meta = document.createElement("span");
   meta.className = "agent-entry-meta";
-  summary.append(icon, title, meta);
+  summary.append(icon, title, status, meta);
   details.append(summary);
   const body = document.createElement("div");
   body.className = "agent-entry-body";
@@ -964,7 +977,11 @@ function createTimelineNode(entry) {
       if (current) current.manualOpen = details.open;
     }, 0);
   });
-  const refs = { details, title, meta, body, text: null, caret: null, detail: null, status: null };
+  const refs = {
+    node: details, details, title, status, meta, body, text: null, caret: null, detail: null,
+    callSummary: null, resultSummary: null, errorSummary: null, statusNode: null,
+    rawResultDetails: null, rawResult: null,
+  };
   state.timelineNodes.set(entry.key, refs);
   return refs;
 }
@@ -979,13 +996,62 @@ function streamCaret() {
 function updateTimelineNode(entry) {
   let refs = state.timelineNodes.get(entry.key);
   if (!refs) refs = createTimelineNode(entry);
+  if (entry.kind === "phase") {
+    refs.node.className = "agent-phase";
+    refs.title.textContent = entry.title;
+    refs.meta.textContent = entry.roundIndex != null ? "第 " + (Number(entry.roundIndex) + 1) + " 轮" : "";
+    return refs.node;
+  }
   const isStreaming = timelineModule.isLatestStreamingEntry(state.timeline, entry);
   refs.details.className = "agent-entry " + entry.kind + (isStreaming ? " is-streaming" : "");
   refs.details.open = preferredEntryOpen(entry);
   refs.title.textContent = entry.title;
+  refs.status.textContent = entry.kind === "tool" || entry.kind === "retry" || entry.kind === "status" || entry.kind === "terminal" ? entry.status : "";
+  refs.status.className = "agent-entry-status" + (entry.status === "成功" ? " is-success" : entry.status === "失败" ? " is-error" : ["调用中", "等待结果", "处理中"].includes(entry.status) ? " is-active" : "");
   refs.meta.textContent = (PHASE_TEXT[entry.phase] || entry.phase || "") + " · " + Number(entry.elapsed || 0).toFixed(1) + "s";
   const children = [];
-  if (entry.text) {
+  if (entry.kind === "tool") {
+    const summaries = [
+      ["callSummary", entry.callSummary, "call"],
+      ["resultSummary", entry.resultSummary, "result"],
+      ["errorSummary", entry.errorSummary, "error"],
+    ];
+    for (const [refName, value, kind] of summaries) {
+      if (!value) continue;
+      if (!refs[refName]) {
+        refs[refName] = document.createElement("p");
+        refs[refName].className = "agent-tool-summary agent-tool-summary-" + kind;
+      }
+      refs[refName].textContent = value;
+      children.push(refs[refName]);
+    }
+    const rawText = entry.toolName === "submit_ttp_template" && !entry.errorSummary
+      ? timelineModule.rawTtpResultText(entry.rawResultText) : "";
+    if (rawText) {
+      if (!refs.rawResultDetails) {
+        refs.rawResultDetails = document.createElement("details");
+        refs.rawResultDetails.className = "agent-raw-result";
+        const rawSummary = document.createElement("summary");
+        rawSummary.textContent = "查看原始解析结果";
+        refs.rawResult = document.createElement("pre");
+        refs.rawResult.className = "agent-tool-raw-result";
+        refs.rawResultDetails.append(rawSummary, refs.rawResult);
+        rawSummary.addEventListener("click", () => {
+          setTimeout(() => {
+            entry.rawResultManualOpen = refs.rawResultDetails.open;
+          }, 0);
+        });
+      }
+      refs.rawResult.textContent = rawText;
+      if (entry.resultComplete) {
+        refs.rawResultDetails.open = entry.rawResultManualOpen === true;
+      } else {
+        refs.rawResultDetails.open = true;
+      }
+      children.push(refs.rawResultDetails);
+    }
+  }
+  if (entry.kind !== "tool" && entry.text) {
     if (!refs.text) {
       refs.text = document.createElement("pre");
       refs.text.className = "agent-stream-text";
@@ -1000,7 +1066,7 @@ function updateTimelineNode(entry) {
     children.push(refs.text);
   }
   const displayDetail = timelineModule.sanitizeDisplayDetail(entry.detail);
-  if (Object.keys(displayDetail).length) {
+  if (entry.kind !== "tool" && Object.keys(displayDetail).length) {
     if (!refs.detail) {
       refs.detail = document.createElement("pre");
       refs.detail.className = "agent-stream-json";
@@ -1009,12 +1075,13 @@ function updateTimelineNode(entry) {
     children.push(refs.detail);
   }
   if (!children.length) {
-    if (!refs.status) {
-      refs.status = document.createElement("span");
-      refs.status.className = "mono";
+    if (!refs.statusNode) {
+      const statusNode = document.createElement("span");
+      statusNode.className = "mono";
+      refs.statusNode = statusNode;
     }
-    refs.status.textContent = entry.complete ? "已完成" : "进行中…";
-    children.push(refs.status);
+    refs.statusNode.textContent = entry.complete ? (entry.status === "失败" ? "执行失败" : "已完成") : "进行中…";
+    children.push(refs.statusNode);
   }
   for (const child of [...refs.body.children]) {
     if (!children.includes(child)) child.remove();
@@ -1023,7 +1090,57 @@ function updateTimelineNode(entry) {
   if (refs.text && timelineModule.isLatestStreamingEntry(state.timeline, entry)) {
     refs.text.scrollTop = refs.text.scrollHeight;
   }
+  if (refs.rawResult && !entry.resultComplete && timelineModule.isLatestStreamingEntry(state.timeline, entry)) {
+    refs.rawResult.scrollTop = refs.rawResult.scrollHeight;
+  }
   return refs.details;
+}
+
+function isTimelineEntryVisible(entry) {
+  return state.timelinePhaseFilter === "all" || entry.phase === state.timelinePhaseFilter;
+}
+
+function timelineCount(phase) {
+  return state.timeline.entries.filter((entry) => entry.kind !== "phase" && (!phase || entry.phase === phase)).length;
+}
+
+function renderTimelineFilters() {
+  const labels = { all: "全部", schema: "Schema 阶段", ttp: "TTP 阶段", acceptance: "最终验收" };
+  document.querySelectorAll("#timeline-filters .timeline-filter").forEach((button) => {
+    const phase = button.dataset.phase;
+    button.replaceChildren(document.createTextNode(labels[phase] || phase));
+    const count = timelineCount(phase === "all" ? "" : phase);
+    if (count) button.append(document.createTextNode(" · " + count));
+    const unread = phase === "all" ? 0 : state.timelineUnread[phase] || 0;
+    if (unread && phase !== state.timelinePhaseFilter) {
+      const badge = document.createElement("span");
+      badge.className = "timeline-filter-unread";
+      badge.textContent = "未读 " + unread;
+      button.append(badge);
+    }
+    button.classList.toggle("is-active", phase === state.timelinePhaseFilter);
+    button.setAttribute("aria-pressed", String(phase === state.timelinePhaseFilter));
+  });
+}
+
+function applyTimelineFilter(scrollToPhase = false) {
+  const host = $("agent-timeline");
+  for (const entry of state.timeline.entries) {
+    let refs = state.timelineNodes.get(entry.key);
+    if (!refs) refs = createTimelineNode(entry);
+    const node = updateTimelineNode(entry);
+    if (isTimelineEntryVisible(entry)) {
+      if (!node.isConnected) host.append(node);
+    } else if (node.isConnected) {
+      node.remove();
+    }
+  }
+  renderTimelineFilters();
+  if (scrollToPhase) {
+    const first = state.timeline.entries.find((entry) => entry.phase === state.timelinePhaseFilter);
+    const refs = first && state.timelineNodes.get(first.key);
+    if (refs && refs.node.isConnected) refs.node.scrollIntoView({ block: "start" });
+  }
 }
 
 function renderTimelineFull() {
@@ -1034,7 +1151,11 @@ function renderTimelineFull() {
   if (!entries.length) {
     const empty = document.createElement("p"); empty.className = "timeline-empty"; empty.textContent = "等待 Agent 事件…"; host.append(empty); return;
   }
-  for (const entry of entries) host.append(updateTimelineNode(entry));
+  for (const entry of entries) {
+    const node = updateTimelineNode(entry);
+    if (isTimelineEntryVisible(entry)) host.append(node);
+  }
+  renderTimelineFilters();
   if (state.followProgress) host.scrollTop = host.scrollHeight;
 }
 
@@ -1044,17 +1165,22 @@ function flushTimelineChanges() {
   if (empty) empty.remove();
   for (const key of state.timelineRemoved) {
     const refs = state.timelineNodes.get(key);
-    if (refs) refs.details.remove();
+    if (refs) refs.node.remove();
     state.timelineNodes.delete(key);
   }
   for (const key of state.timelineDirty) {
     const entry = state.timeline.byKey.get(key);
     if (!entry) continue;
     const node = updateTimelineNode(entry);
-    if (!node.isConnected) host.append(node);
+    if (isTimelineEntryVisible(entry)) {
+      if (!node.isConnected) host.append(node);
+    } else if (node.isConnected) {
+      node.remove();
+    }
   }
   state.timelineRemoved.clear();
   state.timelineDirty.clear();
+  renderTimelineFilters();
   if (state.followProgress) host.scrollTop = host.scrollHeight;
 }
 
@@ -1069,6 +1195,8 @@ function resetAgentTimeline(events) {
   state.events = events.slice();
   state.eventTracker = timelineModule.createSequenceTracker(events);
   state.timeline = timelineModule.buildTimeline(events);
+  state.timelinePhaseFilter = "all";
+  state.timelineUnread = { schema: 0, ttp: 0, acceptance: 0 };
   state.timelineDirty.clear();
   state.timelineRemoved.clear();
   renderTimelineFull();
@@ -1084,6 +1212,15 @@ function appendTimelineEvent(event) {
   }
   if (change.isDelta && change.previousLatestStreamingKey && change.previousLatestStreamingKey !== change.entry.key) {
     state.timelineDirty.add(change.previousLatestStreamingKey);
+  }
+  if (!change.entry) {
+    renderTimelineFilters();
+    updateProgressSummary(event);
+    return true;
+  }
+  if (change.created && change.entry.kind !== "phase" && change.entry.phase !== state.timelinePhaseFilter
+    && Object.prototype.hasOwnProperty.call(state.timelineUnread, change.entry.phase)) {
+    state.timelineUnread[change.entry.phase] += 1;
   }
   state.timelineDirty.add(change.entry.key);
   updateProgressSummary(event);
@@ -1229,12 +1366,21 @@ function closeStream() {
 }
 $("progress-follow").onclick = () => {
   state.followProgress = true;
+  state.timelinePhaseFilter = "all";
+  applyTimelineFilter();
   const host = $("agent-timeline");
   host.scrollTop = host.scrollHeight;
 };
 $("agent-timeline").addEventListener("scroll", () => {
   const host = $("agent-timeline");
   state.followProgress = host.scrollHeight - host.scrollTop - host.clientHeight < 24;
+});
+document.querySelectorAll("#timeline-filters .timeline-filter").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.timelinePhaseFilter = button.dataset.phase || "all";
+    if (state.timelinePhaseFilter !== "all") state.timelineUnread[state.timelinePhaseFilter] = 0;
+    applyTimelineFilter(true);
+  });
 });
 $("new-run").onclick = () => navigateToNew(); $("refresh").onclick = loadHistory; $("history-toggle").onclick = openDrawer; $("history-close").onclick = closeDrawer; $("drawer-overlay").onclick = closeDrawer;
 $("start").onclick = async () => {
