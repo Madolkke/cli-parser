@@ -9,6 +9,7 @@ function displayToolName(toolName) {
   return {
     submit_result_schema: "提交 Schema",
     submit_ttp_template: "提交 TTP 模板",
+    test_ttp_template: "测试 TTP 模板",
     finish_generation: "确认生成完成",
   }[toolName] || "执行工具操作";
 }
@@ -75,6 +76,7 @@ function summarizeToolCall(toolName, callText) {
   if (!payload) return toolName === "finish_generation" ? "等待确认" : "正在准备参数…";
   if (toolName === "submit_result_schema") return summarizeSchema(payload.result_schema || payload);
   if (toolName === "submit_ttp_template") return summarizeTtpTemplate(payload.ttp_template);
+  if (toolName === "test_ttp_template") return summarizeTtpTemplate(payload.ttp_template);
   if (toolName === "finish_generation") return "请求结束生成";
   return "参数已准备";
 }
@@ -108,7 +110,7 @@ function summarizeToolResult(toolName, resultText, resultDetail, complete = true
   const failed = resultDetail && (["error", "failed"].includes(resultDetail.state) || resultDetail.status === "failed" || resultDetail.error || resultDetail.exception);
   if (failed) {
     return {
-      summary: toolName === "submit_result_schema" ? "Schema 提交失败" : toolName === "submit_ttp_template" ? "模板解析失败" : toolName === "finish_generation" ? "生成确认失败" : "工具执行失败",
+      summary: toolName === "submit_result_schema" ? "Schema 提交失败" : toolName === "submit_ttp_template" ? "模板解析失败" : toolName === "test_ttp_template" ? "TTP 测试失败" : toolName === "finish_generation" ? "生成确认失败" : "工具执行失败",
       error: sanitizeToolError(resultDetail),
     };
   }
@@ -116,6 +118,10 @@ function summarizeToolResult(toolName, resultText, resultDetail, complete = true
   if (toolName === "submit_ttp_template") {
     const count = typeof resultText === "string" ? (resultText.match(/<parsed_record\b/g) || []).length : 0;
     return { summary: count ? "已返回 " + count + " 个解析结果块" : "解析结果已返回", error: "" };
+  }
+  if (toolName === "test_ttp_template") {
+    const count = typeof resultText === "string" ? (resultText.match(/<parsed_record\b/g) || []).length : 0;
+    return { summary: count ? "测试结果已返回" : "测试未产生结果", error: "" };
   }
   if (toolName === "finish_generation") return { summary: "生成已确认", error: "" };
   return { summary: "工具已完成", error: "" };

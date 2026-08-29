@@ -23,6 +23,10 @@ MANIFEST_VERSION = 1
 MAX_INPUTS = 1
 TTP_TEMPLATE_MANIFEST_VERSION = 1
 MAX_TTP_TEMPLATE_INPUTS = 5
+TEST_SET_MANIFEST_VERSION = 1
+TEST_SET_MAX_INPUTS = 5
+TEST_SET_TEMPLATE_MAX_BYTES = 64 * 1024
+SEMANTIC_PILOT_SUITE = "semantic-pilot"
 MAX_INPUT_BYTES = 1024 * 1024
 SUPPORTED_NODE_TYPES = frozenset(
     {"object", "array", "string", "integer", "number", "boolean"},
@@ -164,6 +168,49 @@ class TtpTemplateManifest:
     path: Path
     sha256: str
     cases: tuple[TtpTemplateCase, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TestSetCase:
+    """One self-contained four-part command-output test set."""
+
+    id: str
+    command: str
+    suites: tuple[str, ...]
+    tags: tuple[str, ...]
+    path: str
+    absolute_path: Path
+    inputs: tuple[EvaluationInput, ...]
+    schema: JsonObject
+    template: str
+    expected_records: tuple[JsonObject, ...]
+    file_sha256: Mapping[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class TestSetManifest:
+    """Strict index of independent four-part test sets."""
+
+    version: int
+    path: Path
+    sha256: str
+    cases: tuple[TestSetCase, ...]
+
+
+def _is_line_text_placeholder_schema(schema: Mapping[str, Any]) -> bool:
+    """Return whether a schema is the temporary lines[].text migration shape."""
+
+    properties = schema.get("properties")
+    if not isinstance(properties, Mapping) or set(properties) != {"lines"}:
+        return False
+    lines = properties.get("lines")
+    if not isinstance(lines, Mapping) or lines.get("type") != "array":
+        return False
+    items = lines.get("items")
+    if not isinstance(items, Mapping) or items.get("type") != "object":
+        return False
+    item_properties = items.get("properties")
+    return isinstance(item_properties, Mapping) and set(item_properties) == {"text"}
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -848,6 +895,323 @@ def load_ttp_template_manifest(manifest_path: Path) -> TtpTemplateManifest:
     )
 
 
+def _load_test_set_text(
+    path: Path,
+    expected_sha256: str,
+    label: str,
+    *,
+    max_bytes: int,
+    require_nonempty: bool = True,
+) -> str:
+    if not path.is_file():
+        raise HarnessError(f"{label} does not identify a file")
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise HarnessError(f"{label} could not be read") from error
+    if _sha256(payload) != expected_sha256:
+        raise HarnessError(f"{label} SHA-256 does not match")
+    if len(payload) > max_bytes or (require_nonempty and not payload):
+        raise HarnessError(f"{label} exceeds its size or emptiness limit")
+    if payload.startswith(b"\xef\xbb\xbf"):
+        raise HarnessError(f"{label} must not contain a UTF-8 BOM")
+    try:
+        text = payload.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise HarnessError(f"{label} is not strict UTF-8") from error
+    if require_nonempty and not text.strip():
+        raise HarnessError(f"{label} must not contain only whitespace")
+    return text
+
+
+def _load_test_set_json(
+    path: Path,
+    expected_sha256: str,
+    label: str,
+    *,
+    max_bytes: int,
+) -> tuple[Any, bytes]:
+    if not path.is_file():
+        raise HarnessError(f"{label} does not identify a file")
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise HarnessError(f"{label} could not be read") from error
+    if _sha256(payload) != expected_sha256:
+        raise HarnessError(f"{label} SHA-256 does not match")
+    if len(payload) > max_bytes:
+        raise HarnessError(f"{label} exceeds its size limit")
+    if payload.startswith(b"\xef\xbb\xbf"):
+        raise HarnessError(f"{label} must not contain a UTF-8 BOM")
+    try:
+        value = json.loads(
+            payload.decode("utf-8", errors="strict"),
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=lambda value: (_raise_invalid_constant(value)),
+        )
+    except HarnessError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise HarnessError(f"{label} is not strict UTF-8 JSON") from error
+    return value, payload
+
+
+def _load_test_set_files(
+    root: Path,
+    case_path: Path,
+    raw_files: Mapping[str, Any],
+    label: str,
+) -> tuple[
+    tuple[EvaluationInput, ...],
+    JsonObject,
+    str,
+    tuple[JsonObject, ...],
+    dict[str, Any],
+]:
+    _require_exact_keys(
+        raw_files,
+        {"schema", "template", "expected", "inputs"},
+        f"{label}.files",
+    )
+
+    def file_hash(key: str) -> str:
+        raw_file = raw_files[key]
+        if not isinstance(raw_file, Mapping):
+            raise HarnessError(f"{label}.files.{key} must be an object")
+        _require_exact_keys(raw_file, {"sha256"}, f"{label}.files.{key}")
+        return _validate_sha256(raw_file["sha256"], f"{label}.files.{key}.sha256")
+
+    schema_sha256 = file_hash("schema")
+    schema, _ = _load_test_set_json(
+        case_path / "schema.json",
+        schema_sha256,
+        f"{label}.schema.json",
+        max_bytes=256 * 1024,
+    )
+    if not isinstance(schema, dict):
+        raise HarnessError(f"{label}.schema.json must contain an object")
+    if validate_result_schema(schema):
+        raise HarnessError(f"{label}.schema.json is not a supported result schema")
+
+    raw_inputs = raw_files["inputs"]
+    if (
+        not isinstance(raw_inputs, list)
+        or not 1 <= len(raw_inputs) <= TEST_SET_MAX_INPUTS
+    ):
+        raise HarnessError(
+            f"{label}.files.inputs must contain 1 to {TEST_SET_MAX_INPUTS} items",
+        )
+    inputs: list[EvaluationInput] = []
+    expected_names = {f"{index:03d}.txt" for index in range(1, len(raw_inputs) + 1)}
+    actual_names: set[str] = set()
+    input_hashes: list[str] = []
+    for index, raw_input in enumerate(raw_inputs, start=1):
+        input_label = f"{label}.files.inputs[{index - 1}]"
+        if not isinstance(raw_input, Mapping):
+            raise HarnessError(f"{input_label} must be an object")
+        _require_exact_keys(raw_input, {"name", "sha256"}, input_label)
+        name = _require_string(raw_input["name"], f"{input_label}.name")
+        if not re.fullmatch(r"[0-9]{3}\.txt", name) or name != f"{index:03d}.txt":
+            raise HarnessError(f"{input_label}.name must be {index:03d}.txt")
+        if name in actual_names:
+            raise HarnessError(f"{label}.files.inputs contains duplicate names")
+        actual_names.add(name)
+        input_sha256 = _validate_sha256(raw_input["sha256"], f"{input_label}.sha256")
+        input_hashes.append(input_sha256)
+        input_path = case_path / "inputs" / name
+        inputs.append(
+            EvaluationInput(
+                path=f"{case_path.name}/inputs/{name}",
+                sha256=input_sha256,
+                absolute_path=input_path,
+                text=_load_test_set_text(
+                    input_path,
+                    input_sha256,
+                    f"{input_label}.file",
+                    max_bytes=MAX_INPUT_BYTES,
+                ),
+            ),
+        )
+    if actual_names != expected_names:
+        raise HarnessError(f"{label}.files.inputs names are not contiguous")
+    actual_input_files = {
+        item.name for item in (case_path / "inputs").iterdir() if item.is_file()
+    }
+    if actual_input_files != expected_names:
+        raise HarnessError(f"{label}.inputs contains unexpected files")
+
+    template_sha256 = file_hash("template")
+    template = _load_test_set_text(
+        case_path / "template.ttp",
+        template_sha256,
+        f"{label}.template.ttp",
+        max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
+    )
+
+    expected_sha256 = file_hash("expected")
+    expected, _ = _load_test_set_json(
+        case_path / "expected.json",
+        expected_sha256,
+        f"{label}.expected.json",
+        max_bytes=8 * 1024 * 1024,
+    )
+    if not isinstance(expected, list) or len(expected) != len(inputs):
+        raise HarnessError(f"{label}.expected.json must match the input count")
+    if any(not isinstance(record, dict) for record in expected):
+        raise HarnessError(f"{label}.expected.json must contain only object records")
+    if validate_records_against_schema(expected, schema):
+        raise HarnessError(f"{label}.expected.json records do not satisfy schema")
+
+    baseline = validate_ttp_template(
+        template,
+        [item.text for item in inputs],
+        schema,
+        timeout_seconds=20.0,
+        max_result_bytes=8 * 1024 * 1024,
+    )
+    if baseline.issues or baseline.records != expected:
+        raise HarnessError(
+            f"{label} standard template does not reproduce expected records",
+        )
+    return (
+        tuple(inputs),
+        schema,
+        template,
+        tuple(expected),
+        {
+            "schema": schema_sha256,
+            "template": template_sha256,
+            "expected": expected_sha256,
+            "inputs": tuple(input_hashes),
+        },
+    )
+
+
+def load_test_set_manifest(manifest_path: Path) -> TestSetManifest:
+    """Load and fully preflight the canonical four-part test-set index."""
+
+    path = manifest_path.expanduser().resolve()
+    raw, payload = _read_json(path, "test-set manifest")
+    if not isinstance(raw, Mapping):
+        raise HarnessError("test-set manifest root must be an object")
+    _require_exact_keys(raw, {"version", "cases"}, "test-set manifest")
+    if raw["version"] != TEST_SET_MANIFEST_VERSION:
+        raise HarnessError(
+            f"test-set manifest version must be {TEST_SET_MANIFEST_VERSION}",
+        )
+    raw_cases = raw["cases"]
+    if not isinstance(raw_cases, list) or not raw_cases:
+        raise HarnessError("test-set manifest cases must be a non-empty array")
+
+    root = path.parent
+    cases: list[TestSetCase] = []
+    seen_ids: set[str] = set()
+    seen_paths: set[str] = set()
+    for index, raw_case in enumerate(raw_cases):
+        label = f"test-set manifest cases[{index}]"
+        if not isinstance(raw_case, Mapping):
+            raise HarnessError(f"{label} must be an object")
+        required = {"id", "path", "command", "suites", "files"}
+        allowed = required | {"tags"}
+        _require_exact_keys(raw_case, allowed, label)
+        case_id = _require_string(raw_case["id"], f"{label}.id")
+        if not _ID_RE.fullmatch(case_id) or case_id in seen_ids:
+            raise HarnessError(f"{label}.id is invalid or duplicated")
+        seen_ids.add(case_id)
+        path_text, case_path = _safe_manifest_path(
+            root,
+            raw_case["path"],
+            f"{label}.path",
+        )
+        if path_text.casefold() in seen_paths:
+            raise HarnessError(f"{label}.path is duplicated")
+        seen_paths.add(path_text.casefold())
+        if not case_path.is_dir():
+            raise HarnessError(f"{label}.path must identify a directory")
+        actual_children = {child.name for child in case_path.iterdir()}
+        if actual_children != {
+            "inputs",
+            "schema.json",
+            "template.ttp",
+            "expected.json",
+        }:
+            raise HarnessError(
+                f"{label}.path must contain exactly the four test-set parts",
+            )
+        inputs_dir = case_path / "inputs"
+        if not inputs_dir.is_dir():
+            raise HarnessError(f"{label}.inputs must be a directory")
+        command = _require_string(raw_case["command"], f"{label}.command")
+        suites = _string_list(raw_case["suites"], f"{label}.suites", pattern=_TAG_RE)
+        tags = _optional_string_list(
+            raw_case.get("tags"),
+            f"{label}.tags",
+            pattern=_TAG_RE,
+        )
+        raw_files = raw_case["files"]
+        if not isinstance(raw_files, Mapping):
+            raise HarnessError(f"{label}.files must be an object")
+        inputs, schema, template, expected, hashes = _load_test_set_files(
+            root,
+            case_path,
+            raw_files,
+            label,
+        )
+        if (
+            SEMANTIC_PILOT_SUITE in suites
+            and _is_line_text_placeholder_schema(schema)
+        ):
+            raise HarnessError(
+                f"{label}.schema.json uses the lines[].text placeholder and "
+                f"cannot join {SEMANTIC_PILOT_SUITE}",
+            )
+        cases.append(
+            TestSetCase(
+                id=case_id,
+                command=command,
+                suites=suites,
+                tags=tags,
+                path=path_text,
+                absolute_path=case_path,
+                inputs=inputs,
+                schema=schema,
+                template=template,
+                expected_records=expected,
+                file_sha256=hashes,
+            ),
+        )
+    return TestSetManifest(
+        version=TEST_SET_MANIFEST_VERSION,
+        path=path,
+        sha256=_sha256(payload),
+        cases=tuple(cases),
+    )
+
+
+def select_test_sets(
+    manifest: TestSetManifest,
+    *,
+    suite: str | None,
+    case_ids: Sequence[str],
+) -> tuple[TestSetCase, ...]:
+    """Select a suite or explicit case IDs from the canonical manifest."""
+
+    if (suite is None) == (not case_ids):
+        raise HarnessError("select exactly one of --suite or --case")
+    if suite is not None:
+        selected = tuple(case for case in manifest.cases if suite in case.suites)
+        if not selected:
+            raise HarnessError(f"suite does not select any cases: {suite}")
+        return selected
+    by_id = {case.id: case for case in manifest.cases}
+    if len(set(case_ids)) != len(case_ids):
+        raise HarnessError("--case must not contain duplicate IDs")
+    missing = sorted(set(case_ids) - by_id.keys())
+    if missing:
+        raise HarnessError(f"unknown case IDs: {', '.join(missing)}")
+    return tuple(by_id[case_id] for case_id in case_ids)
+
+
 def select_ttp_template_cases(
     manifest: TtpTemplateManifest,
     *,
@@ -1426,6 +1790,7 @@ def score_ttp_template_output(
         "tool_call_starts": 0.0,
         "tool_result_errors": 0.0,
         "ttp_submissions": 0.0,
+        "ttp_test_calls": 0.0,
         "ttp_no_tool_responses": 0.0,
         "ttp_no_tool_retries": 0.0,
         "model_retries_observed": 0.0,
@@ -1505,6 +1870,7 @@ def score_ttp_template_output(
         "tool_call_starts",
         "tool_result_errors",
         "ttp_submissions",
+        "ttp_test_calls",
         "ttp_no_tool_responses",
         "ttp_no_tool_retries",
         "model_retries_observed",
@@ -1997,6 +2363,7 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "tool_result_errors": 0.0,
         "schema_submissions": 0.0,
         "ttp_submissions": 0.0,
+        "ttp_test_calls": 0.0,
         "schema_no_tool_responses": 0.0,
         "ttp_no_tool_responses": 0.0,
         "schema_no_tool_retries": 0.0,
@@ -2158,6 +2525,7 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "tool_result_errors",
         "schema_submissions",
         "ttp_submissions",
+        "ttp_test_calls",
         "schema_no_tool_responses",
         "ttp_no_tool_responses",
         "schema_no_tool_retries",

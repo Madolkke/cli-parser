@@ -19,6 +19,7 @@ from cli_parser_agent.ttp_generation.agent import (
     SCHEMA_SYSTEM_PROMPT,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    TEST_TEMPLATE_TOOL_NAME,
     TTP_SYSTEM_PROMPT,
     FinishGenerationTool,
     GenerationPhase,
@@ -28,6 +29,8 @@ from cli_parser_agent.ttp_generation.agent import (
     SubmitResultSchemaTool,
     SubmitTtpTemplateTool,
     TemplateCandidate,
+    TestTtpTemplateTool,
+    TtpTestCandidate,
     ValidatorOutcome,
     build_schema_task_prompt,
     build_submission_tools,
@@ -35,6 +38,7 @@ from cli_parser_agent.ttp_generation.agent import (
 )
 from cli_parser_agent.ttp_generation.agent import tools as tools_module
 from cli_parser_agent.ttp_generation.progress import ProgressEmitter
+from cli_parser_agent.ttp_generation.validation import TtpParseResult
 
 
 def _schema(field_name: str = "value") -> dict[str, Any]:
@@ -144,7 +148,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v24-no-assumptions-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v25-test-ttp-template-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -164,10 +168,13 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "{{" not in SCHEMA_SYSTEM_PROMPT
 
     assert "submit_ttp_template" in TTP_SYSTEM_PROMPT
+    assert "test_ttp_template" in TTP_SYSTEM_PROMPT
     assert "finish_generation" in TTP_SYSTEM_PROMPT
     assert "空对象或关键数组为空" in TTP_SYSTEM_PROMPT
     assert "跨样例" in TTP_SYSTEM_PROMPT
     assert "每次模型回复最多调用一个工具" in TTP_SYSTEM_PROMPT
+    assert "三个工具之一" in TTP_SYSTEM_PROMPT
+    assert "不会成为可 finish 的候选" in TTP_SYSTEM_PROMPT
     assert "ToolResult 已进入" in TTP_SYSTEM_PROMPT
     assert "语义字段" in TTP_SYSTEM_PROMPT
     assert "未建模列" in TTP_SYSTEM_PROMPT
@@ -208,7 +215,7 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "Python 关键字字段" in TTP_SYSTEM_PROMPT
     # Every reply must call exactly one tool; plain text is discarded and only
     # burns budget (0.67 mean no-tool TTP responses observed per trial).
-    assert "必须恰好调用这两个工具之一" in TTP_SYSTEM_PROMPT
+    assert "必须恰好调用这三个工具之一" in TTP_SYSTEM_PROMPT
     assert "会被整条丢弃" in TTP_SYSTEM_PROMPT
     # Superseded results are collapsed in context, so the model must not read
     # the placeholder as a parse failure or resubmit the same template.
@@ -579,6 +586,65 @@ async def test_template_submission_requires_a_frozen_schema() -> None:
     assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
     assert session.ttp_submissions == 0
     assert session.last_ttp_template is None
+
+
+@pytest.mark.asyncio
+async def test_ttp_test_tool_is_independent_of_schema_and_candidate_state() -> None:
+    assert TestTtpTemplateTool.name == TEST_TEMPLATE_TOOL_NAME
+    seen: list[TtpTestCandidate] = []
+
+    async def validate_test(candidate: TtpTestCandidate) -> TtpParseResult:
+        seen.append(candidate)
+        return TtpParseResult(
+            result=[{"value": "experimental"}],
+            issues=[],
+        )
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+        ttp_test_validator=validate_test,
+    )
+    session.validated_ttp_template = "stored: {{ value }}"
+    session.records = ({"value": "stored"},)
+
+    result = await TestTtpTemplateTool(session).call(
+        text="value: experimental",
+        ttp_template="value: {{ value }}",
+    )
+
+    assert _matched_records(result) == [[{"value": "experimental"}]]
+    assert seen == [
+        TtpTestCandidate(
+            text="value: experimental",
+            ttp_template="value: {{ value }}",
+        ),
+    ]
+    assert session.ttp_test_calls == 1
+    assert session.ttp_submissions == 0
+    assert session.validated_ttp_template == "stored: {{ value }}"
+    assert session.records == ({"value": "stored"},)
+
+
+@pytest.mark.asyncio
+async def test_ttp_test_tool_rejects_invalid_arguments_without_disclosure() -> None:
+    secret = "test-template-secret-4f8c"
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+    )
+
+    result = await TestTtpTemplateTool(session).call(
+        text="   ",
+        ttp_template=secret,
+        unexpected=secret,
+    )
+
+    assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert secret not in _tool_text(result)
+    assert session.ttp_test_calls == 1
 
 
 @pytest.mark.asyncio
@@ -1373,7 +1439,7 @@ async def test_unchanged_template_is_rejected_without_revalidating() -> None:
     ("phase", "tool_types"),
     [
         ("schema", [SubmitResultSchemaTool]),
-        ("ttp", [SubmitTtpTemplateTool, FinishGenerationTool]),
+        ("ttp", [SubmitTtpTemplateTool, TestTtpTemplateTool, FinishGenerationTool]),
     ],
 )
 def test_phase_toolkit_builder_returns_fixed_phase_tools(

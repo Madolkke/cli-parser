@@ -28,6 +28,7 @@ from .tools import (
     FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    TEST_TEMPLATE_TOOL_NAME,
     build_submission_tools,
 )
 
@@ -43,6 +44,7 @@ _PHASE_TOOL_NAMES: dict[GenerationPhase, tuple[str, ...]] = {
     "schema": (SUBMIT_SCHEMA_TOOL_NAME,),
     "ttp": (
         SUBMIT_TEMPLATE_TOOL_NAME,
+        TEST_TEMPLATE_TOOL_NAME,
         FINISH_GENERATION_TOOL_NAME,
     ),
 }

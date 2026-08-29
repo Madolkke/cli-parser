@@ -288,6 +288,7 @@ class TtpGenerator:
                 "ttp_agent_rounds": result_metadata.ttp_agent_rounds,
                 "schema_submissions": result_metadata.schema_submissions,
                 "ttp_submissions": result_metadata.ttp_submissions,
+                "ttp_test_calls": result_metadata.ttp_test_calls,
                 "termination_reason": result_metadata.termination_reason or "",
                 "fault_domain": result_metadata.fault_domain or "",
                 "schema_frozen": bool(

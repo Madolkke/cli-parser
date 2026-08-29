@@ -373,6 +373,7 @@ async def test_generation_result_captures_the_active_laminar_trace(
         "ttp_agent_rounds": 0,
         "schema_submissions": 0,
         "ttp_submissions": 0,
+        "ttp_test_calls": 0,
         "termination_reason": "model_no_tool_retry_limit",
         "fault_domain": "model",
         "schema_frozen": False,

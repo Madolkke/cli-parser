@@ -1025,7 +1025,7 @@ function updateTimelineNode(entry) {
       refs[refName].textContent = value;
       children.push(refs[refName]);
     }
-    const rawText = entry.toolName === "submit_ttp_template" && !entry.errorSummary
+    const rawText = ["submit_ttp_template", "test_ttp_template"].includes(entry.toolName) && !entry.errorSummary
       ? timelineModule.rawTtpResultText(entry.rawResultText) : "";
     if (rawText) {
       if (!refs.rawResultDetails) {

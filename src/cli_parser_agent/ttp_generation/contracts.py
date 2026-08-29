@@ -160,6 +160,7 @@ class GenerationMetadata(ContractModel):
     tool_result_errors: int = Field(default=0, ge=0)
     schema_submissions: int = Field(default=0, ge=0)
     ttp_submissions: int = Field(default=0, ge=0)
+    ttp_test_calls: int = Field(default=0, ge=0)
     schema_no_tool_responses: int = Field(default=0, ge=0)
     ttp_no_tool_responses: int = Field(default=0, ge=0)
     schema_no_tool_retries: int = Field(default=0, ge=0)

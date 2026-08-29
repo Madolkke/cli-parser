@@ -23,34 +23,42 @@ def _load_script() -> ModuleType:
     return module
 
 
-def _configuration_environment() -> dict[str, str]:
-    fixture_root = PROJECT_ROOT / "testdata" / "real_command_outputs" / "ntc_templates"
+def _configuration_environment(
+    input_paths: tuple[Path, ...] | None = None,
+) -> dict[str, str]:
+    if input_paths is None:
+        input_paths = (PROJECT_ROOT / "test-input.txt",)
     return {
         "OPENAI_API_KEY": "test-key",
         "OPENAI_MODEL": "test-model",
         "CLI_PARSER_ONCE_INPUT_FILES": os.pathsep.join(
-            str(fixture_root / "cisco_ios/show_interfaces_status" / filename)
-            for filename in (
-                "cisco_ios_show_interfaces_status.raw",
-                "cisco_ios_show_interfaces_status2.raw",
-                "cisco_ios_show_interfaces_status_pvlan.raw",
-            )
+            str(path)
+            for path in input_paths
         ),
     }
 
 
-def test_environment_command_outputs_are_valid_and_ordered() -> None:
+def test_environment_command_outputs_are_valid_and_ordered(tmp_path: Path) -> None:
     script = _load_script()
-    _, _, paths, _ = script._configuration(_configuration_environment())
+    input_paths = tuple(
+        tmp_path / f"{index:03}.txt"
+        for index in range(1, 4)
+    )
+    for index, path in enumerate(input_paths, start=1):
+        path.write_text(f"sample output {index}\n", encoding="utf-8")
+
+    _, _, paths, _ = script._configuration(
+        _configuration_environment(input_paths),
+    )
 
     outputs, metadata = script._load_command_outputs(paths)
 
     assert len(outputs) == 3
     assert all(output.strip() for output in outputs)
     assert [Path(item["path"]).name for item in metadata] == [
-        "cisco_ios_show_interfaces_status.raw",
-        "cisco_ios_show_interfaces_status2.raw",
-        "cisco_ios_show_interfaces_status_pvlan.raw",
+        "001.txt",
+        "002.txt",
+        "003.txt",
     ]
     assert all(len(item["sha256"]) == 64 for item in metadata)
 

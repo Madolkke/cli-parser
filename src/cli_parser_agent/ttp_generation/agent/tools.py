@@ -17,11 +17,18 @@ from agentscope.permission import (
     PermissionDecision,
 )
 from agentscope.tool import ParamsBase, ToolBase, ToolChunk
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
-from ..validation import ParseCapture, build_parse_capture
+from ..validation import (
+    MAX_TTP_TEMPLATE_BYTES,
+    MAX_TTP_TEST_INPUT_BYTES,
+    ParseCapture,
+    TtpParseResult,
+    build_parse_capture,
+    parse_ttp_template,
+)
 from .session import (
     GenerationPhase,
     GenerationSession,
@@ -29,14 +36,17 @@ from .session import (
     SchemaValidator,
     TemplateCandidate,
     TemplateValidator,
+    TtpTestCandidate,
     ValidatorOutcome,
     ValidatorOutcomeAttributes,
     ValidatorOutcomeLike,
+    run_ttp_test_validator,
     run_validator,
 )
 
 SUBMIT_SCHEMA_TOOL_NAME = "submit_result_schema"
 SUBMIT_TEMPLATE_TOOL_NAME = "submit_ttp_template"
+TEST_TEMPLATE_TOOL_NAME = "test_ttp_template"
 FINISH_GENERATION_TOOL_NAME = "finish_generation"
 
 
@@ -60,6 +70,47 @@ class TemplateSubmissionInput(ParamsBase):
         max_length=65_536,
         description="需要针对全部命令输出验证的完整共享 TTP 模板。",
     )
+
+
+class TtpTemplateTestInput(ParamsBase):
+    """test_ttp_template 接受的独立文本和模板。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(
+        min_length=1,
+        max_length=1_048_576,
+        description="用于测试 TTP 模板的单份非空白文本。",
+    )
+    ttp_template: str = Field(
+        min_length=1,
+        max_length=65_536,
+        description="需要测试的完整 TTP 模板。",
+    )
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("text must not be blank")
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise ValueError("text must be valid UTF-8") from error
+        if size > MAX_TTP_TEST_INPUT_BYTES:
+            raise ValueError("text exceeds the UTF-8 byte limit")
+        return value
+
+    @field_validator("ttp_template")
+    @classmethod
+    def _validate_template_bytes(cls, value: str) -> str:
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeEncodeError as error:
+            raise ValueError("ttp_template must be valid UTF-8") from error
+        if size > MAX_TTP_TEMPLATE_BYTES:
+            raise ValueError("ttp_template exceeds the UTF-8 byte limit")
+        return value
 
 
 class FinishGenerationInput(ParamsBase):
@@ -243,6 +294,35 @@ def _ttp_result_chunk(
     )
 
 
+def _ttp_test_result_chunk(
+    *,
+    result: Any = None,
+    has_result: bool = False,
+    issues: Sequence[Any] = (),
+    **details: Any,
+) -> _TracedToolResult:
+    """Format a parse-only result like submit_ttp_template for the model."""
+
+    diagnostic_payload = _result_payload(
+        phase="template",
+        accepted=has_result and not issues,
+        issues=issues,
+        **details,
+    )
+    if has_result:
+        model_text = _format_ttp_records_for_model((result,))
+    else:
+        model_text = f"[]\n{_brief_ttp_error(issues)}"
+    return _TracedToolResult(
+        chunk=ToolChunk(
+            content=[TextBlock(text=model_text)],
+            state=ToolResultState.SUCCESS,
+            metadata={"phase": "template", "accepted": has_result and not issues},
+        ),
+        diagnostic_payload=diagnostic_payload,
+    )
+
+
 def _tool_chunk_payload(chunk: ToolChunk) -> dict[str, Any]:
     """Recover the JSON payload produced by ``_result_chunk`` for tracing."""
 
@@ -415,6 +495,114 @@ class _SubmissionToolBase(ToolBase):
                 "The tool only validates a candidate and updates its isolated "
                 "in-memory generation session."
             ),
+        )
+
+
+class TestTtpTemplateTool(_SubmissionToolBase):
+    """Safely experiment with one independent text/template pair."""
+
+    __test__ = False
+    name = TEST_TEMPLATE_TOOL_NAME
+    description = (
+        "使用一份独立文本测试 TTP 模板的解析行为。该工具只返回实验结果，"
+        "不会校验冻结 Schema，也不会保存或替换生成候选。"
+    )
+    input_schema = TtpTemplateTestInput.model_json_schema()
+
+    async def call(
+        self,
+        text: str | None = None,
+        ttp_template: str | None = None,
+        **unexpected_arguments: Any,
+    ) -> ToolChunk:
+        self.session.ttp_test_calls += 1
+        traced_input: dict[str, Any] = {
+            "text": text,
+            "ttp_template": ttp_template,
+        }
+        if unexpected_arguments:
+            traced_input["invalid_tool_arguments"] = True
+        return await _run_traced_tool_call(
+            name=self.name,
+            input=traced_input,
+            operation=lambda: self._call(
+                text=text,
+                ttp_template=ttp_template,
+                unexpected_arguments=unexpected_arguments,
+            ),
+            progress=self.progress,
+            phase="ttp",
+        )
+
+    async def _call(
+        self,
+        *,
+        text: str | None,
+        ttp_template: str | None,
+        unexpected_arguments: Mapping[str, Any],
+    ) -> _TracedToolResult:
+        try:
+            submission = TtpTemplateTestInput.model_validate(
+                {
+                    "text": text,
+                    "ttp_template": ttp_template,
+                    **unexpected_arguments,
+                },
+            )
+        except ValidationError:
+            issues = (
+                {
+                    "code": "ttp.test_input_invalid",
+                    "stage": "template",
+                    "message": "TTP test input does not satisfy the tool contract.",
+                },
+            )
+            return _ttp_test_result_chunk(
+                issues=issues,
+                ttp_test_calls=self.session.ttp_test_calls,
+            )
+
+        candidate = TtpTestCandidate(
+            text=submission.text,
+            ttp_template=submission.ttp_template,
+        )
+        try:
+            if self.session.ttp_test_validator is None:
+                outcome = await asyncio.to_thread(
+                    parse_ttp_template,
+                    candidate.ttp_template,
+                    candidate.text,
+                )
+            else:
+                outcome = await run_ttp_test_validator(
+                    self.session.ttp_test_validator,
+                    candidate,
+                )
+            if not isinstance(outcome, TtpParseResult):
+                raise TypeError("TTP test validator returned an unsupported result")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return _ttp_test_result_chunk(
+                issues=(
+                    {
+                        "code": "ttp.test_validator_failed",
+                        "stage": "template",
+                        "message": "TTP test validation could not be completed.",
+                    },
+                ),
+                ttp_test_calls=self.session.ttp_test_calls,
+            )
+
+        if outcome.issues:
+            return _ttp_test_result_chunk(
+                issues=outcome.issues,
+                ttp_test_calls=self.session.ttp_test_calls,
+            )
+        return _ttp_test_result_chunk(
+            result=deepcopy(outcome.result),
+            has_result=True,
+            ttp_test_calls=self.session.ttp_test_calls,
         )
 
 
@@ -886,6 +1074,7 @@ def build_submission_tools(
     if phase == "ttp":
         return [
             SubmitTtpTemplateTool(session, progress),
+            TestTtpTemplateTool(session, progress),
             FinishGenerationTool(session, progress),
         ]
     raise ValueError(f"unsupported generation phase: {phase!r}")
@@ -899,6 +1088,8 @@ __all__ = [
     "SchemaValidator",
     "SubmitResultSchemaTool",
     "SubmitTtpTemplateTool",
+    "TestTtpTemplateTool",
+    "TEST_TEMPLATE_TOOL_NAME",
     "TemplateCandidate",
     "TemplateValidator",
     "ValidatorOutcome",

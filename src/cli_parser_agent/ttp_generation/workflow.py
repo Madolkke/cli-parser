@@ -25,6 +25,7 @@ from .agent import (
     GenerationSession,
     SchemaCandidate,
     TemplateCandidate,
+    TtpTestCandidate,
     ValidatorOutcome,
     build_agent,
     build_schema_task_message,
@@ -51,6 +52,7 @@ from .sampling import (
     sample_command_outputs,
 )
 from .validation import (
+    parse_ttp_template,
     validate_result_schema,
     validate_ttp_template,
 )
@@ -291,6 +293,7 @@ async def _run_traced_generation_phase(
                 "agent_rounds": session.agent_rounds - rounds_before,
                 "schema_submissions": session.schema_submissions,
                 "ttp_submissions": session.ttp_submissions,
+                "ttp_test_calls": session.ttp_test_calls,
                 "termination_reason": termination_reason,
             },
         )
@@ -609,6 +612,7 @@ class _GenerationWorkflow:
             command_outputs=tuple(request.command_outputs),
             schema_validator=self._schema_validator,
             template_validator=self._template_validator,
+            ttp_test_validator=self._ttp_test_validator,
             max_ttp_submissions=policy.max_ttp_submissions,
             max_agent_rounds=policy.max_agent_rounds,
             max_schema_no_tool_retries=policy.max_schema_no_tool_retries,
@@ -687,6 +691,49 @@ class _GenerationWorkflow:
             records=tuple(outcome.records),
         )
 
+    async def _ttp_test_validator(
+        self,
+        candidate: TtpTestCandidate,
+    ) -> Any:
+        remaining = max(0.0, self.deadline - time.monotonic())
+        if remaining <= 0:
+            self.session.terminal_reason = "generation_timeout"
+            return parse_ttp_template(
+                candidate.ttp_template,
+                candidate.text,
+                timeout_seconds=0,
+                max_result_bytes=self.policy.max_parse_result_bytes,
+                max_ttp_template_bytes=self.policy.max_ttp_template_bytes,
+                max_ttp_group_depth=self.policy.max_ttp_group_depth,
+                max_ttp_regex_chars=self.policy.max_ttp_regex_chars,
+                max_ttp_argument_chars=self.policy.max_ttp_argument_chars,
+            )
+        outcome = await asyncio.to_thread(
+            parse_ttp_template,
+            candidate.ttp_template,
+            candidate.text,
+            timeout_seconds=min(
+                self.policy.ttp_validation_timeout_seconds,
+                remaining,
+            ),
+            max_result_bytes=self.policy.max_parse_result_bytes,
+            max_ttp_template_bytes=self.policy.max_ttp_template_bytes,
+            max_ttp_group_depth=self.policy.max_ttp_group_depth,
+            max_ttp_regex_chars=self.policy.max_ttp_regex_chars,
+            max_ttp_argument_chars=self.policy.max_ttp_argument_chars,
+        )
+        if any(
+            issue.code
+            in {
+                "ttp.worker_bootstrap_failed",
+                "ttp.worker_host_unsupported",
+                "ttp.worker_start_failed",
+            }
+            for issue in outcome.issues
+        ):
+            self.session.terminal_reason = "ttp_worker_unavailable"
+        return outcome
+
     def _metadata(self, termination_reason: str) -> GenerationMetadata:
         return GenerationMetadata(
             request_id=self.request_id,
@@ -706,6 +753,7 @@ class _GenerationWorkflow:
             tool_result_errors=self.session.tool_result_errors,
             schema_submissions=self.session.schema_submissions,
             ttp_submissions=self.session.ttp_submissions,
+            ttp_test_calls=self.session.ttp_test_calls,
             schema_no_tool_responses=self.session.schema_no_tool_responses,
             ttp_no_tool_responses=self.session.ttp_no_tool_responses,
             schema_no_tool_retries=self.session.schema_no_tool_retries,

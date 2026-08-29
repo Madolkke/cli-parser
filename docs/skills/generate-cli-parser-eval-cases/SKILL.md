@@ -1,46 +1,45 @@
 ---
 name: generate-cli-parser-eval-cases
-description: Create, extend, or correct versioned golden cases for this repository's CLI parser black-box evaluation system from one raw output per case. Use when authoring expected records, schema structure assertions, or manifest entries under evals/ttp_generation, or when validating those definitions offline.
+description: Create or review the canonical four-part CLI parser test sets offline.
 ---
 
-# Generate CLI Parser Eval Cases
+# Generate Standard Test Sets
 
-Create human-auditable golden data from raw CLI text without consulting the system under test. Treat the raw captures as the only source of truth.
+Use this skill only for offline authoring and review of `evals/test_sets/`.
+Read the repository `AGENTS.md` first. Never run a live model evaluation, use a
+Trace as a golden source, or copy an Agent artifact into a test set.
 
-## Required references
+Each independent test set contains exactly:
 
-Read these files completely before editing a case:
+```text
+<case-id>/
+  inputs/001.txt ... 005.txt
+  schema.json
+  template.ttp
+  expected.json
+```
 
-- `references/test-case-format.md`
-- `references/annotation-policy.md`
-- `references/minimal-example.md`
+The inputs are same-command UTF-8 command echoes in source order. The Schema,
+standard TTP template, and expected records must be reviewed together for all
+inputs. `expected.json` is a list of one object per input. The root manifest is
+`evals/test_sets/manifest.json` and contains only index metadata and SHA-256
+values.
 
-Also read the repository `AGENTS.md`. Do not read `scripts/run_agent_evaluation.py`: it is a local-secret boundary whose live configuration is injected from the environment.
+Before changing assets, preserve the raw source and third-party attribution in
+the review context. Write the standard template independently, run the local
+deterministic baseline, and calculate hashes over the final bytes. Do not add
+`target`, `schema_contract`, per-case external schema paths, or model output
+files.
 
-## Safety boundary
+Run the offline checks:
 
-Never inspect or use any of the following while deriving a golden:
+```powershell
+uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite smoke
+```
 
-- Laminar traces, evaluations, spans, or UI pages;
-- `.artifacts/` or any historical/current Agent result;
-- generated TTP templates, generated Schemas, captures, or model text;
-- upstream parser templates, reference YAML, JSON command results, or another parser's output;
-- an LLM or the tested Agent to propose, fill, or verify expected values.
-
-Never run `scripts/run_agent_evaluation.py run`, a live model request, replay, debugger, or judge. Running `list` and `preflight` is allowed. Do not read, modify, or broadly diff `scripts/run_agent_evaluation.py`.
-
-## Workflow
-
-1. Confirm that the case has exactly one non-empty raw text file. Read it in full.
-2. Identify the repeated primary business entity in each capture: for example, one interface, route, neighbor, or inventory item. Ignore headings, separators, prompts, echoes, pager text, prose notices, and other control material.
-3. If two or more primary output structures are equally reasonable and would produce materially different roots or arrays, stop before editing and ask the human to choose. Explain the alternatives using field names only; do not invent a preference.
-4. Apply the maximum evidenced semantic projection in `references/annotation-policy.md`. Preserve all primary entities and their source order, and retain every fine-grained business field that appears non-empty at least once with an unambiguous meaning and boundary.
-5. Write one expected root object per input, in input order. Keep scalar types strict and default source-derived values to strings. Never add `null`, empty placeholders, empty objects, or empty arrays.
-6. Derive the closed schema contract from those exact records. Include every object, array, item, and scalar path exactly once. An object property uses `required: true` only when it occurs in every instance of its immediate parent object; otherwise use `false`. Root and array-item paths use `false`.
-7. Add or update the manifest entry, calculate SHA-256 over the exact file bytes, and update the target hash after the target is final. Keep paths relative to the repository root and POSIX-formatted.
-8. Run `uv run python scripts/run_agent_evaluation.py preflight`. Fix every local validation error. This command must not initialize Laminar or make a network request.
-9. Review only the files in scope. If a diff is needed, limit it explicitly to `evals/ttp_generation` and this skill directory. Never run an unrestricted repository diff because the evaluation entry script may contain local hard-coded keys.
-
-## Completion report
-
-Report the case ID, ordered input count, selected primary entity, retained field paths, excluded empty, ambiguous, or control fields, input/target hashes, and preflight result. State explicitly that no live evaluation, trace, artifact, upstream answer, or model-generated golden was used.
+The baseline must parse every input and reproduce `expected.json` exactly.
+Object key order is ignored by the evaluator; array order, scalar type,
+missing fields, `null`, and empty strings remain significant. Test sets are
+not a route to execute shell commands, access the network, or run the Agent.

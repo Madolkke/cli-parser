@@ -159,18 +159,28 @@ uv run --env-file .env python scripts/run_ttp_phase_once.py
 
 Results are written under `.artifacts/ttp-phase-once/`.
 
-For repeatable, scored TTP-only tests, provide an external manifest with a
-schema file, one to five input files, and expected records per case:
+For repeatable TTP evaluation, every case is an independent four-part test set
+under `evals/test_sets/<case-id>/`: `inputs/001.txt` through `005.txt`,
+`schema.json`, `template.ttp`, and `expected.json`. The root manifest only
+indexes cases, suites, tags, and SHA-256 values. The standard template is an
+offline executable baseline; the Agent is scored only against the standard
+Schema and expected records.
 
 ```powershell
-uv run --env-file .env python scripts/run_ttp_template_evaluation.py preflight --manifest C:\fixtures\ttp-eval\manifest.json
-uv run --env-file .env python scripts/run_ttp_template_evaluation.py run --manifest C:\fixtures\ttp-eval\manifest.json --suite smoke
+uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite semantic-pilot
+uv run --env-file .env python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode ttp-only --suite semantic-pilot --trials 1 --concurrency 1
 ```
 
-`list` and `preflight` are offline. `run` calls only `generate_from_schema()`
-and writes complete per-case results under `.artifacts/ttp-template-evaluation/`.
-See [TTP-only evaluation](docs/ttp-template-evaluation.md) for the manifest
-format and artifact boundary.
+`list`, `preflight`, and `baseline` are offline. `ttp-only` calls only
+`generate_from_schema()` and writes per-trial results under
+`.artifacts/test-set-evaluation/`. The evaluation entry point does not run the
+full two-stage Schema Agent; Schema quality is checked by the canonical Schema
+and its deterministic preflight. See [四件套评测](docs/ttp-template-evaluation.md).
+
+当前 `evals/test_sets/` 测试数据已清空，等待重新导入经过人工核对的标准四件套。
+重新提供数据后，必须先完成 preflight 和 baseline，再加入对应 suite 并进行 Agent 评分。
 
 ## Local WebUI
 

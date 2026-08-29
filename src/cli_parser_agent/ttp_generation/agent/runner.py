@@ -44,6 +44,7 @@ from .tools import (
     FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    TEST_TEMPLATE_TOOL_NAME,
 )
 
 _NON_SENSITIVE_EVENT_TYPES = (
@@ -172,6 +173,7 @@ def _expected_tool_names(phase: GenerationPhase) -> tuple[str, ...]:
     if phase == "ttp":
         return (
             SUBMIT_TEMPLATE_TOOL_NAME,
+            TEST_TEMPLATE_TOOL_NAME,
             FINISH_GENERATION_TOOL_NAME,
         )
     raise ValueError(f"Unsupported generation phase: {phase!r}")
@@ -461,6 +463,7 @@ async def run_generation_phase(
                                 in {
                                     SUBMIT_SCHEMA_TOOL_NAME,
                                     SUBMIT_TEMPLATE_TOOL_NAME,
+                                    TEST_TEMPLATE_TOOL_NAME,
                                     FINISH_GENERATION_TOOL_NAME,
                                 }
                                 and _submission_count(session, tool_name)

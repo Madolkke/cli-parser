@@ -35,6 +35,7 @@ MAX_TTP_REGEX_CHARS = 2_048
 MAX_TTP_ARGUMENT_CHARS = 4_096
 MAX_TTP_ATTRIBUTE_CHARS = 64 * 1024
 MAX_TTP_RESULT_BYTES = 8 * 1024 * 1024
+MAX_TTP_TEST_INPUT_BYTES = 1024 * 1024
 MAX_TTP_VALIDATION_ISSUES = 100
 DEFAULT_TTP_TIMEOUT_SECONDS = 20.0
 
@@ -114,6 +115,18 @@ class TtpValidationResult:
     @property
     def valid(self) -> bool:
         return not any(issue.severity == "error" for issue in self.issues)
+
+
+@dataclass(frozen=True, slots=True)
+class TtpParseResult:
+    """Raw JSON result from parsing one test input without Schema validation."""
+
+    result: Any | None
+    issues: list[ValidationIssue]
+
+    @property
+    def valid(self) -> bool:
+        return not self.issues
 
 
 @dataclass(frozen=True, slots=True)
@@ -879,6 +892,62 @@ def _isolated_ttp_worker(
         connection.close()
 
 
+def _isolated_ttp_test_worker(
+    connection: Any,
+    template: str,
+    text: str,
+    max_result_bytes: int,
+) -> None:
+    """Parse one model-supplied text and preserve its raw TTP result shape."""
+
+    try:
+        logging.disable(logging.CRITICAL)
+        os.environ.pop("TTP_TEMPLATES_DIR", None)
+        with (
+            tempfile.TemporaryDirectory(
+                prefix="cli-parser-ttp-test-",
+            ) as cache_dir,
+            open(os.devnull, "w", encoding="utf-8") as devnull,
+        ):
+            os.environ["TTPCACHEFOLDER"] = cache_dir
+            with (
+                contextlib.redirect_stdout(devnull),
+                contextlib.redirect_stderr(devnull),
+            ):
+                from ttp import ttp
+
+                parser = ttp(template=f"\n{template}")
+                parser.add_input(
+                    f"\n{text}",
+                    input_name="sample_0",
+                    template_name="_all_",
+                )
+                parser.parse(one=True)
+                result = parser.result(structure="list")
+
+        if not isinstance(result, list) or len(result) != 1:
+            connection.send(("invalid_shape", None))
+            return
+        result = _normalise_json_value(result[0])
+        payload_size = len(
+            json.dumps(
+                result,
+                ensure_ascii=False,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8"),
+        )
+        if payload_size > max_result_bytes:
+            connection.send(("result_too_large", None))
+            return
+        connection.send(("ok", result))
+    except BaseException as exc:  # child must convert SystemExit and parser failures
+        with contextlib.suppress(BaseException):
+            connection.send(("worker_error", type(exc).__name__))
+    finally:
+        connection.close()
+
+
 def _stop_process(process: multiprocessing.Process) -> None:
     try:
         if process.is_alive():
@@ -1008,6 +1077,186 @@ def _run_ttp_isolated(
     return payload, []
 
 
+def _run_ttp_test_isolated(
+    template: str,
+    text: str,
+    *,
+    timeout_seconds: float,
+    max_result_bytes: int,
+) -> tuple[Any | None, list[ValidationIssue]]:
+    """Run one parse-only experiment in a fresh spawn process."""
+
+    if timeout_seconds <= 0:
+        return None, [
+            _issue(
+                "ttp.timeout",
+                "isolated TTP parsing exceeded its time limit",
+            ),
+        ]
+    if not _spawn_host_is_importable():
+        return None, [
+            _issue(
+                "ttp.worker_host_unsupported",
+                "isolated TTP parsing requires an importable Python host module",
+            ),
+        ]
+
+    context = multiprocessing.get_context("spawn")
+    receive, send = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_isolated_ttp_test_worker,
+        args=(send, template, text, max_result_bytes),
+        daemon=True,
+    )
+    started = time.monotonic()
+    try:
+        process.start()
+    except (OSError, RuntimeError, AssertionError, ValueError):
+        receive.close()
+        send.close()
+        return None, [
+            _issue(
+                "ttp.worker_start_failed",
+                "isolated TTP parser process could not be started",
+            ),
+        ]
+    send.close()
+
+    try:
+        deadline = started + timeout_seconds
+        status, payload = "worker_error", None
+        while True:
+            remaining = max(0.0, deadline - time.monotonic())
+            if remaining <= 0:
+                status, payload = "timeout", None
+                break
+            if receive.poll(min(0.05, remaining)):
+                try:
+                    status, payload = receive.recv()
+                except EOFError:
+                    status, payload = "worker_bootstrap_failed", None
+                if time.monotonic() > deadline:
+                    status, payload = "timeout", None
+                break
+            if not process.is_alive():
+                status, payload = "worker_bootstrap_failed", None
+                break
+    finally:
+        receive.close()
+        if status in {"timeout", "worker_bootstrap_failed"}:
+            _stop_process(process)
+        else:
+            process.join(timeout=0.1)
+            _stop_process(process)
+        with contextlib.suppress(OSError, ValueError):
+            process.close()
+
+    messages = {
+        "invalid_shape": "TTP template produced an unsupported template result shape",
+        "result_too_large": "TTP parsing result exceeds the configured size limit",
+        "worker_error": "isolated TTP parsing failed",
+        "worker_bootstrap_failed": (
+            "isolated TTP parser process exited before reporting a result"
+        ),
+        "worker_host_unsupported": (
+            "isolated TTP parsing requires an importable Python host module"
+        ),
+        "timeout": "isolated TTP parsing exceeded its time limit",
+    }
+    if status != "ok":
+        details = {}
+        if (
+            status == "worker_error"
+            and isinstance(payload, str)
+            and len(payload) <= 128
+            and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", payload)
+        ):
+            details["exception_type"] = payload
+        return None, [
+            _issue(
+                f"ttp.{status}" if status in messages else "ttp.worker_error",
+                messages.get(status, messages["worker_error"]),
+                details=details,
+            ),
+        ]
+    return payload, []
+
+
+def parse_ttp_template(
+    template: str,
+    text: str,
+    *,
+    timeout_seconds: float = DEFAULT_TTP_TIMEOUT_SECONDS,
+    max_result_bytes: int = MAX_TTP_RESULT_BYTES,
+    max_ttp_template_bytes: int = MAX_TTP_TEMPLATE_BYTES,
+    max_ttp_group_depth: int = MAX_TTP_GROUP_DEPTH,
+    max_ttp_regex_chars: int = MAX_TTP_REGEX_CHARS,
+    max_ttp_argument_chars: int = MAX_TTP_ARGUMENT_CHARS,
+) -> TtpParseResult:
+    """Safely parse one text without imposing the generation Schema contract."""
+
+    if not isinstance(text, str) or not text.strip():
+        return TtpParseResult(
+            result=None,
+            issues=[_issue("ttp.test_input_empty", "test input must not be blank")],
+        )
+    try:
+        input_bytes = len(text.encode("utf-8"))
+    except UnicodeEncodeError:
+        return TtpParseResult(
+            result=None,
+            issues=[
+                _issue(
+                    "ttp.test_input_invalid_utf8",
+                    "test input must be UTF-8 text",
+                ),
+            ],
+        )
+    if input_bytes > MAX_TTP_TEST_INPUT_BYTES:
+        return TtpParseResult(
+            result=None,
+            issues=[
+                _issue(
+                    "ttp.test_input_too_large",
+                    f"test input exceeds {MAX_TTP_TEST_INPUT_BYTES} UTF-8 bytes",
+                ),
+            ],
+        )
+
+    max_result_bytes = _effective_limit(
+        max_result_bytes,
+        MAX_TTP_RESULT_BYTES,
+        "max_result_bytes",
+    )
+    static_issues = inspect_ttp_template(
+        template,
+        max_ttp_template_bytes=max_ttp_template_bytes,
+        max_ttp_group_depth=max_ttp_group_depth,
+        max_ttp_regex_chars=max_ttp_regex_chars,
+        max_ttp_argument_chars=max_ttp_argument_chars,
+    )
+    if static_issues:
+        return TtpParseResult(result=None, issues=static_issues)
+    if (
+        isinstance(timeout_seconds, bool)
+        or not isinstance(timeout_seconds, (int, float))
+        or not math.isfinite(timeout_seconds)
+        or timeout_seconds < 0
+    ):
+        return TtpParseResult(
+            result=None,
+            issues=[_issue("ttp.invalid_timeout", "TTP timeout cannot be negative")],
+        )
+
+    result, issues = _run_ttp_test_isolated(
+        template,
+        text,
+        timeout_seconds=timeout_seconds,
+        max_result_bytes=max_result_bytes,
+    )
+    return TtpParseResult(result=result, issues=issues)
+
+
 def validate_ttp_template(
     template: str,
     command_outputs: Sequence[str],
@@ -1093,8 +1342,11 @@ __all__ = [
     "MAX_TTP_ARGUMENT_CHARS",
     "MAX_TTP_REGEX_CHARS",
     "MAX_TTP_RESULT_BYTES",
+    "MAX_TTP_TEST_INPUT_BYTES",
     "MAX_TTP_TEMPLATE_BYTES",
+    "TtpParseResult",
     "TtpValidationResult",
     "inspect_ttp_template",
+    "parse_ttp_template",
     "validate_ttp_template",
 ]

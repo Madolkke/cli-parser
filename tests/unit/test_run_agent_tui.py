@@ -108,11 +108,7 @@ def _text_events() -> list[object]:
 
 
 def test_tui_streams_without_changing_the_existing_runner() -> None:
-    fixture = (
-        PROJECT_ROOT
-        / "testdata/real_command_outputs/ntc_templates/cisco_ios/"
-        "show_interfaces_status/cisco_ios_show_interfaces_status.raw"
-    )
+    fixture = PROJECT_ROOT / "new-input.txt"
     settings, _, paths, _ = SCRIPT._configuration(
         {
             "OPENAI_API_KEY": "test-key",

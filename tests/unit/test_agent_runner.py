@@ -37,12 +37,14 @@ from cli_parser_agent.ttp_generation.agent.tools import (
     FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    TEST_TEMPLATE_TOOL_NAME,
     GenerationPhase,
     GenerationSession,
     SchemaCandidate,
     ValidatorOutcome,
     build_submission_tools,
 )
+from cli_parser_agent.ttp_generation.validation import TtpParseResult
 
 
 def _schema() -> dict[str, Any]:
@@ -99,6 +101,21 @@ def _finish_call(call_id: str = "finish") -> ChatResponse:
             id=call_id,
             name=FINISH_GENERATION_TOOL_NAME,
             input="{}",
+        ),
+    )
+
+
+def _test_call(call_id: str = "test") -> ChatResponse:
+    return _response(
+        ToolCallBlock(
+            id=call_id,
+            name=TEST_TEMPLATE_TOOL_NAME,
+            input=json.dumps(
+                {
+                    "text": "value: experimental",
+                    "ttp_template": "value: {{ value }}",
+                },
+            ),
         ),
     )
 
@@ -409,6 +426,46 @@ async def test_ttp_no_tool_response_uses_independent_retry_budget() -> None:
     assert session.schema_agent_rounds == 0
     assert session.ttp_agent_rounds == 3
     assert TTP_NO_TOOL_RETRY_PROMPT in _message_text(model.calls[1]["messages"])
+
+
+async def test_ttp_test_tool_is_non_terminal_and_preserves_result_context() -> None:
+    model = _ScriptedModel(
+        [
+            _test_call(),
+            _template_call(),
+            _finish_call(),
+        ],
+    )
+    session = _session(max_agent_rounds=4)
+    session.ttp_test_validator = lambda candidate: TtpParseResult(
+        result=[{"value": "experimental"}],
+        issues=[],
+    )
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    assert outcome.phase_completed
+    assert session.succeeded
+    assert session.ttp_test_calls == 1
+    assert session.ttp_submissions == 1
+    assert len(model.calls) == 3
+    test_results = [
+        block
+        for message in model.calls[1]["messages"]
+        for block in message.content
+        if isinstance(block, ToolResultBlock) and block.id == "test"
+    ]
+    assert len(test_results) == 1
+    assert _parse_record_blocks(test_results[0].output[0].text) == [
+        [{"value": "experimental"}],
+    ]
 
 
 async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:

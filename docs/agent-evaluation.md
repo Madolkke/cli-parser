@@ -1,111 +1,52 @@
-# Agent 黑盒评测
+# Agent 评测边界
 
-<!-- markdownlint-disable MD013 -->
+评测输入统一为 `evals/test_sets/` 下的四件套测试集。每个测试集固定包含
+`inputs/`、`schema.json`、`template.ttp` 和 `expected.json`；输入按 `001.txt` 到
+`005.txt` 排列，所有输入共享同一个标准 Schema、模板和 expected records。根
+`manifest.json` 只负责索引、suite、标签和 SHA-256。
 
-## 边界
+加载器和确定性校验位于 `src/cli_parser_agent/evaluation.py`，统一入口是
+`scripts/run_test_sets.py`。加载器严格检查 UTF-8/BOM、重复 JSON 键、路径越界、哈希、
+输入数量、Schema 受限子集、expected records 与模板基线。标准模板必须在隔离 TTP 解析后
+对全部输入产生与 `expected.json` 完全一致的 records。
 
-评测系统从人工维护的 raw CLI 与 golden 出发，经 Laminar `evaluate(...)` 对现有公共 API 做非侵入式黑盒调用。它不修改公共 API、提示词、工具协议、AgentState 或默认策略；executor 不传 observer，每个 datapoint 只调用一次生成入口，target 在调用结束后才由 evaluator 读取。默认调用 `TtpGenerator.generate()`；`--template-only` 改调 `TtpGenerator.generate_from_schema()` 并注入由 golden 重建的 Schema，两者都是公共 API。
-
-版本化定义位于 `evals/ttp_generation/`，确定性加载与评分位于 `src/cli_parser_agent/evaluation.py`，人工入口为 `scripts/run_agent_evaluation.py`。`docs/skills/generate-cli-parser-eval-cases/` 是可手动安装的通用 Agent Skill 源码，只用于从 raw capture 制作 golden；`docs/skills/run-ttp-agent-evaluation/` 则将指定配置的真实评测与 Laminar 只读分析流程固化为开发期 Skill。
-
-## Golden 定义
-
-Manifest version `1` 的每个 case 包含 ID、命令说明、suite/tags、恰好一个输入路径及 SHA-256，以及 target 路径和 SHA-256。Target 为单条 expected record 和由 `path/type/required` 三元组构成的封闭 Schema 结构断言。当前完整语料 suite 固定 `31` 个单输入 case、`31` 份输入；smoke suite 固定 `5` 个单输入 case、`5` 份输入，覆盖固定宽表、嵌套地址、重复详情块和层级配置。评测不测量跨样本共享模板泛化。
-
-Golden 采用“最大有证据语义投影”：保留每份输入中的所有主实体和源顺序，并保留至少在一个同类实体中非空出现、语义与边界明确的细粒度业务字段。只在部分父对象实例中出现的字段标记为可选并在缺失实例中省略；在每个父对象实例中都存在的字段才标记为 required。排除表头、分隔线、控制文本和空值，不使用空字符串或 `null` 占位。值默认保持字符串。禁止从被测 Agent 产物、Laminar、历史 artifact、上游模板、参考 YAML/JSON 或模型生成结果复制答案。
-
-产品运行时允许冻结 Schema 接受的 `""`、空根对象和空容器，并交由模型判断其业务合理性；golden 规则仍排除空值，严格评分和质量指标继续区分空字符串、缺失键与空对象。这一评测差异不得反向实现为候选提交门禁。
-
-离线操作不读取入口脚本中的 Key，也不初始化 Laminar 或联网：
-
-```text
-uv run python scripts/run_agent_evaluation.py list
-uv run python scripts/run_agent_evaluation.py preflight
-```
-
-Preflight 检查严格 JSON、路径逃逸、UTF-8、大小、终端噪声、凭据模式、文件哈希、record/input 一一对应、字符串来源和 Schema 断言闭合。
-
-## Live 配置与运行
-
-Live run 从环境变量读取模型、预算与自托管 Laminar 配置。必须设置
-`OPENAI_API_KEY`、`OPENAI_MODEL`、`LMNR_PROJECT_API_KEY`、`LMNR_BASE_URL`、
-`LMNR_HTTP_PORT`、`LMNR_GRPC_PORT` 和 `LMNR_FRONTEND_PORT`；可选变量及其语义
-见仓库根目录的 [`.env.example`](../.env.example)。缺失、空白或明显过短的 Key 会
-在任何网络访问之前被拒绝。Key 不进入配置指纹、metadata、span input/output、
-本地摘要、异常或测试快照。
-
-Live run 必须显式选择 suite 或 case：
-
-```text
-uv run python scripts/run_agent_evaluation.py run --suite smoke
-uv run python scripts/run_agent_evaluation.py run --suite smoke --trials 1 --concurrency 1
-uv run python scripts/run_agent_evaluation.py run --case ntc.cisco_ios.show_interfaces_status.sample_01
-```
-
-`--trials` 范围 `1-10`、默认 `1`；`--concurrency` 范围 `1-4`、默认 `1`；`--name` 可覆盖 Evaluation 显示名。Harness 不 resume，也不重试失败 trial。退出码 `0` 表示全部 trial 严格通过且遥测完整，`1` 表示正常完成但至少一个 trial 未通过，`2` 表示定义、配置、Laminar 或归档错误，`130` 表示人工取消。
-
-### Template-only 模式
-
-`--template-only` 把每个 case 的 golden `schema_contract` 机械重建为闭合 Draft 2020-12 Schema 并注入，executor 改调 `generate_from_schema()`：
-
-```text
-uv run python scripts/run_agent_evaluation.py run --suite smoke --template-only
-```
-
-重建是 `schema_signature` 的精确逆（对全部 `31` 个 case 验证 `schema_signature(schema_from_contract(c)) == c`），因此 `schema_contract_match` 恒为 `1`，评分 target 与默认模式完全一致。它的用途是**排除 Schema 阶段字段命名差异后单独衡量 TTP 质量**：实测中曾出现模板逻辑合理、仅因模型把字段命名为 `interface` 而 golden 为 `name`（或数组命名 `entries` 而 golden 为 `inventory`）就整例判 0 的情况。
-
-该模式在本地摘要中记为 `template_only: true`。它的分数只与同模式运行可比，不能与两阶段结果直接比较，也不替代两阶段的最终验收。默认仍是两阶段模式。
-
-### 外部 Schema 的 TTP-only 评分
-
-`scripts/run_ttp_template_evaluation.py` 面向调用方维护的外部 fixture，和本页的 Laminar black-box evaluation 分开。它的每个 case 明确指定 Schema、`1-5` 份输入和 expected records，调用公共 `generate_from_schema()` 后按 records 严格比较并重复 Agent 外全文验收。Laminar Key 存在时可产生普通 Trace，但不是运行前提，也不会创建 Evaluation 或 telemetry 完整性门槛。详见 [TTP-only evaluation](ttp-template-evaluation.md)。
-
-### 高预算诊断运行
-
-默认 `900` 秒、`13` 轮和 `9` 次 TTP 提交用于常规验收。需要观察完整修正链时，使用独立进程和单并发的高预算配置；诊断主运行固定为总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交和单次模型超时 `120` 秒，避免时间预算放大后仍被较小的阶段预算截断：
+## 两种运行模式
 
 ```powershell
-$env:CLI_PARSER_GENERATION_TIMEOUT_SECONDS = "7200"
-$env:CLI_PARSER_MAX_AGENT_ITERS = "32"
-$env:CLI_PARSER_MAX_TEMPLATE_SUBMISSIONS = "24"
-$env:CLI_PARSER_MODEL_TIMEOUT_SECONDS = "120"
-uv run python scripts/run_agent_evaluation.py run --suite smoke --trials 1 --concurrency 1
+uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
+uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite semantic-pilot
+uv run --env-file .env python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode ttp-only --suite semantic-pilot --trials 1 --concurrency 1
 ```
 
-高预算值只属于开发诊断，不改变默认 `GenerationPolicy`，每次运行必须通过配置指纹记录有效模型、推理、预算和 Laminar 配置。先运行 `smoke` 建立低歧义基线，再运行完整 `all` 语料；完整公开语料仍按 [真实命令输出语料测试计划](live-corpus-test-plan.md) 先 `5/5` smoke、再以 `--resume` 达到 `31/31`。高预算运行不自动重试失败 trial，取消或重新运行必须使用新的 run 目录并保留旧 Trace。
+`list`、`preflight` 和 `baseline` 完全离线，不读取模型配置、不初始化 Laminar。`baseline`
+只验证维护者提供的标准 TTP 模板可执行且结果正确，它不要求 Agent 生成相同的模板文本。
 
-## Trace、评分与本地产物
+`ttp-only` 将标准 Schema 和全部同源输入传给一次独立的
+`TtpGenerator.generate_from_schema()`，随后执行 Agent 外全文验收和严格 records 评分。
+它不调用 `generate()`，不运行 Schema Agent，也不把标准模板字符串相似度作为得分。
+默认 `trials=1`、`concurrency=1`；模型与预算从环境变量读取，高预算只能由人工显式配置。
 
-Live run 先验证 `http://127.0.0.1:8000` SQL HTTP 与 `127.0.0.1:8001` gRPC，再创建 Evaluation 和 datapoints。Trace 层级为 `evaluation → executor → ttp.generate → schema.phase/ttp.phase → LLM/TOOL`，只启用 OpenAI instrumentation。运行结束 flush 后，入口通过只读 SQL 查询 `evaluation_datapoints` 和 `spans`，最多等待 `60` 秒处理延迟；超时标记 `telemetry_incomplete`，不重新调用模型。
+严格通过条件是：生成成功、独立验收通过、records 数量和输入索引一致、records 与
+`expected.json` 深度全等。对象键顺序忽略；数组顺序、类型、缺失字段、`null` 和空字符串
+严格区分。报告保留 records exact、逐输入通过率、叶子 precision/recall/F1、TTP 轮次、
+提交次数、首个有效候选、终止原因、耗时和可选 Laminar Trace ID。Schema 质量不作为本入口
+的分数。
 
-严格通过同时要求生成成功、Agent 外全文重新验收、records 与 golden 深度全等、Schema 结构全等且公共 issues 无 error。对象键顺序忽略；数组顺序、标量类型、缺失和 `null` 严格区分。叶子 precision/recall/F1 使用“数组索引归一为 `*` 的 JSON 路径 + 规范化标量值”多重集合；Schema 指标按路径、类型和 required 三元组计算。Evaluation、Trace、必要 spans 和 Trace ID 一致性作为独立遥测完整性指标，不参与 `strict_pass` 或严格正确率；遥测不完整仍会使本次评测运行状态为 `telemetry_incomplete` 并返回非零退出码。严格通过是 case 级全量门槛，部分分数只用于诊断，不替代最终验收。
+## 资产边界
 
-## 系统化指标
+标准 Schema 和 expected records 必须由维护者从 raw 回显独立核对，不能读取被测 Agent
+结果、Trace、历史 artifact、上游模板或模型生成答案。标准 TTP 模板是可审查的确定性基线，
+用于确认四件套自身闭环；TTP-only Agent 只按 Schema 和 expected records 评估。
 
-每次评测同时报告四类指标，并按 case、suite 和输入形状分层；对象键顺序不影响评分，数组顺序、标量类型、缺失与 `null` 继续严格区分。
+运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，可能包含模板、records 和模型
+输出，应按本地敏感调试数据处理。入口可以保存脱敏配置指纹和可选 Trace ID，不把 API Key
+写入 summary。完整两阶段 Schema Agent 评测不属于本入口。
 
-- **结果正确性**：case 严格通过率、input 级 records 通过率、record 数量与索引映射、records exact、Schema contract exact、叶子值 precision/recall/F1，以及 Schema 路径/类型/required precision/recall/F1。
-- **结构与候选质量**：Schema 冻结率、是否进入 TTP、首个有效 TTP 候选率、有效候选后的 finish 率、最终验收率、每输入的漏字段/多字段和空容器诊断。模板是否过拟合、字段分组是否合理、可选字段是否自然省略等语义质量，只能在显式开发评测的 HumanEvaluator 评审中记录，不能由严格分数推断。
-- **流程可靠性**：Agent 总轮次和分阶段轮次、工具调用及错误、Schema/TTP 提交、无工具回复/重试、模型重试、终止原因、故障域和 issue-code 分布；重复 trial 报告通过率、样本数和置信区间。
-- **资源效率**：根、phase、`context.fit`、`agent.round`、`generation.deadline_cleanup`、`final.acceptance`、LLM 和 TOOL 的耗时及其 p50/p95/p99，LLM input/output tokens、cost、每轮上下文 token 增长斜率/峰值、分段解释时长比例及每个成功 case 的归一化成本。正常运行要求分段覆盖端到端时长至少 `98%`；Laminar 入库不完整时该 trial 只能标记为 `telemetry_incomplete`，不得用缺失数据补零来宣称通过。
+旧的 `evals/ttp_generation/`、`target/schema_contract` 双格式、
+`run_agent_evaluation.py` 和 `run_ttp_template_evaluation.py` 不再是评测路径。没有标准
+expected records 的临时排查可以使用专用单次 TTP 诊断脚本，但不得作为标准测试执行。
 
-case 汇总至少包含 trial 数、严格通过数/率、均值、p50、p95 和 p99；低 trial 数时明确注明尾部分位数的不确定性。报告同时保留 macro（按 case）和 micro（按输入）视角，避免多输入 case 以样本数量掩盖单输入 case 的失败。配置指纹必须绑定实际模型、prompt version、推理开关/强度、程序化 `extra_body` 的规范化 SHA-256、预算、采样和安全限制；`extra_body` 正文、Key 和原始输入不进入评测配置快照或本地摘要。
-
-### 开发期 HumanEvaluator
-
-HumanEvaluator 只属于 `scripts/run_agent_evaluation.py` 等显式开发评测入口，不属于 `TtpGenerator.generate()`、产品 API、普通 pytest 或生产部署。评审人员在 Laminar Trace 的只读调试通道中检查一次 run 产生的**全部** Schema/TTP 候选（包括被拒绝候选、有效候选、capture 复核和最终候选），使用固定标签记录：解析边界、主实体/字段粒度、可选字段表达、同一输入内实体一致性、fixture-specific 过拟合和可维护性。
-
-HumanEvaluator 不修改 Agent 状态、不触发重试、不向模型回灌评审内容，也不把模板、records、capture、原始输入或模型文本写入本地脱敏摘要；本地只允许保存有界的评审标签、issue-code、Trace ID 和数值指标。未启用 Laminar 时不执行全量候选人工评审。
-
-Reviewer 子进程写入单条标签时只传 Trace ID、提交序号和有界标签，不传模板正文：
-
-```powershell
-uv run python scripts/run_agent_evaluation.py review `
-  --trace-id <trace-id> --phase ttp --submission 1 --label repairable `
-  --dimension boundary=misaligned --dimension optionality=stable `
-  --issue-code ttp.capture_mismatch
-```
-
-`--phase schema|ttp` 用于区分 Schema 提案和 TTP 模板提交，默认是 `ttp`；两阶段候选都按 submission index 聚合评审覆盖率。
-
-本地 `.artifacts/agent-evals/<UTC-run-id>/summary.json` 仅包含配置指纹、Git revision/dirty、case/trial 状态、数值指标、安全 issue code、Evaluation/Trace ID 和 URL。完整配置、文件哈希、模板、records、capture、原始输入、target 和模型文本不写入本地摘要。
+`semantic-pilot` 只收录已从当前 raw 回显重建并人工复核的业务实体 Schema。当前测试数据已
+清空，暂时没有可运行的 pilot case；重新提供数据后，固定宽度表、键值行和嵌套段落应分别
+以语义实体表达，且必须先通过 preflight 和 baseline。

@@ -586,6 +586,7 @@ class TuiStatus:
     model_rounds: int = 0
     schema_submissions: int = 0
     ttp_submissions: int = 0
+    ttp_test_calls: int = 0
     candidate_available: bool = False
     state: str = "运行中"
     termination_reason: str | None = None
@@ -622,6 +623,12 @@ class TuiStatus:
                         bool,
                     ):
                         self.ttp_submissions = ttp_submissions
+                    ttp_test_calls = output.get("ttp_test_calls")
+                    if isinstance(ttp_test_calls, int) and not isinstance(
+                        ttp_test_calls,
+                        bool,
+                    ):
+                        self.ttp_test_calls = ttp_test_calls
             elif name == "cli_parser.generation.completed":
                 result = value_mapping.get("result")
                 self.state = (
@@ -655,6 +662,7 @@ class TuiStatus:
                         self.elapsed_seconds = float(result_elapsed)
                     schema_submissions = result_metadata.get("schema_submissions")
                     ttp_submissions = result_metadata.get("ttp_submissions")
+                    ttp_test_calls = result_metadata.get("ttp_test_calls")
                     if isinstance(schema_submissions, int) and not isinstance(
                         schema_submissions,
                         bool,
@@ -665,6 +673,11 @@ class TuiStatus:
                         bool,
                     ):
                         self.ttp_submissions = ttp_submissions
+                    if isinstance(ttp_test_calls, int) and not isinstance(
+                        ttp_test_calls,
+                        bool,
+                    ):
+                        self.ttp_test_calls = ttp_test_calls
             elif name == "cli_parser.generation.cancelled":
                 self.state = "已取消"
                 self.termination_reason = "cancelled"
@@ -1047,6 +1060,8 @@ class AgentTuiApp(App[int]):
         text.append(f"Schema {self.status_model.schema_submissions}")
         text.append("  ")
         text.append(f"TTP {self.status_model.ttp_submissions}")
+        text.append("  ")
+        text.append(f"测试 {self.status_model.ttp_test_calls}")
         text.append("  ")
         text.append(f"有效候选 {candidate}")
         text.append("  ")

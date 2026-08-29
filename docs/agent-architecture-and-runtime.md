@@ -28,7 +28,9 @@ flowchart TD
     HANDOFF --> TSAMPLE["从全文重新采样"]
     TSAMPLE --> TAGENT["ttp_template_generator<br/>全新 Model + AgentState + Toolkit"]
     TAGENT --> TTOOL["submit_ttp_template"]
+    TAGENT --> XTOOL["test_ttp_template"]
     TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射校验"]
+    XTOOL --> XVALIDATE["安全检查 + spawn 单输入 parse-only 解析"]
     TVALIDATE --> DIAGNOSTIC["内部诊断<br/>accepted + issues + 有界 capture"]
     TVALIDATE -->|有 records| MATCH["模型可见独立解析结果块"]
     TVALIDATE -->|无 records| EMPTY["[] + 固定中文错误"]
@@ -49,6 +51,7 @@ flowchart TD
     ROOT --> TPHASE["ttp.phase<br/>仅成功交接后创建"]
     TPHASE --> TLLM["openai.chat"]
     TPHASE --> TTOOLSPAN["submit_ttp_template TOOL"]
+    TPHASE --> XTOOLSPAN["test_ttp_template TOOL"]
     TPHASE --> FTOOLSPAN["finish_generation TOOL"]
 ```
 
@@ -92,10 +95,11 @@ Schema Agent 的 rejected candidate、issues、Thinking、ToolCall/ToolResult、
 ```text
 Schema Agent -> submit_result_schema
 TTP Agent    -> submit_ttp_template
+             -> test_ttp_template
              -> finish_generation
 ```
 
-HTTP 请求省略 `tool_choice`，因此模型自主决定调用哪个当前阶段工具。普通 assistant 文本不被解析为产物。若一次模型调用没有工具调用，runner 回滚该回复新增的文本、Thinking 和 usage，再追加不引用回复内容的固定中文提醒；TTP 提醒要求模型在继续提交和确认 finish 之间选择。重试只发生在当前阶段，并继续消耗同一请求的全局轮次和 deadline。
+HTTP 请求省略 `tool_choice`，因此模型自主决定调用哪个当前阶段工具。普通 assistant 文本不被解析为产物。若一次模型调用没有工具调用，runner 回滚该回复新增的文本、Thinking 和 usage，再追加不引用回复内容的固定中文提醒；TTP 提醒要求模型在继续提交、测试和确认 finish 之间选择。重试只发生在当前阶段，并继续消耗同一请求的全局轮次和 deadline。
 
 ## 一次请求的运行流程
 
@@ -125,11 +129,13 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和双工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v24-no-assumptions-zh-cn`。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v25-test-ttp-template-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
 TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言白名单和参数 AST 检查，再在独立 `spawn` 进程中对所有完整输入执行解析。校验器要求每份输入恰好产生一个根 `dict`，并逐个使用冻结 Schema 验证 record；不再额外拒绝空字符串、空根对象或空容器。
+
+模型也可以调用 `test_ttp_template` 探索一份独立的非空文本和模板。它复用相同的白名单、spawn 隔离、超时和结果大小保护，但只返回单输入的原始 `parser.result(structure="list")` 形状，不执行 Schema 校验、根 object 要求或匿名根解包，也不保存候选；成功结果以一个 `parsed_record` 块返回，失败时返回 `[]` 和固定中文错误。测试结果历史全部保留，模型必须等待该 ToolResult 进入上下文后再继续提交或 finish。
 
 判定根数量前有一步解包。TTP 会为未命名的顶层组多包一层 list：`<group>` 无 name 时，该输入的结果是 `[{...}]` 而不是 `{...}`。而当冻结 Schema 的根层同时含标量字段和 array 时，未命名最外层 group 是唯一正确写法——给它加 name 会把所有根层标量都嵌进那个名字底下。校验器因此先解包单元素外壳：外层 list 恰好一个元素且该元素是 `dict` 时解一层，其余形状原样交给根数量检查。真正的多根（同级两个命名组、或重复的未命名根组）会产出多元素 list，仍以 `ttp.multiple_root_objects` 被拒。模型可见 ToolResult 将按输入索引分别放入独立的 `<parsed_record>` 块；每个块同时带有 0-based `input_index` 和 1-based `display_number`，没有 records 时追加固定中文错误。模板通过这些检查时只保存为最新有效候选，不会结束 Agent。
 
@@ -139,11 +145,11 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 [{}, {"interfaces": []}]
 ```
 
-完整结果块中的记录数据受 `GenerationPolicy.max_parse_result_bytes` 约束，默认最高 `8 MiB`；超限沿用结构化模型失败路径。只有最近一次提交的结果块完整保留在模型上下文中：新的 `submit_ttp_template` 结果进入上下文后，更早的同名 ToolResult 正文会被替换为固定中文说明。被替换的只是已被后续提交取代的旧反馈，源 `<command_outputs_json>` 与当次完整结果块都不受影响；该说明不含 records、accepted、issues、预算或候选状态。这样可以阻断上下文无界增长（实测 input tokens 曾从 `3871` 增至 `92202`），同时保持"模型看到当次完整结果块"的复核契约。内部 capture 仍有固定 `32 KiB` 上限，超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 只保留在 Laminar、observer/TUI 和评测诊断链中，不会写入失败的公共结果，也不会回传 Schema Agent。
+完整结果块中的记录数据受 `GenerationPolicy.max_parse_result_bytes` 约束，默认最高 `8 MiB`；超限沿用结构化模型失败路径。只有最近一次提交的结果块完整保留在模型上下文中：新的 `submit_ttp_template` 结果进入上下文后，更早的同名 ToolResult 正文会被替换为固定中文说明。被替换的只是已被后续提交取代的旧反馈，源 `<command_outputs_json>` 与当次完整结果块都不受影响；该说明不含 records、accepted、issues、预算或候选状态。`test_ttp_template` 的实验结果不适用这条提交历史折叠规则，全部保留。这样可以阻断上下文无界增长（实测 input tokens 曾从 `3871` 增至 `92202`），同时保持"模型看到当次完整结果块"的复核契约。内部 capture 仍有固定 `32 KiB` 上限，超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 只保留在 Laminar、observer/TUI 和评测诊断链中，不会写入失败的公共结果，也不会回传 Schema Agent。
 
 模型必须复核当前输入的记录数量、异常空数组/空对象、表头或分隔线误捕获以及字段是否为细粒度值。若不满意，它继续提交模板；后续无效提交不清除先前有效候选，新的有效提交会替换旧候选。若满意，它调用无参数的 `finish_generation`。没有有效候选时 finish 返回结构化拒绝，只有存在有效候选且 finish 成功时 TTP 阶段才结束。
 
-每个模型回复最多调用一个工具；模型必须等提交 ToolResult/records 进入后续上下文后再 finish。首版通过 `parallel_tool_calls=False` 和提示协议维持这个顺序，不额外记录候选产生轮次或实现同轮调用拦截。
+每个模型回复最多调用一个工具，且必须在三个 TTP 工具中恰好选择一个；模型必须等提交或测试 ToolResult 进入后续上下文后再继续提交或 finish。首版通过 `parallel_tool_calls=False` 和提示协议维持这个顺序，不额外记录候选产生轮次或实现同轮调用拦截。
 
 默认最多提交 `9` 次模板。达到有效 `max_ttp_submissions` 上限的候选仍会执行校验并向模型返回 records，但随后请求无条件以 `ttp_submission_limit` 失败；内部 capture/issues 仍进入诊断通道。默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后调用 finish。轮次、时间或零工具预算在 finish 前耗尽时，即使 session 已保留有效候选也不会自动接受。
 
@@ -152,6 +158,8 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 `finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 
 失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
+
+`GenerationMetadata.ttp_test_calls` 记录进入 `test_ttp_template` 实现后的调用次数，包括参数边界拒绝和 parse-only 失败；AgentScope 在工具实现前拒绝的 malformed call 不计入该字段。它不计入 `ttp_submissions`，也不新增独立调用上限或终止原因。`propose_schema` 未进入 TTP 阶段时该字段恒为 `0`。
 
 ## Laminar Trace
 
@@ -165,16 +173,17 @@ ttp.generate
 └── ttp.phase
     ├── openai.chat
     ├── submit_ttp_template [TOOL]
+    ├── test_ttp_template [TOOL]
     └── finish_generation [TOOL]
 ```
 
-重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，提交与完成工具使用手动 TOOL span；TTP capture 位于 `submit_ttp_template` 输出中，`finish_generation` 只记录空输入和接受/拒绝反馈。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
+重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，提交、测试与完成工具使用手动 TOOL span；TTP capture 位于 `submit_ttp_template` 输出中，`test_ttp_template` 的独立解析结果和调用次数只用于诊断，`finish_generation` 只记录空输入和接受/拒绝反馈。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
 
 Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observability.py`](../src/cli_parser_agent/observability.py)，精确的采集范围和生命周期规则见 [首版架构](architecture.md#24-可选-laminar-调试-trace)。
 
 ### Evaluation 外层
 
-人工运行 `scripts/run_agent_evaluation.py` 时，Laminar 在上述树外再增加 `evaluation` 与 `executor` 两层。每个 repository `Datapoint` 对应一个 case 的一个 trial；executor 只把完整 raw outputs 传给一次公共 `generate()`，不传 observer，也看不到 expected target。生成结束后确定性 evaluator 才读取 target，执行严格 records/Schema 评分；随后只读 SQL 从同一 Trace 汇总 LLM/TOOL 调用、tokens、cost 和阶段时延。这个外层不改变 session、模型上下文、工具或 finish 协议。详细定义、安全边界和运行方式见 [Agent 黑盒评测](agent-evaluation.md)。
+标准测试集运行由 `scripts/run_test_sets.py` 负责。`baseline` 只在本地隔离执行每个测试集的标准 TTP 模板；`ttp-only` 对每个 trial 只调用一次公共 `generate_from_schema()`，再由 Agent 外确定性验收和比较 expected records。该开发入口不创建 Laminar Evaluation，Laminar 仅作为可选 Trace 通道；详细格式和运行方式见 [四件套评测](ttp-template-evaluation.md)。
 
 系统化评测把结果分成四组：records/Schema 严格正确性，Schema 冻结、TTP 进入、首个有效候选、finish 和最终验收的流程漏斗，`agent.round`/`context.fit`/`generation.deadline_cleanup`/`final.acceptance`/LLM/TOOL 的时延与 tokens/cost，以及按 case、suite、输入形状分层的重复 trial 可靠性。严格通过是最终门槛；叶子值和 Schema 的 precision/recall/F1、逐输入差异和 issue-code 只用于定位缺陷。评测报告同时提供按 case 的 macro 结果和按输入的 micro 结果，不能用多输入 case 的数量掩盖单输入失败。
 

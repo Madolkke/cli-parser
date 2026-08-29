@@ -29,6 +29,14 @@ class TemplateCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class TtpTestCandidate:
+    """Framework-neutral input passed to the parse-only TTP test validator."""
+
+    text: str
+    ttp_template: str
+
+
+@dataclass(frozen=True, slots=True)
 class ValidatorOutcome:
     """Normalized validator result understood by the AgentScope adapter."""
 
@@ -61,6 +69,12 @@ class TemplateValidator(Protocol):
     def __call__(self, candidate: TemplateCandidate) -> ValidatorReturn: ...
 
 
+class TtpTestValidator(Protocol):
+    """Parse-only validator used by the TTP exploration tool."""
+
+    def __call__(self, candidate: TtpTestCandidate) -> Any: ...
+
+
 @dataclass(slots=True)
 class GenerationSession:
     """Mutable artifact and budget state owned by one generation request.
@@ -72,6 +86,7 @@ class GenerationSession:
     command_outputs: tuple[str, ...] | Sequence[str]
     schema_validator: SchemaValidator
     template_validator: TemplateValidator
+    ttp_test_validator: TtpTestValidator | None = None
     max_ttp_submissions: int = 9
     max_agent_rounds: int = 13
     max_schema_no_tool_retries: int = 3
@@ -85,6 +100,7 @@ class GenerationSession:
     last_result_schema: dict[str, Any] | None = None
     schema_submissions: int = 0
     ttp_submissions: int = 0
+    ttp_test_calls: int = 0
     agent_rounds: int = 0
     schema_agent_rounds: int = 0
     ttp_agent_rounds: int = 0
@@ -264,6 +280,18 @@ async def run_validator(
     return normalize_validator_outcome(value)
 
 
+async def run_ttp_test_validator(
+    validator: TtpTestValidator,
+    candidate: TtpTestCandidate,
+) -> Any:
+    """Run a synchronous or asynchronous parse-only validator."""
+
+    value = validator(candidate)
+    if inspect.isawaitable(value):
+        return await value
+    return value
+
+
 __all__ = [
     "GenerationPhase",
     "GenerationSession",
@@ -271,7 +299,10 @@ __all__ = [
     "SchemaValidator",
     "TemplateCandidate",
     "TemplateValidator",
+    "TtpTestCandidate",
+    "TtpTestValidator",
     "ValidatorOutcome",
     "ValidatorOutcomeAttributes",
     "ValidatorOutcomeLike",
+    "run_ttp_test_validator",
 ]

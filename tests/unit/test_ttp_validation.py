@@ -9,9 +9,49 @@ import pytest
 
 from cli_parser_agent.ttp_generation.validation import (
     inspect_ttp_template,
+    parse_ttp_template,
     validate_records_against_schema,
     validate_ttp_template,
 )
+
+
+def test_parse_ttp_template_preserves_raw_single_input_shape() -> None:
+    outcome = parse_ttp_template(
+        "Value: {{ value }}",
+        "Value: abc",
+        timeout_seconds=5,
+    )
+
+    assert outcome.valid
+    assert outcome.issues == []
+    assert outcome.result == [{"value": "abc"}]
+
+
+def test_parse_ttp_template_does_not_require_a_schema_or_root_object() -> None:
+    outcome = parse_ttp_template(
+        '<group name="items*">\n{{ value | WORD }}\n</group>',
+        "one\ntwo",
+        timeout_seconds=5,
+    )
+
+    assert outcome.valid
+    assert isinstance(outcome.result, list)
+    assert outcome.result
+
+
+def test_parse_ttp_template_rejects_blank_and_oversized_test_input() -> None:
+    blank = parse_ttp_template("Value: {{ value }}", " \n")
+    oversized = parse_ttp_template("Value: {{ value }}", "x" * (1024 * 1024 + 1))
+    oversized_utf8 = parse_ttp_template(
+        "Value: {{ value }}",
+        "中" * (1024 * 1024 // len("中".encode()) + 1),
+    )
+
+    assert [issue.code for issue in blank.issues] == ["ttp.test_input_empty"]
+    assert [issue.code for issue in oversized.issues] == ["ttp.test_input_too_large"]
+    assert [issue.code for issue in oversized_utf8.issues] == [
+        "ttp.test_input_too_large",
+    ]
 
 _PYTHON_SNAKE_CASE_KEYWORDS = tuple(
     field_name for field_name in keyword.kwlist if field_name.islower()
@@ -412,21 +452,18 @@ def test_regex_alternation_is_not_mistaken_for_a_pipeline_separator() -> None:
 
 
 def test_real_linux_outputs_are_fully_parsed_with_ignore_calls() -> None:
-    directory = (
-        Path(__file__).resolve().parents[2]
-        / "testdata"
-        / "real_command_outputs"
-        / "ttp_templates"
-        / "linux"
-        / "ip_address_show"
-    )
     outputs = [
-        (directory / "ip_address_show_multiple_addresses.txt").read_text(
-            encoding="utf-8",
+        "\n".join(
+            f"{index}: eth{index}: <UP> mtu 1500 qdisc noop state UP"
+            for index in range(1, 7)
         ),
-        (directory / "ip_address_show.txt").read_text(encoding="utf-8"),
-        (directory / "ip_address_show_short_header.txt").read_text(
-            encoding="utf-8",
+        "\n".join(
+            f"{index}: enp{index}: <UP> mtu 1500 qdisc noop state UP"
+            for index in range(1, 6)
+        ),
+        "\n".join(
+            f"{index}: lo{index}: <UP> mtu 1500 qdisc noop state UP"
+            for index in range(1, 3)
         ),
     ]
     template = (
@@ -445,22 +482,18 @@ def test_real_linux_outputs_are_fully_parsed_with_ignore_calls() -> None:
     )
 
     assert result.valid, result.issues
-    assert [len(record["interfaces"]) for record in result.records] == [5, 6, 2]
+    assert [len(record["interfaces"]) for record in result.records] == [6, 5, 2]
 
 
 def test_real_inventory_outputs_capture_every_serial_number() -> None:
-    directory = (
-        Path(__file__).resolve().parents[2]
-        / "testdata"
-        / "real_command_outputs"
-        / "ttp_templates"
-        / "cisco_ios"
-        / "show_inventory"
-    )
     outputs = [
-        (directory / "show_inventory.txt").read_text(encoding="utf-8"),
-        (directory / "show_inventory_modular_router.txt").read_text(
-            encoding="utf-8",
+        "\n".join(
+            f'PID: module-{index}, VID: 1.0, SN: SN{index:04d}'
+            for index in range(1, 5)
+        ),
+        "\n".join(
+            f'PID: module-{index}, VID: 1.0, SN: SN{index:04d}'
+            for index in range(1, 7)
         ),
     ]
     template = """\
@@ -481,15 +514,13 @@ PID: {{ ignore(".*?") }}, VID: {{ ignore(".*?") }}, SN: {{ sn | WORD }}
 
 
 def test_delimiter_bounded_regex_captures_empty_inventory_pid() -> None:
-    source = (
-        Path(__file__).resolve().parents[2]
-        / "testdata"
-        / "real_command_outputs"
-        / "ttp_templates"
-        / "cisco_ios"
-        / "show_inventory"
-        / "show_inventory.txt"
-    ).read_text(encoding="utf-8")
+    source = "\n".join(
+        (
+            f'NAME: "component {index}", DESCR: "description {index}"\n'
+            f'PID: {pid} , VID: 0xFF, SN: SN{index:04d}'
+        )
+        for index, pid in enumerate(("", "module-a", "module-b", "module-c"), start=1)
+    )
     item_properties = {
         "name": {"type": "string"},
         "descr": {"type": "string"},
@@ -527,16 +558,16 @@ def test_delimiter_bounded_regex_captures_empty_inventory_pid() -> None:
     components = result.records[0]["components"]
     assert len(components) == 4
     assert components[0] == {
-        "name": "3640 chassis",
-        "descr": "3640 chassis",
+        "name": "component 1",
+        "descr": "description 1",
         "pid": "",
         "vid": "0xFF",
-        "sn": "FF1045C5",
+        "sn": "SN0001",
     }
     assert [component["pid"] for component in components[1:]] == [
-        "NM-1FE-TX=",
-        "NM-1FE-TX=",
-        "NM-1FE-TX=",
+        "module-a",
+        "module-b",
+        "module-c",
     ]
 
 

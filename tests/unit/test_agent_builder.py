@@ -229,6 +229,7 @@ async def test_phase_agents_have_independent_runtime_components() -> None:
     ]
     assert [item["function"]["name"] for item in ttp_tools] == [
         SUBMIT_TEMPLATE_TOOL_NAME,
+        "test_ttp_template",
         FINISH_GENERATION_TOOL_NAME,
     ]
 
@@ -239,7 +240,11 @@ async def test_phase_agents_have_independent_runtime_components() -> None:
         ("schema", [SUBMIT_SCHEMA_TOOL_NAME], SCHEMA_SYSTEM_PROMPT),
         (
             "ttp",
-            [SUBMIT_TEMPLATE_TOOL_NAME, FINISH_GENERATION_TOOL_NAME],
+            [
+                SUBMIT_TEMPLATE_TOOL_NAME,
+                "test_ttp_template",
+                FINISH_GENERATION_TOOL_NAME,
+            ],
             TTP_SYSTEM_PROMPT,
         ),
     ],
@@ -295,7 +300,14 @@ async def test_initial_token_estimate_rejects_phase_tool_mismatch() -> None:
     ("phase", "expected_tool_names"),
     [
         ("schema", [SUBMIT_SCHEMA_TOOL_NAME]),
-        ("ttp", [SUBMIT_TEMPLATE_TOOL_NAME, FINISH_GENERATION_TOOL_NAME]),
+        (
+            "ttp",
+            [
+                SUBMIT_TEMPLATE_TOOL_NAME,
+                "test_ttp_template",
+                FINISH_GENERATION_TOOL_NAME,
+            ],
+        ),
     ],
 )
 async def test_model_wire_request_exposes_only_isolated_phase_tools(

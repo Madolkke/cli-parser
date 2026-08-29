@@ -79,6 +79,7 @@ def _print_result_summary(result: Any, result_path: Path) -> None:
     print(f"tool_result_errors: {metadata.tool_result_errors}")
     print(f"schema_submissions: {metadata.schema_submissions}")
     print(f"ttp_submissions: {metadata.ttp_submissions}")
+    print(f"ttp_test_calls: {getattr(metadata, 'ttp_test_calls', 0)}")
     print(f"schema_no_tool_responses: {metadata.schema_no_tool_responses}")
     print(f"ttp_no_tool_responses: {metadata.ttp_no_tool_responses}")
     print(f"schema_no_tool_retries: {metadata.schema_no_tool_retries}")

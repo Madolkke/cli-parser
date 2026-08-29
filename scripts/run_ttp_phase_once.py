@@ -99,6 +99,7 @@ def _print_result_summary(result: Any, result_path: Path) -> None:
     print(f"tool_call_starts: {metadata.tool_call_starts}")
     print(f"tool_result_errors: {metadata.tool_result_errors}")
     print(f"ttp_submissions: {metadata.ttp_submissions}")
+    print(f"ttp_test_calls: {getattr(metadata, 'ttp_test_calls', 0)}")
     print(f"ttp_no_tool_responses: {metadata.ttp_no_tool_responses}")
     print(f"ttp_no_tool_retries: {metadata.ttp_no_tool_retries}")
     print(f"first_ttp_passed: {metadata.first_ttp_passed}")

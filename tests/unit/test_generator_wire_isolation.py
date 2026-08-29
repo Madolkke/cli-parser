@@ -21,6 +21,7 @@ from cli_parser_agent.ttp_generation.agent import (
     FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
     SUBMIT_TEMPLATE_TOOL_NAME,
+    TEST_TEMPLATE_TOOL_NAME,
     TTP_SYSTEM_PROMPT,
     build_ttp_task_prompt,
 )
@@ -152,6 +153,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
 
         if tool_names == [
             SUBMIT_TEMPLATE_TOOL_NAME,
+            TEST_TEMPLATE_TOOL_NAME,
             FINISH_GENERATION_TOOL_NAME,
         ]:
             ttp_requests.append(request)
@@ -266,6 +268,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     ]
     assert [item["function"]["name"] for item in first_ttp_request["tools"]] == [
         SUBMIT_TEMPLATE_TOOL_NAME,
+        TEST_TEMPLATE_TOOL_NAME,
         FINISH_GENERATION_TOOL_NAME,
     ]
     assert first_ttp_request["parallel_tool_calls"] is False
@@ -274,6 +277,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     second_ttp_request = ttp_requests[1]
     assert [item["function"]["name"] for item in second_ttp_request["tools"]] == [
         SUBMIT_TEMPLATE_TOOL_NAME,
+        TEST_TEMPLATE_TOOL_NAME,
         FINISH_GENERATION_TOOL_NAME,
     ]
     assert second_ttp_request["parallel_tool_calls"] is False

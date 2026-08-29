@@ -1,63 +1,32 @@
-# Evaluation case format
+# 四件套格式
 
-All paths are relative to the repository root. The versioned manifest is `evals/ttp_generation/manifest.json`; targets belong in `evals/ttp_generation/targets/`.
+相对于 `evals/test_sets/manifest.json` 的每个 `path` 都必须是一个独立目录，且只能包含：
 
-## Manifest
+```text
+inputs/001.txt ... inputs/005.txt
+schema.json
+template.ttp
+expected.json
+```
 
-The root has exactly `version` and `cases`; version is currently `1`. Each case has exactly:
+manifest 条目示例：
 
 ```json
 {
-  "id": "source.platform.command_name",
-  "command": "show something",
-  "suites": ["smoke"],
-  "tags": ["vendor", "shape"],
-  "inputs": [
-    {
-      "path": "testdata/path/capture.txt",
-      "sha256": "64 lowercase hexadecimal characters"
-    }
-  ],
-  "target": {
-    "path": "evals/ttp_generation/targets/source.platform.command_name.json",
-    "sha256": "64 lowercase hexadecimal characters"
+  "id": "linux.ip_route_show",
+  "path": "linux.ip_route_show",
+  "command": "ip route show",
+  "suites": ["smoke", "all"],
+  "tags": ["linux"],
+  "files": {
+    "schema": {"sha256": "<sha256>"},
+    "template": {"sha256": "<sha256>"},
+    "expected": {"sha256": "<sha256>"},
+    "inputs": [{"name": "001.txt", "sha256": "<sha256>"}]
   }
 }
 ```
 
-Use exactly one input per case. IDs and tags are lowercase stable identifiers. Do not add comments or extra keys. SHA-256 covers the exact bytes on disk, including line endings and final newline.
-
-## Target
-
-The target root has exactly `records` and `schema_contract`:
-
-```json
-{
-  "records": [
-    {"items": [{"name": "alpha", "state": "up"}]}
-  ],
-  "schema_contract": [
-    {"path": "/", "type": "object", "required": false},
-    {"path": "/items", "type": "array", "required": true},
-    {"path": "/items/*", "type": "object", "required": false},
-    {"path": "/items/*/name", "type": "string", "required": true},
-    {"path": "/items/*/state", "type": "string", "required": true}
-  ]
-}
-```
-
-There must be exactly one record for the single input. Records must be non-empty root objects. Objects are closed by the contract: every observed path is declared and every declared path is observed at least once. Optional object properties may be absent from individual parent instances.
-
-Supported node types are `object`, `array`, `string`, `integer`, `number`, and `boolean`. Field names are ASCII `snake_case`. `/` is the root. `*` is permitted only as an array item segment. Array item nodes are never required. An object property is required only when it appears in every instance of its immediate parent object; otherwise it is optional.
-
-Every string value in record `n` must occur literally in input `n`. This is a provenance check, not permission to copy headings or control text.
-
-## Offline validation
-
-Run only:
-
-```text
-uv run python scripts/run_agent_evaluation.py preflight
-```
-
-The command verifies strict JSON, duplicate keys, traversal-free paths, UTF-8 and size limits, hashes, terminal noise and credential patterns, record/input cardinality, value provenance, and closed schema assertions. It does not prove that an annotation is semantically correct, so perform the human review first.
+`expected.json` 必须是按输入顺序排列的 object 数组。Loader 会校验受限 Schema、输入
+数量、文件名、UTF-8/BOM、SHA-256，并在隔离 TTP 进程中确认标准模板与 expected 完全一致。
+不得使用旧的 `target`、`schema_contract` 或外部文件双格式。
