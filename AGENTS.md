@@ -38,10 +38,10 @@
 - 唯一允许的 HTTP 面是 `src/cli_parser_agent/webui/`：单用户本地开发/运维 WebUI，只能绑回环地址（默认 `127.0.0.1:8080`），无鉴权、无会话、无多用户隔离，同一时刻只允许一次生成在跑（冲突返回 `409`）。它只通过公共 API 调用生成，不得绕过或改写生成协议、提示词、工具与预算。它不是部署形态，也不构成对外服务契约；需要鉴权、并发或远程访问时必须先重新讨论边界。生成在后台任务中执行，HTTP 请求不得阻塞等待整个预算。
 - WebUI 的运行记录以纯文件保存在被 Git 忽略的 `data/runs/<UTC 时间戳>/` 下（`meta.json`、`inputs.json`、`schema.json`、`result.json`、`events.jsonl`、`config.json`），无数据库、无索引文件，列表即目录扫描。已结束且存在已保存 Schema 或成功 artifact Schema 的运行可创建独立的 TTP-only Schema 重执行子运行：子运行复制输入和 Schema，在 metadata 记录 `source_run_id` 与 Schema 来源，从新的事件 sequence 开始，绝不改写来源运行。新建和 Schema 重执行可在启动前覆盖 WebUI 允许的标准模型字段和 GenerationPolicy，未覆盖项继承该 WebUI 进程启动时的 `.env` 基线；`extra_body` 仍只来自环境，`parallel_tool_calls` 固定为 `false`。实际配置快照写入 `config.json`，按本地单用户的显式选择可包含明文 API Key，但不进入 `meta.json`、历史接口、SSE、普通日志或事件投影。run id 必须匹配固定时间戳模式且解析后仍位于 `data/runs` 之内，拒绝任何越界路径。
 - Laminar 既可作为可选的完整调试通道，也可由显式评测入口用 `evaluate(...)` 建立 `evaluation → executor → ttp.generate → phase → LLM/TOOL` Trace；不引入 `lmnr-cli`、Debugger session、replay、LLM judge 或 Laminar Dataset。会运行真实模型的短进程开发脚本在结束前 flush，所有 `list` 和 `preflight` 操作不初始化 Laminar 或产生网络请求。
-- `scripts/run_test_sets.py` 是唯一的标准评测入口：`list`、`preflight` 和 `baseline` 离线运行，`ttp-only` 只调用公共 `generate_from_schema()`。完整两阶段 Agent 不属于测试集运行模式；模型、Laminar、预算和产物位置均通过环境变量注入，真实 Key 不得写入摘要或测试资产。
+- `scripts/run_test_sets.py` 是唯一的标准评测入口，使用 `evals/datasets.toml` 作为唯一注册表：`list`、`preflight` 和 `baseline` 离线运行，按目录实际状态报告 inputs-only、template、complete 和 pending；默认 `--input-scope default` 只使用条目显式登记的 `default_input`，缺少该声明的数据集在默认范围为 pending，`--input-scope full` 才验证全部输入；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。完整两阶段 Agent 不属于测试集运行模式；模型、Laminar、预算和产物位置均通过环境变量注入，真实 Key 不得写入摘要或测试资产。
 - `scripts/run_webui.py` 是零参数的 WebUI 启动脚本：从环境变量读取模型与预算配置，绑回环地址提供服务，`CLI_PARSER_WEBUI_HOST` / `_PORT` / `_DATA_ROOT` 可覆盖默认值。配置无效时在绑定端口前以退出码 `2` 结束，不打印栈回溯。
 - `scripts/run_ttp_phase_once.py` 是零参数的开发脚本，只通过公共 `generate_from_schema()` 运行一次注入 Schema 的 TTP 阶段；Schema 与输入路径经环境变量提供，产物写入被忽略的 `.artifacts/ttp-phase-once/`。它不是产品 CLI，不得绕过公共 API 或改变生成协议。
-- 系统化评测必须同时报告结果正确性（case/input 通过率、records/Schema exact 与 precision/recall/F1）、流程漏斗（Schema 冻结、进入 TTP、首个有效候选、finish、最终验收）、可靠性（终止原因、故障域、issue-code、重复 trial）和资源效率（`context.fit`、`agent.round`、`generation.deadline_cleanup`、`final.acceptance`、LLM/TOOL 时延的 p50/p95/p99、tokens、cost、上下文增长和分段覆盖率）。结果按 case/suite/输入形状提供 macro 与 micro 视角；`strict_pass` 只由确定性 `candidate_pass` 决定，Evaluation/Trace/span 完整性与 Trace ID 一致性必须独立报告且不得影响严格正确率；部分分数只用于诊断。
+- 系统化评测必须同时报告结果正确性（dataset/input 通过率、records/Schema exact 与 precision/recall/F1）、流程漏斗（Schema 冻结、进入 TTP、首个有效候选、finish、最终验收）、可靠性（终止原因、故障域、issue-code、重复 trial）和资源效率（`context.fit`、`agent.round`、`generation.deadline_cleanup`、`final.acceptance`、LLM/TOOL 时延的 p50/p95/p99、tokens、cost、上下文增长和分段覆盖率）。结果按 dataset/tag/输入形状提供 macro 与 micro 视角；`strict_pass` 只由确定性 `candidate_pass` 决定，Evaluation/Trace/span 完整性与 Trace ID 一致性必须独立报告且不得影响严格正确率；部分分数只用于诊断。
 - 需要诊断完整修正链时，开发评测入口可在独立进程、并发 `1` 下显式提升预算；本轮主运行固定使用总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交和单次模型超时 `120` 秒。高预算只适用于开发测评，不修改默认 `GenerationPolicy`，每次运行必须保留有效配置指纹和 Laminar Trace。
 - HumanEvaluator 仅限显式开发评测入口：在 Laminar 只读 Trace 中评审该 run 产生的全部 Schema/TTP 候选、capture 复核和最终候选，并记录有界的解析边界、字段粒度、可选字段、同一输入内实体一致性、过拟合和可维护性标签；写入时显式区分 `phase=schema|ttp`。它不得进入 `TtpGenerator.generate()`、产品部署或普通 pytest，不修改 Agent 状态、不触发重试、不向模型回灌内容，本地摘要不得保存模板、records、capture、原始输入或模型文本。
 - `src/cli_parser_agent/evaluation.py` 只实现四件套测试集的安全加载、Agent 外终验、严格评分和脱敏投影；`evals/test_sets/` 每个目录固定保存 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`。标准答案只能从输入回显人工核对生成，不能读取被测产物、Trace、历史 artifact、上游模板、参考 YAML/JSON 或使用被测模型生成答案。
@@ -68,14 +68,14 @@
 - 官方黑盒评测和真实语料以 `evals/test_sets/` 四件套为唯一输入格式；运行时公共 API 仍兼容 `1-5` 输入。当前标准测试数据已清空，重新提供后必须无凭据独立执行 preflight，验证文件编码、大小、终端噪声、凭据模式和 SHA-256，不得产生模型请求。
 - 语义测试闭环独立于 pytest：重新导入的测试集必须先逐 case baseline 通过，再以同一标准集运行 TTP-only Agent；只有当前 `prompt_version` 的成功 case 才能被跳过，每个成功 case 都要在 Agent 外使用全文重新验收。未完成语义重建的测试集不加入 pilot 评分。
 - Laminar 单测必须覆盖可选初始化、幂等行为、独立/继承 Trace、根与 TOOL span 的正常/失败/异常/取消生命周期、trace ID 契约和短进程 flush；语料 `list`/`preflight` 必须证明不触发 tracing 初始化或网络访问。
-- 评测系统单测必须覆盖四件套目录、manifest 严格解析、路径逃逸、哈希、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线一致性、语义占位检测、严格 records 比较、逐输入诊断、严格正确率与遥测完整性解耦。测试数据为空时，普通 pytest 不得依赖具体仓库 case；重新导入后再由 preflight、baseline 和独立评测步骤验证数据集。高预算诊断、重复 trial 和人工评审均属于独立开发步骤，不进入普通 pytest。
+- 评测系统单测必须覆盖四件套目录、TOML 注册表严格解析、路径逃逸、哈希、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线一致性、语义占位检测、严格 records 比较、逐输入诊断、严格正确率与遥测完整性解耦。测试数据为空时，普通 pytest 不得依赖具体仓库 case；重新导入后再由 preflight、baseline 和独立评测步骤验证数据集。高预算诊断、重复 trial 和人工评审均属于独立开发步骤，不进入普通 pytest。
 - observer 与 TUI 单测必须覆盖缺省行为不变、事件顺序和请求隔离、observer 异常隔离、阶段上下文快照、零工具丢弃标记、外部/内部取消区分、完整 JSONL 转录和 Key 排除；Textual `run_test()` 还需覆盖上下导航、Thinking 折叠、详情滚动、自动跟随与完成后退出。
 - 首版交付前至少完成一次真实模型的端到端闭环；普通测试仍必须离线、稳定且不依赖模型。
 
 ## 后续 Agent 工作规则
 
 - 当前目录与职责见 [docs/architecture.md](docs/architecture.md)。不要创建无用途的空目录或 `.gitkeep`。
-- 真实语料的来源、运行方式与验收标准见 [docs/live-corpus-test-plan.md](docs/live-corpus-test-plan.md)；新增或替换文件时同步更新 manifest、SHA-256、第三方来源说明和该文档中的计数。
+- 真实语料的来源、运行方式与验收标准见 [docs/live-corpus-test-plan.md](docs/live-corpus-test-plan.md)；新增或替换文件时同步更新 `evals/datasets.toml`、SHA-256、第三方来源说明和该文档中的计数。
 - 重要契约、阶段协议或目录边界变化时，同步更新本文件和架构文档。
 - 提示词若从 Python 模块迁移为 Markdown 资源，使用 `importlib.resources` 加载并在构建配置中声明 package data。
 - 只有出现第二个真实产品用例或消费者后，才提取共享产品模块或新增适配与编排目录；现有 `evaluation.py`、`evals/` 和评测 Skill 始终是开发测试边界。

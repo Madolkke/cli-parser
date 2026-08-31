@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "total_configured_hardware_interfaces": {
+      "type": "string"
+    },
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "speed_duplex_state": {
+            "type": "string"
+          },
+          "mac_address": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "id",
+          "speed_duplex_state",
+          "mac_address"
+        ]
+      }
+    },
+    "aggregation_groups": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "total_configured_hardware_interfaces",
+    "interfaces",
+    "aggregation_groups"
+  ]
+}

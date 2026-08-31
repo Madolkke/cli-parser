@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "firmware_signature": {
+      "type": "string"
+    },
+    "virus_db": {
+      "type": "string"
+    },
+    "extended_db": {
+      "type": "string"
+    },
+    "av_ai_ml_model": {
+      "type": "string"
+    },
+    "ips_db": {
+      "type": "string"
+    },
+    "ips_etdb": {
+      "type": "string"
+    },
+    "app_db": {
+      "type": "string"
+    },
+    "industrial_db": {
+      "type": "string"
+    },
+    "ips_malicious_url_database": {
+      "type": "string"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "bios_version": {
+      "type": "string"
+    },
+    "system_part_number": {
+      "type": "string"
+    },
+    "log_hard_disk": {
+      "type": "string"
+    },
+    "hostname": {
+      "type": "string"
+    },
+    "private_encryption": {
+      "type": "string"
+    },
+    "operation_mode": {
+      "type": "string"
+    },
+    "current_virtual_domain": {
+      "type": "string"
+    },
+    "max_number_of_virtual_domains": {
+      "type": "string"
+    },
+    "virtual_domains_status": {
+      "type": "string"
+    },
+    "virtual_domain_configuration": {
+      "type": "string"
+    },
+    "fips_cc_mode": {
+      "type": "string"
+    },
+    "current_ha_mode": {
+      "type": "string"
+    },
+    "branch_point": {
+      "type": "string"
+    },
+    "release_version_information": {
+      "type": "string"
+    },
+    "system_time": {
+      "type": "string"
+    },
+    "last_reboot_reason": {
+      "type": "string"
+    },
+    "security_level": {
+      "type": "string"
+    },
+    "cluster_uptime": {
+      "type": "string"
+    },
+    "cluster_state_change_time": {
+      "type": "string"
+    },
+    "extreme_db": {
+      "type": "string"
+    },
+    "fortios_x86_64": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "firmware_signature",
+    "virus_db",
+    "extended_db",
+    "av_ai_ml_model",
+    "ips_db",
+    "ips_etdb",
+    "app_db",
+    "industrial_db",
+    "ips_malicious_url_database",
+    "serial_number",
+    "bios_version",
+    "system_part_number",
+    "log_hard_disk",
+    "hostname",
+    "private_encryption",
+    "operation_mode",
+    "current_virtual_domain",
+    "max_number_of_virtual_domains",
+    "virtual_domains_status",
+    "virtual_domain_configuration",
+    "fips_cc_mode",
+    "current_ha_mode",
+    "branch_point",
+    "release_version_information",
+    "system_time",
+    "last_reboot_reason"
+  ]
+}

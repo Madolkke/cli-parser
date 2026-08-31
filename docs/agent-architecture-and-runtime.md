@@ -183,7 +183,7 @@ Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observabili
 
 ### Evaluation 外层
 
-标准测试集运行由 `scripts/run_test_sets.py` 负责。`baseline` 只在本地隔离执行每个测试集的标准 TTP 模板；`ttp-only` 对每个 trial 只调用一次公共 `generate_from_schema()`，再由 Agent 外确定性验收和比较 expected records。该开发入口不创建 Laminar Evaluation，Laminar 仅作为可选 Trace 通道；详细格式和运行方式见 [四件套评测](ttp-template-evaluation.md)。
+标准测试集运行由 `scripts/run_test_sets.py` 负责。默认范围只选择 TOML 明确登记的 `default_input` 及同索引 expected record，`--input-scope full` 才运行全部输入；`baseline` 只在本地隔离执行选中输入的标准 TTP 模板，`ttp-only` 对每个 trial 只调用一次公共 `generate_from_schema()`，再由 Agent 外确定性验收和比较 expected records。该开发入口不创建 Laminar Evaluation，Laminar 仅作为可选 Trace 通道；详细格式和运行方式见 [四件套评测](ttp-template-evaluation.md)。
 
 系统化评测把结果分成四组：records/Schema 严格正确性，Schema 冻结、TTP 进入、首个有效候选、finish 和最终验收的流程漏斗，`agent.round`/`context.fit`/`generation.deadline_cleanup`/`final.acceptance`/LLM/TOOL 的时延与 tokens/cost，以及按 case、suite、输入形状分层的重复 trial 可靠性。严格通过是最终门槛；叶子值和 Schema 的 precision/recall/F1、逐输入差异和 issue-code 只用于定位缺陷。评测报告同时提供按 case 的 macro 结果和按输入的 micro 结果，不能用多输入 case 的数量掩盖单输入失败。
 

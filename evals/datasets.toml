@@ -1,0 +1,124 @@
+# 标准测试集唯一注册表（详见 evals/standard-test-dataset.md「数据集阶段约定」）。
+# 目录实际状态决定 inputs-only、template 或 complete 阶段；无需生成 JSON manifest。
+version = 1
+
+[[dataset]]
+id = 1
+name = "broadcom_icos.show_version"
+command = "show version"
+platform = "broadcom_icos"
+source = "ntc-templates"
+tags = ["easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "e8ba88c953b76683d9f053abec9e321d8140e1194791c4936c02461028fa8106" }
+schema = { file = "schema.json", sha256 = "a9bd72709a5c30a38daea40aad3b07c3d5690a545fb0448df556626687f1c68b" }
+expected = { file = "expected.json", sha256 = "e703cd2b0f4e113a485597cecbe33a51dd7aebd34b8f284c70d7aaec071b7adc" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "8db982330658ac2337c7d3a7e90b255164bc8613bdc784988ad487ffe85d6cfc" },
+  { file = "inputs/002.txt", sha256 = "d59a6b02837e0c38e1ffc0a92149b435d25cc191e5051d5085aa4e85ced1d62e" },
+  { file = "inputs/003.txt", sha256 = "98ecde4e09522189311c45a1867a1cf10cd56a7cd227be40f58287353b66aa7f" },
+  { file = "inputs/004.txt", sha256 = "dee4f63de1fb8c05a29df8e7887bade37dceba2bdad002c6ad9cbdd035740fb5" },
+  { file = "inputs/005.txt", sha256 = "a283565da15b8b705190993a6644ba9470e538cbb43294f7db5600f16a060ae2" },
+]
+
+[[dataset]]
+id = 2
+name = "cisco_ios.show_lldp_neighbors_detail"
+command = "show lldp neighbors detail"
+platform = "cisco_ios"
+source = "ntc-templates"
+tags = []
+inputs = [
+  { file = "inputs/001.txt", sha256 = "5993d7fae009f196363a3e749ecd1c160fa659e02e1d40cd4b68598b8a1477ce" },
+  { file = "inputs/002.txt", sha256 = "c99c292c8a12de41c05e402d9ea0c1f1502a2ebb65731af34b312fe396fd8dc7" },
+  { file = "inputs/003.txt", sha256 = "599f335703b70dde613f14491c2742fdc8c710451e0c4306c444793ccbae85e7" },
+  { file = "inputs/004.txt", sha256 = "fa4668d836492846099c9ed95ffcb43ddc0a9b359788c3ce840e5300046b7143" },
+  { file = "inputs/005.txt", sha256 = "c03f2f4b8c38f1be1919825652f8991afc97b3b162621d60a3162e5b61c6663a" },
+]
+
+[[dataset]]
+id = 3
+name = "fortinet.get_system_status"
+command = "get system status"
+platform = "fortinet"
+source = "ntc-templates"
+tags = ["easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "3602f6799291bbffa50959e1921248071cbc40992ed4d8f3d60ccbcad55df1a8" }
+schema = { file = "schema.json", sha256 = "d79b5e55025f48b86dc954ee702df745ac22e4b1fbaa13558989abb8fd04022c" }
+expected = { file = "expected.json", sha256 = "9f7f66dd2b6c17fedd6d8347dab136910f2c49a25a7ce66d13c67ebda8e0aebc" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "61beaa2acb3af1903acfc253d2379a601c4d3367e7d6b1e6ac4f3ff06bc80a0b" },
+  { file = "inputs/002.txt", sha256 = "7dcd69755eca525424c1b87809f3357012306377c642b527a7762038b97d20ad" },
+  { file = "inputs/003.txt", sha256 = "2b06c4c683922987bab1e4fb46030321b3c90652bc5b17fdb201f917e81efffc" },
+]
+
+[[dataset]]
+id = 4
+name = "huawei_vrp.display_port_vlan"
+command = "display port vlan"
+platform = "huawei_vrp"
+source = "ntc-templates"
+tags = []
+template = { file = "template.ttp", sha256 = "653ececbbbab2d05239e966dcef8ed031a6a208f6d427c3fde458668a7fb950f" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "9e9c26cdb7fee0d3366b35ef40803ad53989652f2b79e12fe4495b3a62adc8dc" },
+  { file = "inputs/002.txt", sha256 = "f208ed986b6e3423a65226aab986c23dcae902acf6627c3d7247dcd72b2530dd" },
+  { file = "inputs/003.txt", sha256 = "ec3fd13da22c4aebbd250caf88e2b54041674073a03d884c2dfa202c5333c2dc" },
+  { file = "inputs/004.txt", sha256 = "b29ac8e6c73f588b7aed419d256f7b22d622e4ccac2e8b609dd0d7005cdfb195" },
+]
+
+[[dataset]]
+id = 5
+name = "cisco_s300.show_lldp_neighbors"
+command = "show lldp neighbors"
+platform = "cisco_s300"
+source = "ntc-templates"
+tags = ["medium"]
+inputs = [
+  { file = "inputs/001.txt", sha256 = "bfc6d69648b37ebc4923dacc97c80cf41c202a685af46ee648a1765ae902dc86" },
+  { file = "inputs/002.txt", sha256 = "4ef42c61dd0d8506ac1881d471b44d14a04c3648f244b07f7ed2ec06b647e232" },
+]
+
+[[dataset]]
+id = 6
+name = "paloalto_panos.show_interface_hardware"
+command = "show interface hardware"
+platform = "paloalto_panos"
+source = "ntc-templates"
+tags = ["easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "e206595a037de4e984fa076f54f653a95240ecc43f5de554b1cd4623b85f8fe1" }
+schema = { file = "schema.json", sha256 = "b8648240dc9160663c2600b9be39864ac2767106669f0f5055e388eab56aff7e" }
+expected = { file = "expected.json", sha256 = "87670dc2ef3a83ab359f11df06700fc867b4f1becf5cd09307ffdc99ec89de49" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "57e224c9f04c66e7ad79b1b1f25ebffeff7fd2dc440c5a5d2b3897bbf26c83df" },
+  { file = "inputs/002.txt", sha256 = "abf83d307063ae616423f238b99edd81f5bb1629b8a7f0a2192c0f8e551a3c90" },
+]
+
+[[dataset]]
+id = 7
+name = "hp_procurve.show_interfaces_status"
+command = "show interfaces status"
+platform = "hp_procurve"
+source = "ntc-templates"
+tags = ["medium"]
+inputs = [
+  { file = "inputs/001.txt", sha256 = "e2de108214cddb66512bfafaf43ae1f0ace76d46c13270d8eb15735a2058e111" },
+  { file = "inputs/002.txt", sha256 = "5f63ce0f1bb0807efb755dfd7e4c3f09d503a966d7a8fe3bb92f1059c9bb0cd4" },
+  { file = "inputs/003.txt", sha256 = "1b94a72a75f113de6e1c7a20b0cac1132dabf87cef3189c71de7536daf4a861c" },
+  { file = "inputs/004.txt", sha256 = "e2efb0b8806c6516e81a573a6a0dd9c78322d8290178fb872278c6d9ff933b93" },
+]
+
+[[dataset]]
+id = 8
+name = "cisco_ios.show_power_status"
+command = "show power status"
+platform = "cisco_ios"
+source = "ntc-templates"
+tags = ["medium"]
+inputs = [
+  { file = "inputs/001.txt", sha256 = "6a867d40fc887046a0305bb6bb25433515fe09e7a2ba6953038fecd3e922eb23" },
+  { file = "inputs/002.txt", sha256 = "afac66b48e390913d7783336bb937f91100c2961210180271c9272f1b8b3647e" },
+  { file = "inputs/003.txt", sha256 = "33a6bc06d38e2b02cdee2aa478f0b4f61ba5f36bf4b0b973724e13ff4b48cca6" },
+]

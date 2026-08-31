@@ -21,9 +21,9 @@ Each independent test set contains exactly:
 
 The inputs are same-command UTF-8 command echoes in source order. The Schema,
 standard TTP template, and expected records must be reviewed together for all
-inputs. `expected.json` is a list of one object per input. The root manifest is
-`evals/test_sets/manifest.json` and contains only index metadata and SHA-256
-values.
+inputs. `expected.json` is a list of one object per input. The sole registry is
+`evals/datasets.toml` and contains only index metadata and SHA-256 values plus
+an explicit `default_input` path for routine single-input evaluation.
 
 Before changing assets, preserve the raw source and third-party attribution in
 the review context. Write the standard template independently, run the local
@@ -34,12 +34,15 @@ files.
 Run the offline checks:
 
 ```powershell
-uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite smoke
+uv run python scripts/run_test_sets.py list --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py preflight --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline --input-scope full
 ```
 
-The baseline must parse every input and reproduce `expected.json` exactly.
+The default baseline must parse the registered default input and reproduce its
+same-index expected record exactly. Run the explicit full scope before accepting
+a multi-input regression.
 Object key order is ignored by the evaluator; array order, scalar type,
 missing fields, `null`, and empty strings remain significant. Test sets are
 not a route to execute shell commands, access the network, or run the Agent.

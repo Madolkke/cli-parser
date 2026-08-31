@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "switch": {
+      "type": "string"
+    },
+    "system_description": {
+      "type": "string"
+    },
+    "machine_type": {
+      "type": "string"
+    },
+    "machine_model": {
+      "type": "string"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "maintenance_level": {
+      "type": "string"
+    },
+    "manufacturer": {
+      "type": "string"
+    },
+    "burned_in_mac_address": {
+      "type": "string"
+    },
+    "software_version": {
+      "type": "string"
+    },
+    "operating_system": {
+      "type": "string"
+    },
+    "network_processing_device": {
+      "type": "string"
+    },
+    "additional_packages": {
+      "type": "string"
+    },
+    "cpld_version": {
+      "type": "string"
+    },
+    "board_revision": {
+      "type": "string"
+    },
+    "fru_number": {
+      "type": "string"
+    },
+    "part_number": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "switch",
+    "system_description",
+    "machine_type",
+    "machine_model",
+    "serial_number",
+    "maintenance_level",
+    "manufacturer",
+    "burned_in_mac_address",
+    "software_version",
+    "operating_system",
+    "network_processing_device",
+    "additional_packages"
+  ]
+}

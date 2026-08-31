@@ -1,0 +1,34 @@
+<group>
+Version: {{ version | ORPHRASE }}
+Firmware Signature: {{ firmware_signature | ORPHRASE }}
+Virus-DB: {{ virus_db | ORPHRASE }}
+Extended DB: {{ extended_db | ORPHRASE }}
+AV AI/ML Model: {{ av_ai_ml_model | ORPHRASE }}
+IPS-DB: {{ ips_db | ORPHRASE }}
+IPS-ETDB: {{ ips_etdb | ORPHRASE }}
+APP-DB: {{ app_db | ORPHRASE }}
+INDUSTRIAL-DB: {{ industrial_db | ORPHRASE }}
+IPS Malicious URL Database: {{ ips_malicious_url_database | ORPHRASE }}
+Serial-Number: {{ serial_number | ORPHRASE }}
+BIOS version: {{ bios_version | ORPHRASE }}
+System Part-Number: {{ system_part_number | ORPHRASE }}
+Log hard disk: {{ log_hard_disk | ORPHRASE }}
+Hostname: {{ hostname | ORPHRASE }}
+Private Encryption: {{ private_encryption | ORPHRASE }}
+Operation Mode: {{ operation_mode | ORPHRASE }}
+Current virtual domain: {{ current_virtual_domain | ORPHRASE }}
+Max number of virtual domains: {{ max_number_of_virtual_domains | ORPHRASE }}
+Virtual domains status: {{ virtual_domains_status | ORPHRASE }}
+Virtual domain configuration: {{ virtual_domain_configuration | ORPHRASE }}
+FIPS-CC mode: {{ fips_cc_mode | ORPHRASE }}
+Current HA mode: {{ current_ha_mode | ORPHRASE }}
+Branch point: {{ branch_point | ORPHRASE }}
+Release Version Information: {{ release_version_information | ORPHRASE }}
+System time: {{ system_time | ORPHRASE }}
+Last reboot reason: {{ last_reboot_reason | ORPHRASE }}
+Security Level: {{ security_level | ORPHRASE }}
+Cluster uptime: {{ cluster_uptime | ORPHRASE }}
+Cluster state change time: {{ cluster_state_change_time | ORPHRASE }}
+Extreme DB: {{ extreme_db | ORPHRASE }}
+FortiOS x86-64: {{ fortios_x86_64 | ORPHRASE }}
+</group>

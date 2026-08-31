@@ -3,26 +3,28 @@
 评测输入统一为 `evals/test_sets/` 下的四件套测试集。每个测试集固定包含
 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`；输入按 `001.txt` 到
 `005.txt` 排列，所有输入共享同一个标准 Schema、模板和 expected records。根
-`manifest.json` 只负责索引、suite、标签和 SHA-256。
+唯一注册表 `evals/datasets.toml` 负责索引、标签和 SHA-256；目录实际状态决定数据集是 inputs-only、template 还是 complete。
 
 加载器和确定性校验位于 `src/cli_parser_agent/evaluation.py`，统一入口是
 `scripts/run_test_sets.py`。加载器严格检查 UTF-8/BOM、重复 JSON 键、路径越界、哈希、
 输入数量、Schema 受限子集、expected records 与模板基线。标准模板必须在隔离 TTP 解析后
-对全部输入产生与 `expected.json` 完全一致的 records。
+默认范围内对 TOML 中显式指定的单份 `default_input` 产生与同索引
+`expected.json` record 完全一致的 records。`--input-scope full` 才验证全部输入。
 
 ## 两种运行模式
 
 ```powershell
-uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite semantic-pilot
-uv run --env-file .env python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode ttp-only --suite semantic-pilot --trials 1 --concurrency 1
+uv run python scripts/run_test_sets.py list --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py preflight --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline --input-scope full
+uv run --env-file .env python scripts/run_test_sets.py run --registry evals/datasets.toml --mode ttp-only --trials 1 --concurrency 1
 ```
 
 `list`、`preflight` 和 `baseline` 完全离线，不读取模型配置、不初始化 Laminar。`baseline`
 只验证维护者提供的标准 TTP 模板可执行且结果正确，它不要求 Agent 生成相同的模板文本。
 
-`ttp-only` 将标准 Schema 和全部同源输入传给一次独立的
+默认 `ttp-only` 将标准 Schema 和一份已登记的默认回显传给一次独立的
 `TtpGenerator.generate_from_schema()`，随后执行 Agent 外全文验收和严格 records 评分。
 它不调用 `generate()`，不运行 Schema Agent，也不把标准模板字符串相似度作为得分。
 默认 `trials=1`、`concurrency=1`；模型与预算从环境变量读取，高预算只能由人工显式配置。
@@ -47,6 +49,7 @@ uv run --env-file .env python scripts/run_test_sets.py run --manifest evals/test
 `run_agent_evaluation.py` 和 `run_ttp_template_evaluation.py` 不再是评测路径。没有标准
 expected records 的临时排查可以使用专用单次 TTP 诊断脚本，但不得作为标准测试执行。
 
-`semantic-pilot` 只收录已从当前 raw 回显重建并人工复核的业务实体 Schema。当前测试数据已
-清空，暂时没有可运行的 pilot case；重新提供数据后，固定宽度表、键值行和嵌套段落应分别
-以语义实体表达，且必须先通过 preflight 和 baseline。
+只有 complete 阶段、指定了 `default_input` 且通过 preflight/baseline 的数据集才进入默认
+strict TTP-only 统计；缺少默认回显的完整数据集在该范围会作为 pending。`inputs-only` 和
+template 阶段同样会作为 pending 或 smoke 结果单独报告。标签可用
+`--tag` 过滤，未指定过滤条件时运行 TOML 注册表中的全部数据集。

@@ -1,0 +1,19 @@
+<group>
+Switch: {{switch | ORPHRASE}}
+System Description{{ignore("[.]+[ ]*")}}{{system_description | ROW}}
+Machine Type{{ignore("[.]+[ ]*")}}{{machine_type | ROW}}
+Machine Model{{ignore("[.]+[ ]*")}}{{machine_model | ORPHRASE}}
+Serial Number{{ignore("[.]+[ ]*")}}{{serial_number | ORPHRASE}}
+Maintenance Level{{ignore("[.]+[ ]*")}}{{maintenance_level | ORPHRASE}}
+Manufacturer{{ignore("[.]+[ ]*")}}{{manufacturer | ORPHRASE}}
+Burned In MAC Address{{ignore("[.]+[ ]*")}}{{burned_in_mac_address | ORPHRASE}}
+Software Version{{ignore("[.]+[ ]*")}}{{software_version | ORPHRASE}}
+Operating System{{ignore("[.]+[ ]*")}}{{operating_system | ORPHRASE}}
+Network Processing Device{{ignore("[.]+[ ]*")}}{{network_processing_device | ORPHRASE}}
+Additional Packages{{ignore("[.]+[ ]*")}}{{additional_packages | ORPHRASE | joinmatches(" ")}}
+{{ignore("[ \t]+")}}{{additional_packages | ORPHRASE | joinmatches(" ")}}
+CPLD version{{ignore("[.]+[ ]*")}}{{cpld_version | ORPHRASE}}
+Board Revision{{ignore("[.]+[ ]*")}}{{board_revision | ORPHRASE}}
+FRU Number{{ignore("[.]+[ ]*")}}{{fru_number | ORPHRASE}}
+Part Number{{ignore("[.]+[ ]*")}}{{part_number | ORPHRASE}}
+</group>

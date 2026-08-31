@@ -122,7 +122,6 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 │           └── references/
 ├── evals/
 │   └── test_sets/
-│       ├── manifest.json
 │       └── <platform.command>/
 │           ├── inputs/
 │           ├── schema.json
@@ -183,7 +182,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | --- | --- | --- |
 | `config.py` | OpenAI 兼容配置与独立的执行/安全策略 | 否 |
 | `observability.py` | 可选 Laminar 幂等初始化与 trace 边界辅助函数 | 否 |
-| `evaluation.py` | 四件套测试集 manifest 安全加载、确定性模板基线、独立验收、严格 records 评分和脱敏 trial 投影 | 否 |
+| `evaluation.py` | TOML 测试集注册表安全加载、阶段化预检、确定性模板基线、独立验收、严格 records 评分和脱敏 trial 投影 | 否 |
 | `contracts.py` | 请求、成功/失败结果、artifact、issue、metadata 和 Schema proposal | 否 |
 | `progress.py` | `ProgressObserver` 调试类型、请求级事件序列化与异常隔离 | 是；只复制和派发事件，不参与 Agent 决策 |
 | `sampling.py` | 确定性模型上下文采样，不改变全文验收输入；workflow 另做阶段序列化/token fitting | 否 |
@@ -204,8 +203,9 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 | `scripts/_agent_run_support.py` | 零参数开发 runner 共用的输入检查、隐藏 Key 读取、artifact 与 Laminar flush 辅助函数 | 否 |
 | `scripts/run_agent_once.py` | 使用环境变量运行一个人工选择的真实模型请求，写入完整开发产物，打印 trace ID 并在退出前 flush | 否；只调用公共 API |
 | `scripts/run_agent_tui.py` | 以 Textual 只读观察一次流式生成，支持时间线导航与 Thinking 折叠，并写入完整本地事件 artifact | 是；仅通过公共 observer 接收调试事件，不访问或修改 AgentState |
-| `scripts/run_test_sets.py` | 四件套测试集的离线 list/preflight/baseline 与 TTP-only Agent 评分入口 | 否；只调用公共 API 和确定性 validation |
-| `evals/test_sets/` | 按平台和命令组织的独立测试集，每组固定保存输入、Schema、标准模板和 expected records | 不适用；不进入 wheel |
+| `scripts/run_test_sets.py` | TOML 注册表驱动的分阶段 list/preflight/baseline 与 TTP-only Agent 评分入口；默认只评测登记的 `default_input`，`--input-scope full` 运行全量回归 | 否；只调用公共 API 和确定性 validation |
+| `evals/datasets.toml` | 标准测试集唯一注册、选择和状态入口 | 不适用；不进入 wheel |
+| `evals/test_sets/` | 按平台和命令组织的独立测试集，可处于 inputs-only、template 或 complete 阶段 | 不适用；不进入 wheel |
 | `scripts/run_ttp_phase_once.py` | 无 GT 的单次 TTP-only 人工诊断脚本 | 否；只调用公共 API |
 
 所有领域逻辑留在 `ttp_generation` 垂直切片中。即使 `validation/` 不依赖 AgentScope，也不提升到项目顶层；四件套评测只属于开发测试边界，不改变产品生成流程。
@@ -323,7 +323,7 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - pytest 中的稳定测试不隐式访问网络或模型；标准测试集由四件套 loader 做离线闭环，独立 runner 只在显式 `ttp-only` 模式下访问模型。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、测试工具非终止行为、候选保留、无候选 finish 拒绝、达到有效模板提交上限后的严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交/测试与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
-- 四件套评测单测覆盖目录结构、manifest 严格解析、路径逃逸与 SHA-256、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线闭合、records/数组/类型的严格比较和逐输入诊断。系统化评测报告 case/input 严格通过率、records precision-recall-F1、TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按 suite、平台和输入形状的 macro/micro 结果。
+- 四件套评测单测覆盖 TOML 注册表严格解析、路径逃逸与 SHA-256、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线闭合、records/数组/类型的严格比较和逐输入诊断。系统化评测报告 case/input 严格通过率、records precision-recall-F1、TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按标签、平台和输入形状的 macro/micro 结果。
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 

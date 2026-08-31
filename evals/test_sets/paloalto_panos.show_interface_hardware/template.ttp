@@ -1,0 +1,7 @@
+<group>
+total configured hardware interfaces: {{ total_configured_hardware_interfaces | DIGIT }}
+<group name="interfaces">
+{{ name }} {{ id | DIGIT }} {{ speed_duplex_state }} {{ mac_address }}
+</group>
+aggregation groups: {{ aggregation_groups | DIGIT }}
+</group>

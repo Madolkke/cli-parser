@@ -159,18 +159,22 @@ uv run --env-file .env python scripts/run_ttp_phase_once.py
 
 Results are written under `.artifacts/ttp-phase-once/`.
 
-For repeatable TTP evaluation, every case is an independent four-part test set
-under `evals/test_sets/<case-id>/`: `inputs/001.txt` through `005.txt`,
-`schema.json`, `template.ttp`, and `expected.json`. The root manifest only
-indexes cases, suites, tags, and SHA-256 values. The standard template is an
-offline executable baseline; the Agent is scored only against the standard
-Schema and expected records.
+For repeatable TTP evaluation, every case is an independent test set under
+`evals/test_sets/<dataset-name>/`. A completed case contains `inputs/001.txt`
+through `005.txt`, `schema.json`, `template.ttp`, and `expected.json`. The sole
+registry is `evals/datasets.toml`; it indexes metadata and SHA-256 values while
+the directory contents determine whether a case is inputs-only, template, or
+complete. The standard template is an offline executable baseline; the Agent
+is scored only against the standard Schema and expected records. Normal runs
+use each dataset's explicitly registered `default_input`; use `--input-scope full`
+for an all-input regression.
 
 ```powershell
-uv run python scripts/run_test_sets.py list --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py preflight --manifest evals/test_sets/manifest.json
-uv run python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode baseline --suite semantic-pilot
-uv run --env-file .env python scripts/run_test_sets.py run --manifest evals/test_sets/manifest.json --mode ttp-only --suite semantic-pilot --trials 1 --concurrency 1
+uv run python scripts/run_test_sets.py list --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py preflight --registry evals/datasets.toml
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline
+uv run python scripts/run_test_sets.py run --registry evals/datasets.toml --mode baseline --input-scope full
+uv run --env-file .env python scripts/run_test_sets.py run --registry evals/datasets.toml --mode ttp-only --trials 1 --concurrency 1
 ```
 
 `list`, `preflight`, and `baseline` are offline. `ttp-only` calls only
@@ -180,7 +184,8 @@ full two-stage Schema Agent; Schema quality is checked by the canonical Schema
 and its deterministic preflight. See [四件套评测](docs/ttp-template-evaluation.md).
 
 当前 `evals/test_sets/` 测试数据已清空，等待重新导入经过人工核对的标准四件套。
-重新提供数据后，必须先完成 preflight 和 baseline，再加入对应 suite 并进行 Agent 评分。
+重新提供数据后，必须先完成 preflight 和 baseline；complete 数据集即可通过
+`--dataset`、`--dataset-id` 或 `--tag` 进入 Agent 评分。
 
 ## Local WebUI
 

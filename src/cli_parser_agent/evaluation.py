@@ -6,14 +6,16 @@ import hashlib
 import json
 import math
 import re
+import tomllib
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from cli_parser_agent import GenerationPolicy, GenerationResult
 from cli_parser_agent.ttp_generation.validation import (
+    parse_ttp_template,
     validate_records_against_schema,
     validate_result_schema,
     validate_ttp_template,
@@ -27,6 +29,7 @@ TEST_SET_MANIFEST_VERSION = 1
 TEST_SET_MAX_INPUTS = 5
 TEST_SET_TEMPLATE_MAX_BYTES = 64 * 1024
 SEMANTIC_PILOT_SUITE = "semantic-pilot"
+DATASET_REGISTRY_VERSION = 1
 MAX_INPUT_BYTES = 1024 * 1024
 SUPPORTED_NODE_TYPES = frozenset(
     {"object", "array", "string", "integer", "number", "boolean"},
@@ -185,6 +188,7 @@ class TestSetCase:
     template: str
     expected_records: tuple[JsonObject, ...]
     file_sha256: Mapping[str, Any]
+    original_input_indices: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +199,104 @@ class TestSetManifest:
     path: Path
     sha256: str
     cases: tuple[TestSetCase, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetFileSpec:
+    """A file declared by the TOML dataset registry."""
+
+    file: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetRegistryEntry:
+    """Registry metadata and filesystem state for one dataset."""
+
+    id: int
+    name: str
+    command: str
+    platform: str
+    source: str
+    tags: tuple[str, ...]
+    absolute_path: Path
+    inputs: tuple[DatasetFileSpec, ...]
+    default_input: str | None
+    default_input_index: int | None
+    template: DatasetFileSpec | None
+    schema: DatasetFileSpec | None
+    expected: DatasetFileSpec | None
+    stage: Literal["inputs-only", "template", "complete"]
+    present_files: tuple[str, ...]
+    missing_files: tuple[str, ...]
+    input_texts: tuple[EvaluationInput, ...]
+    template_text: str | None
+    registry_errors: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetRegistry:
+    """The sole TOML registry used by the standard test-set runner."""
+
+    version: int
+    path: Path
+    sha256: str
+    datasets: tuple[DatasetRegistryEntry, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetPreflightReport:
+    """Safe, payload-free status for one registry entry."""
+
+    dataset: DatasetRegistryEntry
+    status: Literal["pending", "passed", "failed"]
+    input_scope: Literal["default", "full"] = "default"
+    selected_input_indices: tuple[int, ...] = ()
+    errors: tuple[str, ...] = ()
+    case: TestSetCase | None = None
+    template_inputs_passed: int = 0
+    baseline_exact: bool | None = None
+    template_smoke_results: tuple[dict[str, Any], ...] = ()
+
+    def as_dict(self) -> dict[str, Any]:
+        entry = self.dataset
+        selected_inputs = [
+            {
+                "input_index": index,
+                "display_number": index + 1,
+                "file": entry.inputs[index].file,
+            }
+            for index in self.selected_input_indices
+        ]
+        return {
+            "id": entry.id,
+            "name": entry.name,
+            "command": entry.command,
+            "platform": entry.platform,
+            "source": entry.source,
+            "tags": list(entry.tags),
+            "stage": entry.stage,
+            "status": self.status,
+            "input_count": len(entry.inputs),
+            "input_scope": self.input_scope,
+            "default_input": entry.default_input,
+            "selected_input": (
+                selected_inputs[0]["file"] if len(selected_inputs) == 1 else None
+            ),
+            "selected_input_count": len(selected_inputs),
+            "selected_inputs": selected_inputs,
+            "present_files": list(entry.present_files),
+            "missing_files": list(entry.missing_files),
+            "eligible": {
+                "baseline": self.status == "passed"
+                and entry.stage in {"template", "complete"},
+                "ttp_only": self.status == "passed" and entry.stage == "complete",
+            },
+            "template_inputs_passed": self.template_inputs_passed,
+            "template_smoke": list(self.template_smoke_results),
+            "baseline_exact": self.baseline_exact,
+            "errors": list(self.errors),
+        }
 
 
 def _is_line_text_placeholder_schema(schema: Mapping[str, Any]) -> bool:
@@ -789,8 +891,7 @@ def load_ttp_template_manifest(manifest_path: Path) -> TtpTemplateManifest:
     _require_exact_keys(raw, {"version", "cases"}, "TTP template manifest")
     if raw["version"] != TTP_TEMPLATE_MANIFEST_VERSION:
         raise HarnessError(
-            "TTP template manifest version must be "
-            f"{TTP_TEMPLATE_MANIFEST_VERSION}",
+            f"TTP template manifest version must be {TTP_TEMPLATE_MANIFEST_VERSION}",
         )
     raw_cases = raw["cases"]
     if not isinstance(raw_cases, list) or not raw_cases:
@@ -1087,6 +1188,673 @@ def _load_test_set_files(
     )
 
 
+def _dataset_file_spec(value: Any, label: str) -> DatasetFileSpec:
+    if not isinstance(value, Mapping):
+        raise HarnessError(f"{label} must be an object")
+    _require_exact_keys(value, {"file", "sha256"}, label)
+    file_name = _require_string(value["file"], f"{label}.file")
+    sha256 = _validate_sha256(value["sha256"], f"{label}.sha256")
+    return DatasetFileSpec(file=file_name, sha256=sha256)
+
+
+def _verify_dataset_file(
+    path: Path,
+    spec: DatasetFileSpec,
+    label: str,
+) -> bool:
+    """Verify a declared file when present, returning false for pending files."""
+
+    if not path.is_file():
+        return False
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise HarnessError(f"{label} could not be read") from error
+    if _sha256(payload) != spec.sha256:
+        raise HarnessError(f"{label} SHA-256 does not match")
+    return True
+
+
+def _dataset_path_spec(
+    dataset_path: Path,
+    spec: DatasetFileSpec,
+    expected_file: str,
+    label: str,
+) -> Path:
+    path_text, path = _safe_manifest_path(dataset_path, spec.file, f"{label}.file")
+    if path_text != expected_file:
+        raise HarnessError(f"{label}.file must be {expected_file}")
+    return path
+
+
+def _dataset_inputs(
+    entry: DatasetRegistryEntry,
+    *,
+    validate_content: bool,
+) -> tuple[EvaluationInput, ...]:
+    inputs: list[EvaluationInput] = []
+    for index, spec in enumerate(entry.inputs, start=1):
+        path = _dataset_path_spec(
+            entry.absolute_path,
+            spec,
+            f"inputs/{index:03d}.txt",
+            f"dataset {entry.name}.inputs[{index - 1}]",
+        )
+        label = f"dataset {entry.name}.inputs[{index - 1}].file"
+        if not path.is_file():
+            continue
+        text = _load_test_set_text(
+            path,
+            spec.sha256,
+            label,
+            max_bytes=MAX_INPUT_BYTES,
+        )
+        inputs.append(
+            EvaluationInput(
+                path=f"test_sets/{entry.name}/inputs/{index:03d}.txt",
+                sha256=spec.sha256,
+                absolute_path=path,
+                text=text,
+            ),
+        )
+    return tuple(inputs)
+
+
+def _validate_input_scope(value: str) -> Literal["default", "full"]:
+    if value not in {"default", "full"}:
+        raise HarnessError("input scope must be default or full")
+    return cast(Literal["default", "full"], value)
+
+
+def dataset_input_scope_metadata(
+    entry: DatasetRegistryEntry,
+    input_scope: Literal["default", "full"],
+) -> dict[str, Any]:
+    """Return payload-free information about inputs selected for a run."""
+
+    if input_scope == "default":
+        indices = (
+            ()
+            if entry.default_input_index is None
+            else (entry.default_input_index,)
+        )
+    else:
+        indices = tuple(range(len(entry.inputs)))
+    return {
+        "input_scope": input_scope,
+        "default_input": entry.default_input,
+        "selected_input": (
+            entry.inputs[indices[0]].file if len(indices) == 1 else None
+        ),
+        "selected_input_indices": indices,
+        "selected_inputs": tuple(
+            {
+                "input_index": index,
+                "display_number": index + 1,
+                "file": entry.inputs[index].file,
+            }
+            for index in indices
+        ),
+    }
+
+
+def _scoped_dataset_inputs(
+    entry: DatasetRegistryEntry,
+    input_scope: Literal["default", "full"],
+) -> tuple[tuple[EvaluationInput, ...], tuple[int, ...]]:
+    inputs = _dataset_inputs(entry, validate_content=True)
+    if len(inputs) != len(entry.inputs):
+        raise HarnessError(f"dataset {entry.name} input files are incomplete")
+    metadata = dataset_input_scope_metadata(entry, input_scope)
+    selected_indices = cast(tuple[int, ...], metadata["selected_input_indices"])
+    if not selected_indices:
+        raise HarnessError(f"dataset {entry.name} has no default_input")
+    return tuple(inputs[index] for index in selected_indices), selected_indices
+
+
+def load_dataset_registry(registry_path: Path) -> DatasetRegistry:
+    """Load the strict TOML registry and inspect filesystem completeness.
+
+    This function intentionally does not run TTP or model code.  Missing files
+    are represented as pending state so ``list`` remains useful while a case is
+    being assembled; malformed present files and registry drift are errors.
+    """
+
+    path = registry_path.expanduser().resolve()
+    try:
+        payload = path.read_bytes()
+    except OSError as error:
+        raise HarnessError("dataset registry could not be read") from error
+    if payload.startswith(b"\xef\xbb\xbf"):
+        raise HarnessError("dataset registry must not contain a UTF-8 BOM")
+    try:
+        raw = tomllib.loads(payload.decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise HarnessError("dataset registry is not valid UTF-8 TOML") from error
+    if not isinstance(raw, Mapping):
+        raise HarnessError("dataset registry root must be a table")
+    _require_exact_keys(raw, {"version", "dataset"}, "dataset registry")
+    if raw["version"] != DATASET_REGISTRY_VERSION:
+        raise HarnessError(
+            f"dataset registry version must be {DATASET_REGISTRY_VERSION}",
+        )
+    raw_datasets = raw["dataset"]
+    if not isinstance(raw_datasets, list) or not raw_datasets:
+        raise HarnessError("dataset registry dataset must be a non-empty array")
+
+    test_sets_root = path.parent / "test_sets"
+    if not test_sets_root.is_dir():
+        raise HarnessError("dataset registry test_sets directory does not exist")
+    actual_dirs = {child.name for child in test_sets_root.iterdir() if child.is_dir()}
+    entries: list[DatasetRegistryEntry] = []
+    seen_ids: set[int] = set()
+    seen_names: set[str] = set()
+    for index, raw_dataset in enumerate(raw_datasets):
+        label = f"dataset registry dataset[{index}]"
+        if not isinstance(raw_dataset, Mapping):
+            raise HarnessError(f"{label} must be a table")
+        required = {"id", "name", "command", "platform", "source", "tags", "inputs"}
+        allowed = required | {"default_input", "template", "schema", "expected"}
+        missing = required - raw_dataset.keys()
+        extra = raw_dataset.keys() - allowed
+        if missing:
+            raise HarnessError(f"{label} is missing keys: {', '.join(sorted(missing))}")
+        if extra:
+            raise HarnessError(
+                f"{label} has unsupported keys: {', '.join(sorted(extra))}"
+            )
+        dataset_id = raw_dataset["id"]
+        if (
+            isinstance(dataset_id, bool)
+            or not isinstance(dataset_id, int)
+            or dataset_id < 1
+            or dataset_id in seen_ids
+        ):
+            raise HarnessError(f"{label}.id is invalid or duplicated")
+        seen_ids.add(dataset_id)
+        name = _require_string(raw_dataset["name"], f"{label}.name")
+        if not _ID_RE.fullmatch(name) or name in seen_names:
+            raise HarnessError(f"{label}.name is invalid or duplicated")
+        seen_names.add(name)
+        if name not in actual_dirs:
+            raise HarnessError(f"{label}.name directory does not exist: {name}")
+        dataset_path = test_sets_root / name
+        actual_children = {child.name for child in dataset_path.iterdir()}
+        allowed_children = {"inputs", "template.ttp", "schema.json", "expected.json"}
+        unexpected_children = actual_children - allowed_children
+        if unexpected_children:
+            raise HarnessError(
+                f"{label} contains unsupported files: "
+                f"{', '.join(sorted(unexpected_children))}",
+            )
+        inputs_dir = dataset_path / "inputs"
+        if not inputs_dir.is_dir():
+            raise HarnessError(f"{label}.inputs directory does not exist")
+
+        command = _require_string(raw_dataset["command"], f"{label}.command")
+        platform = _require_string(raw_dataset["platform"], f"{label}.platform")
+        source = _require_string(raw_dataset["source"], f"{label}.source")
+        tags = _optional_string_list(
+            raw_dataset["tags"], f"{label}.tags", pattern=_TAG_RE
+        )
+        raw_inputs = raw_dataset["inputs"]
+        if (
+            not isinstance(raw_inputs, list)
+            or not 1 <= len(raw_inputs) <= TEST_SET_MAX_INPUTS
+        ):
+            raise HarnessError(
+                f"{label}.inputs must contain 1 to {TEST_SET_MAX_INPUTS} items",
+            )
+        input_specs: list[DatasetFileSpec] = []
+        expected_input_names = {
+            f"{index:03d}.txt" for index in range(1, len(raw_inputs) + 1)
+        }
+        for input_index, raw_input in enumerate(raw_inputs, start=1):
+            spec = _dataset_file_spec(raw_input, f"{label}.inputs[{input_index - 1}]")
+            _dataset_path_spec(
+                dataset_path,
+                spec,
+                f"inputs/{input_index:03d}.txt",
+                f"{label}.inputs[{input_index - 1}]",
+            )
+            input_specs.append(spec)
+        default_input = None
+        default_input_index = None
+        if "default_input" in raw_dataset:
+            default_input = _require_string(
+                raw_dataset["default_input"],
+                f"{label}.default_input",
+            )
+            _safe_manifest_path(
+                dataset_path,
+                default_input,
+                f"{label}.default_input",
+            )
+            try:
+                default_input_index = next(
+                    input_index
+                    for input_index, spec in enumerate(input_specs)
+                    if spec.file == default_input
+                )
+            except StopIteration:
+                raise HarnessError(
+                    f"{label}.default_input must match a declared input file"
+                ) from None
+        actual_input_names = {
+            item.name for item in inputs_dir.iterdir() if item.is_file()
+        }
+        if actual_input_names - expected_input_names:
+            raise HarnessError(f"{label}.inputs contains unexpected files")
+        template_spec = (
+            _dataset_file_spec(raw_dataset["template"], f"{label}.template")
+            if "template" in raw_dataset
+            else None
+        )
+        schema_spec = (
+            _dataset_file_spec(raw_dataset["schema"], f"{label}.schema")
+            if "schema" in raw_dataset
+            else None
+        )
+        expected_spec = (
+            _dataset_file_spec(raw_dataset["expected"], f"{label}.expected")
+            if "expected" in raw_dataset
+            else None
+        )
+        if (schema_spec is None) != (expected_spec is None):
+            raise HarnessError(f"{label}.schema and expected must be declared together")
+        registry_errors: list[str] = []
+        for spec, filename, field in (
+            (template_spec, "template.ttp", "template"),
+            (schema_spec, "schema.json", "schema"),
+            (expected_spec, "expected.json", "expected"),
+        ):
+            actual = (dataset_path / filename).is_file()
+            if spec is None and actual:
+                registry_errors.append(
+                    f"{label}.{field} file exists but is not declared"
+                )
+            if spec is not None:
+                _dataset_path_spec(dataset_path, spec, filename, f"{label}.{field}")
+                _verify_dataset_file(dataset_path / filename, spec, f"{label}.{field}")
+        for input_index, spec in enumerate(input_specs, start=1):
+            _verify_dataset_file(
+                dataset_path / spec.file,
+                spec,
+                f"{label}.inputs[{input_index - 1}]",
+            )
+        for filename in sorted(actual_input_names):
+            if filename in expected_input_names:
+                expected_spec_for_input = input_specs[int(filename[:3]) - 1]
+                _verify_dataset_file(
+                    inputs_dir / filename,
+                    expected_spec_for_input,
+                    f"{label}.inputs/{filename}",
+                )
+
+        schema_present = (dataset_path / "schema.json").is_file()
+        expected_present = (dataset_path / "expected.json").is_file()
+        if schema_present != expected_present:
+            raise HarnessError(
+                f"{label} must contain schema.json and expected.json together"
+            )
+        template_present = (dataset_path / "template.ttp").is_file()
+        if schema_present:
+            stage: Literal["inputs-only", "template", "complete"] = "complete"
+        elif template_present:
+            stage = "template"
+        else:
+            stage = "inputs-only"
+        present_files = ["inputs"]
+        missing_files: list[str] = []
+        for input_index, _spec in enumerate(input_specs, start=1):
+            filename = f"inputs/{input_index:03d}.txt"
+            if (inputs_dir / f"{input_index:03d}.txt").is_file():
+                present_files.append(filename)
+            else:
+                missing_files.append(filename)
+        for filename, spec in (
+            ("template.ttp", template_spec),
+            ("schema.json", schema_spec),
+            ("expected.json", expected_spec),
+        ):
+            if (dataset_path / filename).is_file():
+                present_files.append(filename)
+            elif spec is not None:
+                missing_files.append(filename)
+        input_texts = _dataset_inputs(
+            DatasetRegistryEntry(
+                id=dataset_id,
+                name=name,
+                command=command,
+                platform=platform,
+                source=source,
+                tags=tags,
+                absolute_path=dataset_path,
+                inputs=tuple(input_specs),
+                default_input=default_input,
+                default_input_index=default_input_index,
+                template=template_spec,
+                schema=schema_spec,
+                expected=expected_spec,
+                stage=stage,
+                present_files=tuple(present_files),
+                missing_files=tuple(missing_files),
+                input_texts=(),
+                template_text=None,
+                registry_errors=tuple(registry_errors),
+            ),
+            validate_content=False,
+        )
+        template_text = None
+        if template_spec is not None and (dataset_path / "template.ttp").is_file():
+            template_text = _load_test_set_text(
+                dataset_path / "template.ttp",
+                template_spec.sha256,
+                f"{label}.template.ttp",
+                max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
+            )
+        entries.append(
+            DatasetRegistryEntry(
+                id=dataset_id,
+                name=name,
+                command=command,
+                platform=platform,
+                source=source,
+                tags=tags,
+                absolute_path=dataset_path,
+                inputs=tuple(input_specs),
+                default_input=default_input,
+                default_input_index=default_input_index,
+                template=template_spec,
+                schema=schema_spec,
+                expected=expected_spec,
+                stage=stage,
+                present_files=tuple(present_files),
+                missing_files=tuple(missing_files),
+                input_texts=input_texts,
+                template_text=template_text,
+                registry_errors=tuple(registry_errors),
+            ),
+        )
+    missing_dirs = actual_dirs - seen_names
+    if missing_dirs:
+        raise HarnessError(
+            "unregistered test-set directories: " + ", ".join(sorted(missing_dirs)),
+        )
+    return DatasetRegistry(
+        version=DATASET_REGISTRY_VERSION,
+        path=path,
+        sha256=_sha256(payload),
+        datasets=tuple(entries),
+    )
+
+
+def _load_dataset_complete_case(
+    entry: DatasetRegistryEntry,
+    input_scope: Literal["default", "full"],
+) -> TestSetCase:
+    if entry.stage != "complete" or entry.missing_files:
+        raise HarnessError(f"dataset {entry.name} is not complete")
+    if entry.template is None or entry.schema is None or entry.expected is None:
+        raise HarnessError(f"dataset {entry.name} is missing a four-part file")
+    inputs, original_input_indices = _scoped_dataset_inputs(entry, input_scope)
+    schema, _ = _load_test_set_json(
+        entry.absolute_path / "schema.json",
+        entry.schema.sha256,
+        f"dataset {entry.name}.schema.json",
+        max_bytes=256 * 1024,
+    )
+    if not isinstance(schema, dict) or validate_result_schema(schema):
+        raise HarnessError(f"dataset {entry.name}.schema.json is not supported")
+    template = _load_test_set_text(
+        entry.absolute_path / "template.ttp",
+        entry.template.sha256,
+        f"dataset {entry.name}.template.ttp",
+        max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
+    )
+    expected, _ = _load_test_set_json(
+        entry.absolute_path / "expected.json",
+        entry.expected.sha256,
+        f"dataset {entry.name}.expected.json",
+        max_bytes=8 * 1024 * 1024,
+    )
+    if not isinstance(expected, list):
+        raise HarnessError(f"dataset {entry.name}.expected.json must be an array")
+    if input_scope == "full" and len(expected) != len(entry.inputs):
+        raise HarnessError(f"dataset {entry.name}.expected.json must match input count")
+    if any(index >= len(expected) for index in original_input_indices):
+        raise HarnessError(
+            f"dataset {entry.name}.expected.json is missing the selected record"
+        )
+    selected_expected = tuple(expected[index] for index in original_input_indices)
+    if any(not isinstance(record, dict) for record in selected_expected):
+        raise HarnessError(f"dataset {entry.name}.expected.json must contain objects")
+    if validate_records_against_schema(selected_expected, schema):
+        raise HarnessError(f"dataset {entry.name}.expected.json violates schema")
+    return TestSetCase(
+        id=entry.name,
+        command=entry.command,
+        suites=(),
+        tags=entry.tags,
+        path=f"test_sets/{entry.name}",
+        absolute_path=entry.absolute_path,
+        inputs=inputs,
+        schema=schema,
+        template=template,
+        expected_records=selected_expected,
+        file_sha256={
+            "schema": entry.schema.sha256,
+            "template": entry.template.sha256,
+            "expected": entry.expected.sha256,
+            "inputs": tuple(
+                entry.inputs[index].sha256 for index in original_input_indices
+            ),
+        },
+        original_input_indices=original_input_indices,
+    )
+
+
+def preflight_dataset_registry(
+    registry: DatasetRegistry,
+    *,
+    input_scope: Literal["default", "full"] = "default",
+) -> tuple[DatasetPreflightReport, ...]:
+    """Run deterministic checks for every registered dataset."""
+
+    input_scope = _validate_input_scope(input_scope)
+    reports: list[DatasetPreflightReport] = []
+    for entry in registry.datasets:
+        scope_metadata = dataset_input_scope_metadata(entry, input_scope)
+        selected_input_indices = cast(
+            tuple[int, ...],
+            scope_metadata["selected_input_indices"],
+        )
+        if entry.registry_errors:
+            reports.append(
+                DatasetPreflightReport(
+                    dataset=entry,
+                    status="failed",
+                    input_scope=input_scope,
+                    selected_input_indices=selected_input_indices,
+                    errors=entry.registry_errors,
+                ),
+            )
+            continue
+        if entry.missing_files:
+            reports.append(
+                DatasetPreflightReport(
+                    dataset=entry,
+                    status="pending",
+                    input_scope=input_scope,
+                    selected_input_indices=selected_input_indices,
+                ),
+            )
+            continue
+        if input_scope == "default" and entry.default_input_index is None:
+            reports.append(
+                DatasetPreflightReport(
+                    dataset=entry,
+                    status="pending",
+                    input_scope=input_scope,
+                ),
+            )
+            continue
+        smoke_results: list[dict[str, Any]] = []
+        try:
+            if entry.stage == "inputs-only":
+                reports.append(
+                    DatasetPreflightReport(
+                        dataset=entry,
+                        status="pending",
+                        input_scope=input_scope,
+                        selected_input_indices=selected_input_indices,
+                    ),
+                )
+                continue
+            if entry.template_text is None:
+                raise HarnessError(f"dataset {entry.name} template is unavailable")
+            if entry.stage == "template":
+                inputs, original_input_indices = _scoped_dataset_inputs(
+                    entry,
+                    input_scope,
+                )
+                passed = 0
+                for input_index, item in zip(
+                    original_input_indices,
+                    inputs,
+                    strict=True,
+                ):
+                    parsed = parse_ttp_template(entry.template_text, item.text)
+                    result = parsed.result
+                    root_type = (
+                        "object"
+                        if isinstance(result, dict)
+                        else "array"
+                        if isinstance(result, list)
+                        else type(result).__name__
+                    )
+                    smoke_results.append(
+                        {
+                            "input_index": input_index,
+                            "success": not parsed.issues,
+                            "root_type": root_type,
+                            "root_count": len(result)
+                            if isinstance(result, list)
+                            else 1,
+                            "issue_codes": [
+                                str(getattr(issue, "code", "ttp.parse_failed"))
+                                for issue in parsed.issues
+                            ],
+                        },
+                    )
+                    if parsed.issues:
+                        codes = tuple(
+                            str(getattr(issue, "code", "ttp.parse_failed"))
+                            for issue in parsed.issues
+                        )
+                        raise HarnessError(
+                            f"dataset {entry.name} template failed input "
+                            f"{input_index + 1}: {', '.join(codes)}",
+                        )
+                    passed += 1
+                reports.append(
+                    DatasetPreflightReport(
+                        dataset=entry,
+                        status="passed",
+                        input_scope=input_scope,
+                        selected_input_indices=selected_input_indices,
+                        template_inputs_passed=passed,
+                        template_smoke_results=tuple(smoke_results),
+                    ),
+                )
+                continue
+            case = _load_dataset_complete_case(entry, input_scope)
+            baseline = validate_ttp_template(
+                case.template,
+                [item.text for item in case.inputs],
+                case.schema,
+                timeout_seconds=20.0,
+                max_result_bytes=8 * 1024 * 1024,
+            )
+            exact = not baseline.issues and baseline.records == list(
+                case.expected_records
+            )
+            if not exact:
+                raise HarnessError(
+                    f"dataset {entry.name} standard template baseline mismatch"
+                )
+            reports.append(
+                DatasetPreflightReport(
+                    dataset=entry,
+                    status="passed",
+                    input_scope=input_scope,
+                    selected_input_indices=selected_input_indices,
+                    case=case,
+                    template_inputs_passed=len(case.inputs),
+                    baseline_exact=True,
+                    template_smoke_results=tuple(
+                        {
+                            "input_index": index,
+                            "success": True,
+                            "root_type": "object",
+                            "root_count": 1,
+                            "issue_codes": [],
+                        }
+                        for index in case.original_input_indices
+                    ),
+                ),
+            )
+        except HarnessError as error:
+            reports.append(
+                DatasetPreflightReport(
+                    dataset=entry,
+                    status="failed",
+                    input_scope=input_scope,
+                    selected_input_indices=selected_input_indices,
+                    errors=(str(error),),
+                    template_smoke_results=tuple(smoke_results),
+                ),
+            )
+    return tuple(reports)
+
+
+def select_dataset_entries(
+    registry: DatasetRegistry,
+    *,
+    names: Sequence[str] = (),
+    ids: Sequence[int] = (),
+    tags: Sequence[str] = (),
+) -> tuple[DatasetRegistryEntry, ...]:
+    """Select all entries by default, or intersect explicit name/id/tag filters."""
+
+    if len(set(names)) != len(names):
+        raise HarnessError("--dataset must not contain duplicate names")
+    if len(set(ids)) != len(ids):
+        raise HarnessError("--dataset-id must not contain duplicate IDs")
+    if len(set(tags)) != len(tags):
+        raise HarnessError("--tag must not contain duplicate tags")
+    by_name = {dataset.name: dataset for dataset in registry.datasets}
+    by_id = {dataset.id: dataset for dataset in registry.datasets}
+    unknown_names = sorted(set(names) - by_name.keys())
+    unknown_ids = sorted(set(ids) - by_id.keys())
+    if unknown_names:
+        raise HarnessError("unknown datasets: " + ", ".join(unknown_names))
+    if unknown_ids:
+        raise HarnessError("unknown dataset IDs: " + ", ".join(map(str, unknown_ids)))
+    selected = list(registry.datasets)
+    if names:
+        selected = [dataset for dataset in selected if dataset.name in names]
+    if ids:
+        selected = [dataset for dataset in selected if dataset.id in ids]
+    for tag in tags:
+        if not _TAG_RE.fullmatch(tag):
+            raise HarnessError(f"invalid tag: {tag}")
+        selected = [dataset for dataset in selected if tag in dataset.tags]
+    if not selected:
+        raise HarnessError("dataset selection did not match any datasets")
+    return tuple(selected)
+
+
 def load_test_set_manifest(manifest_path: Path) -> TestSetManifest:
     """Load and fully preflight the canonical four-part test-set index."""
 
@@ -1157,10 +1925,7 @@ def load_test_set_manifest(manifest_path: Path) -> TestSetManifest:
             raw_files,
             label,
         )
-        if (
-            SEMANTIC_PILOT_SUITE in suites
-            and _is_line_text_placeholder_schema(schema)
-        ):
+        if SEMANTIC_PILOT_SUITE in suites and _is_line_text_placeholder_schema(schema):
             raise HarnessError(
                 f"{label}.schema.json uses the lines[].text placeholder and "
                 f"cannot join {SEMANTIC_PILOT_SUITE}",
@@ -1366,11 +2131,7 @@ def _precision_recall_f1(
     expected_count = sum(expected.values())
     precision = overlap / actual_count if actual_count else 0.0
     recall = overlap / expected_count if expected_count else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision + recall
-        else 0.0
-    )
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     return precision, recall, f1
 
 
@@ -1728,9 +2489,11 @@ def score_records_by_input(
         actual_counter = _leaf_counter(actual) if actual_present else Counter()
         expected_counter = _leaf_counter(expected)
         precision, recall, f1 = _precision_recall_f1(actual_counter, expected_counter)
-        actual_shape = _value_shape_counts(actual) if actual_present else {
-            key: 0 for key in _value_shape_counts({})
-        }
+        actual_shape = (
+            _value_shape_counts(actual)
+            if actual_present
+            else {key: 0 for key in _value_shape_counts({})}
+        )
         expected_shape = _value_shape_counts(expected)
         diagnostics.append(
             {
@@ -1752,9 +2515,7 @@ def score_records_by_input(
                 "expected_scalar_count": expected_shape["scalar_count"],
                 "actual_empty_string_count": actual_shape["empty_string_count"],
                 "actual_null_count": actual_shape["null_count"],
-                "actual_empty_container_count": actual_shape[
-                    "empty_container_count"
-                ],
+                "actual_empty_container_count": actual_shape["empty_container_count"],
             },
         )
     return diagnostics
@@ -1799,9 +2560,7 @@ def score_ttp_template_output(
         output.get("generation_result") if isinstance(output, Mapping) else None
     )
     acceptance = (
-        output.get("independent_acceptance")
-        if isinstance(output, Mapping)
-        else None
+        output.get("independent_acceptance") if isinstance(output, Mapping) else None
     )
     if not isinstance(raw_result, Mapping) or not isinstance(acceptance, Mapping):
         return {
@@ -1925,16 +2684,20 @@ def project_candidate_quality(
     records_value = records if isinstance(records, list) else []
     shape = _value_shape_counts(records_value)
     issue_values = payload.get("issues")
-    issue_codes = [
-        issue.get("code")
-        for issue in issue_values
-        if (
-            isinstance(issue, Mapping)
-            and isinstance(issue.get("code"), str)
-            and len(issue["code"]) <= 128
-            and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
-        )
-    ] if isinstance(issue_values, list) else []
+    issue_codes = (
+        [
+            issue.get("code")
+            for issue in issue_values
+            if (
+                isinstance(issue, Mapping)
+                and isinstance(issue.get("code"), str)
+                and len(issue["code"]) <= 128
+                and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
+            )
+        ]
+        if isinstance(issue_values, list)
+        else []
+    )
     result: dict[str, Any] = {
         "phase": "ttp",
         "accepted": payload.get("accepted") is True,
@@ -1981,16 +2744,20 @@ def _project_schema_quality(span: Mapping[str, Any]) -> dict[str, Any]:
 
     payload = _candidate_payload(span)
     issue_values = payload.get("issues")
-    issue_codes = [
-        issue.get("code")
-        for issue in issue_values
-        if (
-            isinstance(issue, Mapping)
-            and isinstance(issue.get("code"), str)
-            and len(issue["code"]) <= 128
-            and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
-        )
-    ] if isinstance(issue_values, list) else []
+    issue_codes = (
+        [
+            issue.get("code")
+            for issue in issue_values
+            if (
+                isinstance(issue, Mapping)
+                and isinstance(issue.get("code"), str)
+                and len(issue["code"]) <= 128
+                and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
+            )
+        ]
+        if isinstance(issue_values, list)
+        else []
+    )
     submission_index = payload.get("schema_submission")
     if not isinstance(submission_index, int) or isinstance(
         submission_index,
@@ -2026,10 +2793,14 @@ def project_candidate_trajectory(
         if name in {"finish_generation", "generation.finish_generation"}:
             finish_called = True
             continue
-        if name in {
-            "submit_result_schema",
-            "schema.submit_result_schema",
-        } or "schema_submission" in payload:
+        if (
+            name
+            in {
+                "submit_result_schema",
+                "schema.submit_result_schema",
+            }
+            or "schema_submission" in payload
+        ):
             schema_quality = _project_schema_quality(span)
             if schema_quality["submission_index"] is None:
                 schema_quality["submission_index"] = ordinal + 1
@@ -2050,16 +2821,12 @@ def project_candidate_trajectory(
     candidates.sort(key=lambda item: int(item["submission_index"]))
     schema_candidates.sort(key=lambda item: int(item["submission_index"]))
     accepted_indices = [
-        int(item["submission_index"])
-        for item in candidates
-        if item["accepted"]
+        int(item["submission_index"]) for item in candidates if item["accepted"]
     ]
     first_accepted = accepted_indices[0] if accepted_indices else None
     return {
         "schema_submission_count": len(schema_candidates),
-        "schema_accepted_count": sum(
-            item["accepted"] for item in schema_candidates
-        ),
+        "schema_accepted_count": sum(item["accepted"] for item in schema_candidates),
         "schema_candidates": schema_candidates,
         "submission_count": len(candidates),
         "accepted_count": len(accepted_indices),
@@ -2067,9 +2834,7 @@ def project_candidate_trajectory(
             item["candidate_available"] for item in candidates
         ),
         "first_accepted_submission": first_accepted,
-        "last_accepted_submission": accepted_indices[-1]
-        if accepted_indices
-        else None,
+        "last_accepted_submission": accepted_indices[-1] if accepted_indices else None,
         "accepted_indices": accepted_indices,
         "finish_called": finish_called,
         "finish_after_first_accepted": bool(
@@ -2078,9 +2843,7 @@ def project_candidate_trajectory(
         "issue_domains": dict(
             sorted(
                 Counter(
-                    domain
-                    for item in candidates
-                    for domain in item["issue_domains"]
+                    domain for item in candidates for domain in item["issue_domains"]
                 ).items(),
             ),
         ),
@@ -2239,9 +3002,7 @@ def attach_human_reviews(
             projected = dict(candidate)
             index = projected.get("submission_index")
             phase = projected.get("phase", "ttp")
-            review_key = (
-                f"schema:{index}" if phase == "schema" else str(index)
-            )
+            review_key = f"schema:{index}" if phase == "schema" else str(index)
             review = review_submissions.get(review_key)
             if isinstance(review, Mapping):
                 projected["human_review"] = dict(review)
@@ -2252,9 +3013,7 @@ def attach_human_reviews(
             result["schema_candidates"] = collection
     result["candidates"] = candidates
     result["human_review"] = {
-        key: value
-        for key, value in reviews.items()
-        if key != "submissions"
+        key: value for key, value in reviews.items() if key != "submissions"
     }
     return result
 
@@ -2608,11 +3367,15 @@ def safe_trial_facts(
     if not isinstance(metadata, Mapping):
         metadata = {}
     raw_issues = result.get("issues")
-    issue_codes = [
-        str(issue.get("code"))
-        for issue in raw_issues
-        if isinstance(issue, Mapping) and isinstance(issue.get("code"), str)
-    ] if isinstance(raw_issues, list) else []
+    issue_codes = (
+        [
+            str(issue.get("code"))
+            for issue in raw_issues
+            if isinstance(issue, Mapping) and isinstance(issue.get("code"), str)
+        ]
+        if isinstance(raw_issues, list)
+        else []
+    )
     acceptance = output.get("independent_acceptance")
     acceptance_codes = (
         acceptance.get("issue_codes", []) if isinstance(acceptance, Mapping) else []
