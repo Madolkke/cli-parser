@@ -1,0 +1,29 @@
+<group>
+{{ ignore("[ \t]+") }}------------------------- Call Quality -------------------------
+<group name="current_hour">
+{{ ignore("[ \t]+") }}------------------------- Current hour -------------------------
+{{ ignore("[ \t]+") }}Number of Call : {{ number_of_call | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of MOS : {{ average_of_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Minimum MOS : {{ minimum_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Maximum MOS : {{ maximum_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of ERL : {{ average_of_erl | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of ACOM : {{ average_of_acom | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of loss-rate : {{ average_of_loss_rate | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of jitter : {{ average_of_jitter | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of Max delay : {{ average_of_max_delay | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average Pdd : {{ average_pdd | ORPHRASE }}
+</group>
+<group name="previous_hour">
+{{ ignore("[ \t]+") }}------------------------- Previous hour ------------------------
+{{ ignore("[ \t]+") }}Number of Call : {{ number_of_call | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of MOS : {{ average_of_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Minimum MOS : {{ minimum_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Maximum MOS : {{ maximum_mos | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of ERL : {{ average_of_erl | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of ACOM : {{ average_of_acom | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of loss-rate : {{ average_of_loss_rate | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of jitter : {{ average_of_jitter | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average of Max delay : {{ average_of_max_delay | ORPHRASE }}
+{{ ignore("[ \t]+") }}Average Pdd : {{ average_pdd | ORPHRASE }}
+</group>
+</group>

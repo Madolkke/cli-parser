@@ -1,0 +1,5 @@
+<group>
+<group name="interfaces">
+{{ port | re("([A-Za-z]+\d\S*)") }} {{ name | re("(\S+(?: \S+)*)") }} {{ status | re("(\S+)") }} {{ vlan | re("(\S+)") }} {{ duplex | re("(\S+)") }} {{ speed | re("(\S+)") }} {{ type | ORPHRASE }}
+</group>
+</group>

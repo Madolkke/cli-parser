@@ -148,7 +148,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v25-test-ttp-template-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v26-test-then-submit-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -176,6 +176,9 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "三个工具之一" in TTP_SYSTEM_PROMPT
     assert "不会成为可 finish 的候选" in TTP_SYSTEM_PROMPT
     assert "ToolResult 已进入" in TTP_SYSTEM_PROMPT
+    assert "下一次回复必须" in TTP_SYSTEM_PROMPT
+    assert "禁止在一次 test_ttp_template 之后再次连续调用该工具" in TTP_SYSTEM_PROMPT
+    assert "不要因为局部实验结果不理想而删除已经形成的" in TTP_SYSTEM_PROMPT
     assert "语义字段" in TTP_SYSTEM_PROMPT
     assert "未建模列" in TTP_SYSTEM_PROMPT
     assert "表格" in TTP_SYSTEM_PROMPT

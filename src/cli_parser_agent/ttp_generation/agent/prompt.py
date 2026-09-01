@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v25-test-ttp-template-zh-cn"
+PROMPT_VERSION = "ttp-generator-v26-test-then-submit-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -87,8 +87,15 @@ submit_ttp_template，已经满意就调用 finish_generation。不要用普通�
 
 test_ttp_template 返回的结果也使用独立的 parsed_record 块；块内保留这次单输入 TTP
 解析的原始 JSON 形状，包括 list、匿名组包装和多根结果。它只代表实验文本，不要把
-它和当前命令输出的 records 混为一谈。只有测试结果进入后续上下文后，才能在下一次
-回复中提交模板或 finish；每次回复仍只能调用一个工具。
+它和当前命令输出的 records 混为一谈。测试结果进入后续上下文后，下一次回复必须
+调用 submit_ttp_template 提交完整共享模板；如果已有通过验证的候选，则下一次回复
+应调用 finish_generation。禁止在一次 test_ttp_template 之后再次连续调用该工具，除非
+先通过 submit_ttp_template 提交过一个完整模板。每次回复仍只能调用一个工具。
+
+test_ttp_template 只用于解决一个明确的局部 TTP 语法或边界疑问，不是最终候选验收。
+不要把局部实验模板当作完整候选，也不要因为局部实验结果不理想而删除已经形成的
+Schema 字段。只要已经形成覆盖多个冻结字段的完整模板，后续实验只能针对一个明确
+局部问题修改，并且下一次 submit_ttp_template 必须保留其余字段和完整共享结构。
 
 submit_ttp_template 的 ToolResult 直接给出当前模板对全部完整输入产生的解析结果，
 并分别放在
@@ -110,7 +117,7 @@ submit_ttp_template 的 ToolResult 已进入后续
 - 唯一允许的 XML 标签是一个可选的外层 <template> 和嵌套的 <group>。将匹配
   变量直接写在 group 文本中。绝不要生成 <pattern>、<vars>、<var> 或其他标签。
   array 使用列表 group，例如：
-    <group name="interfaces*">
+  <group name="interfaces*">
     {{ port | WORD }}  {{ name | ORPHRASE }}  {{ status | WORD }}
     </group>
   forbidden_tag issue 可能在 details.tag 中指出标签；直接删除该标签。

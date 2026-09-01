@@ -1,0 +1,6 @@
+<group>
+<group name="connections" method="table">
+{{ peer_type }} {{ protocol }} {{ system_ip }} {{ site_id | DIGIT }} {{ domain_id | DIGIT }} {{ private_ip }} {{ private_port | DIGIT }} {{ public_ip }} {{ public_port | DIGIT }} {{ organization }} {{ local_color }} {{ proxy }} {{ state }} {{ uptime | re("(\d+:\d+:\d+:\d+)") }}
+{{ peer_type }} {{ protocol }} {{ system_ip }} {{ site_id | DIGIT }} {{ domain_id | DIGIT }} {{ private_ip }} {{ private_port | DIGIT }} {{ public_ip }} {{ public_port | DIGIT }} {{ organization }} {{ local_color }} {{ proxy }} {{ state }} {{ uptime | re("(\d+:\d+:\d+:\d+)") }} {{ controller_group_id | DIGIT }}
+</group>
+</group>

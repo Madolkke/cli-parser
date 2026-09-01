@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "current_hour": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "number_of_call": {
+          "type": "string"
+        },
+        "average_of_mos": {
+          "type": "string"
+        },
+        "minimum_mos": {
+          "type": "string"
+        },
+        "maximum_mos": {
+          "type": "string"
+        },
+        "average_of_erl": {
+          "type": "string"
+        },
+        "average_of_acom": {
+          "type": "string"
+        },
+        "average_of_loss_rate": {
+          "type": "string"
+        },
+        "average_of_jitter": {
+          "type": "string"
+        },
+        "average_of_max_delay": {
+          "type": "string"
+        },
+        "average_pdd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number_of_call",
+        "average_of_mos",
+        "minimum_mos",
+        "maximum_mos",
+        "average_of_erl",
+        "average_of_acom",
+        "average_of_loss_rate",
+        "average_of_jitter",
+        "average_of_max_delay",
+        "average_pdd"
+      ]
+    },
+    "previous_hour": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "number_of_call": {
+          "type": "string"
+        },
+        "average_of_mos": {
+          "type": "string"
+        },
+        "minimum_mos": {
+          "type": "string"
+        },
+        "maximum_mos": {
+          "type": "string"
+        },
+        "average_of_erl": {
+          "type": "string"
+        },
+        "average_of_acom": {
+          "type": "string"
+        },
+        "average_of_loss_rate": {
+          "type": "string"
+        },
+        "average_of_jitter": {
+          "type": "string"
+        },
+        "average_of_max_delay": {
+          "type": "string"
+        },
+        "average_pdd": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "number_of_call",
+        "average_of_mos",
+        "minimum_mos",
+        "maximum_mos",
+        "average_of_erl",
+        "average_of_acom",
+        "average_of_loss_rate",
+        "average_of_jitter",
+        "average_of_max_delay",
+        "average_pdd"
+      ]
+    }
+  },
+  "required": [
+    "current_hour",
+    "previous_hour"
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "peer_type": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "system_ip": {
+            "type": "string"
+          },
+          "site_id": {
+            "type": "string"
+          },
+          "domain_id": {
+            "type": "string"
+          },
+          "private_ip": {
+            "type": "string"
+          },
+          "private_port": {
+            "type": "string"
+          },
+          "public_ip": {
+            "type": "string"
+          },
+          "public_port": {
+            "type": "string"
+          },
+          "organization": {
+            "type": "string"
+          },
+          "local_color": {
+            "type": "string"
+          },
+          "proxy": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "uptime": {
+            "type": "string"
+          },
+          "controller_group_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "peer_type",
+          "protocol",
+          "system_ip",
+          "site_id",
+          "domain_id",
+          "private_ip",
+          "private_port",
+          "public_ip",
+          "public_port",
+          "organization",
+          "local_color",
+          "proxy",
+          "state",
+          "uptime"
+        ]
+      }
+    }
+  },
+  "required": [
+    "connections"
+  ]
+}

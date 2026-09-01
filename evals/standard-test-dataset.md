@@ -144,14 +144,29 @@ inputs = [                              # 相对数据集目录的路径 + 实�
 ## 当前状态
 
 2026-08 重新接入第一批数据集，见 `evals/datasets.toml`。
-`broadcom_icos.show_version`（5 份）、`fortinet.get_system_status`（3 份）与
-`paloalto_panos.show_interface_hardware`（2 份，三者均标记 `easy`）已完成四件套并登记
+`broadcom_icos.show_version`（5 份）、`fortinet.get_system_status`（3 份）、
+`paloalto_panos.show_interface_hardware`（2 份）与 `oneaccess_oneos.show_voice_mos`
+（3 份，四者均标记 `easy`）已完成四件套并登记
 `schema.json` 与 `expected.json`：全部字段保守使用 `string`，required 判定基于各输入的
 实际出现情况（`fortinet` 的 `security_level`、`cluster_uptime`、`cluster_state_change_time`、
 `extreme_db`、`fortios_x86_64` 与 `broadcom` 的 `cpld_version`、`board_revision`、
 `fru_number`、`part_number` 为可选，缺失字段省略键）；`expected.json` 仅由原始输入回显
 人工核对生成，preflight 与 baseline 均已通过，具备 strict baseline 与 ttp-only 资格。
+`oneaccess_oneos.show_voice_mos` 是首个嵌套 object 形态：根对象下 `current_hour` 与
+`previous_hour` 两个必填子对象各含 10 个必填字符串字段，模板以两个段标题行作命名子组
+锚点，行首缩进经 `ignore("[ \t]+")` 消耗；原始语料为 CRLF，拷贝时已规范化为 LF。
 `huawei_vrp.display_port_vlan`（4 份，无难度标签）仍处于 template 阶段。已登记模板的要点：
+`cisco_nxos.show_interface_status`（5 份，标记 `medium`）为定宽 7 列接口状态表：`name`
+列是自由文本（含空格与制表符，如 `managed by puppet`、`interface1<TAB>`），模板用
+`re("(\S+(?: \S+)*)")` 贪婪匹配单空格词组、遇到 2+ 空格或制表符自然截断，`port` 用
+`[A-Za-z]+\d\S*` 排除表头行；截断状态值（`xcvrAbsen`、`noOperMem` 等）忠实保留。
+上游语料的 tunnel 变体（含第二段 5 列 Tunnel 表）与第 7 份简单变体未收入：5 列行会被
+7 列空白分列模式错位吸收，与 hp_procurve 的缺列歧义同类，白名单内无法区分。
+`cisco_ios.show_sdwan_control_connections`（2 份，标记 `medium`）为三行表头的 14-15 列
+宽表：第 2 份输入多一个尾列 `controller_group_id`，模板用两个行模式变体并依赖
+`method="table"` 使组内全部模式都成为记录起点（TTP 默认仅第一行模式为记录起点，多个
+行模式变体共存时必须加该组属性）；`uptime` 用严格 `re("(\d+:\d+:\d+:\d+)")` 防止吞掉
+可选尾列。
 `fortinet` 为每键一行的扁平 `Key: value` 结构（值用 `ORPHRASE` 捕获）；
 `broadcom` 的点线填充用 `ignore("[.]+[ ]*")` 消耗，`Additional Packages` 跨行续行经
 `joinmatches` 合并为单字符串，含双空格的两个自由文本字段用 `ROW` 捕获；`paloalto` 以嵌套
@@ -163,12 +178,12 @@ inputs = [                              # 相对数据集目录的路径 + 实�
 定宽解析虽能正确解析全部数据行，但其表头行自清洁机制要求字段名回显输入表头的原始
 大小写（PascalCase），与受限 Schema 的 snake_case 契约冲突；空白分列解析因缺列行被证明
 存在歧义，故暂不交付模板、维持 inputs-only，待白名单增加 strip 类过滤器后重做。
-`cisco_ios.show_lldp_neighbors_detail`（5 份，因重复邻居块、
-嵌套可选 MED 子块与多行文本，复杂度较高，无难度标签）、
+`cisco_ios.show_lldp_neighbors_detail`（5 份，标记 `hard`，重复邻居块、
+嵌套可选 MED 子块与多行文本叠加，为全库复杂度最高形态）、
 `cisco_s300.show_lldp_neighbors`（2 份，标记 `medium`，定宽列内截断换行需按列宽拼接）、
 `hp_procurve.show_interfaces_status`（4 份，标记 `medium`，
 表头一致的纯单表；模板制作受阻，见上）与
-`cisco_ios.show_power_status`（3 份，标记 `medium`，跨行表头加主/子两级行结构）
+`cisco_ios.show_power_status`（3 份，标记 `hard`，跨行表头加主/子两级行结构）
 仍为 inputs-only。这四个 inputs-only 数据集与 template 阶段的 `huawei` 均
 尚无 `schema.json`、`expected.json`，因此暂不具备 strict baseline 或 ttp-only 资格；
 `huawei` 仍可由 TOML runner 执行 template smoke。重新接入时不得复用旧的 expected、Schema、模板或历史目标记录。

@@ -1,0 +1,80 @@
+[
+  {
+    "current_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "0",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "0",
+      "average_of_erl": "0",
+      "maximum_mos": "0.00",
+      "minimum_mos": "0.00",
+      "average_of_mos": "0.00",
+      "number_of_call": "0"
+    },
+    "previous_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "3",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "43",
+      "average_of_erl": "14",
+      "maximum_mos": "4.34",
+      "minimum_mos": "4.34",
+      "average_of_mos": "4.34",
+      "number_of_call": "1"
+    }
+  },
+  {
+    "current_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "0",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "0",
+      "average_of_erl": "0",
+      "maximum_mos": "0.0",
+      "minimum_mos": "0.0",
+      "average_of_mos": "0.0",
+      "number_of_call": "0"
+    },
+    "previous_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "0",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "0",
+      "average_of_erl": "0",
+      "maximum_mos": "0.0",
+      "minimum_mos": "0.0",
+      "average_of_mos": "0.0",
+      "number_of_call": "0"
+    }
+  },
+  {
+    "current_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "262144",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "46",
+      "average_of_erl": "19",
+      "maximum_mos": "4.35",
+      "minimum_mos": "4.35",
+      "average_of_mos": "4.35",
+      "number_of_call": "1"
+    },
+    "previous_hour": {
+      "average_pdd": "0",
+      "average_of_max_delay": "43691",
+      "average_of_jitter": "0",
+      "average_of_loss_rate": "0",
+      "average_of_acom": "57",
+      "average_of_erl": "29",
+      "maximum_mos": "4.34",
+      "minimum_mos": "4.33",
+      "average_of_mos": "4.34",
+      "number_of_call": "6"
+    }
+  }
+]

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "interfaces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "port": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "vlan": {
+            "type": "string"
+          },
+          "duplex": {
+            "type": "string"
+          },
+          "speed": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "port",
+          "name",
+          "status",
+          "vlan",
+          "duplex",
+          "speed",
+          "type"
+        ]
+      }
+    }
+  },
+  "required": [
+    "interfaces"
+  ]
+}

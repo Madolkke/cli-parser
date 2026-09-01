@@ -27,7 +27,7 @@ name = "cisco_ios.show_lldp_neighbors_detail"
 command = "show lldp neighbors detail"
 platform = "cisco_ios"
 source = "ntc-templates"
-tags = []
+tags = ["hard"]
 inputs = [
   { file = "inputs/001.txt", sha256 = "5993d7fae009f196363a3e749ecd1c160fa659e02e1d40cd4b68598b8a1477ce" },
   { file = "inputs/002.txt", sha256 = "c99c292c8a12de41c05e402d9ea0c1f1502a2ebb65731af34b312fe396fd8dc7" },
@@ -76,8 +76,8 @@ platform = "cisco_s300"
 source = "ntc-templates"
 tags = ["medium"]
 inputs = [
-  { file = "inputs/001.txt", sha256 = "bfc6d69648b37ebc4923dacc97c80cf41c202a685af46ee648a1765ae902dc86" },
-  { file = "inputs/002.txt", sha256 = "4ef42c61dd0d8506ac1881d471b44d14a04c3648f244b07f7ed2ec06b647e232" },
+  { file = "inputs/001.txt", sha256 = "95f9eed876a379f15e0eda3324105560831cf3ae44f5ba68b4c22ab783bbeabf" },
+  { file = "inputs/002.txt", sha256 = "79347150cf21d247c3e3d37496a30d0741c1b44c9d8e17a1bd4948d5c0f57fd9" },
 ]
 
 [[dataset]]
@@ -104,10 +104,10 @@ platform = "hp_procurve"
 source = "ntc-templates"
 tags = ["medium"]
 inputs = [
-  { file = "inputs/001.txt", sha256 = "e2de108214cddb66512bfafaf43ae1f0ace76d46c13270d8eb15735a2058e111" },
-  { file = "inputs/002.txt", sha256 = "5f63ce0f1bb0807efb755dfd7e4c3f09d503a966d7a8fe3bb92f1059c9bb0cd4" },
-  { file = "inputs/003.txt", sha256 = "1b94a72a75f113de6e1c7a20b0cac1132dabf87cef3189c71de7536daf4a861c" },
-  { file = "inputs/004.txt", sha256 = "e2efb0b8806c6516e81a573a6a0dd9c78322d8290178fb872278c6d9ff933b93" },
+  { file = "inputs/001.txt", sha256 = "e19b8f766fcef5d3d6e00cd78dc49d9898565913ec1e3fac4cef06059433ec83" },
+  { file = "inputs/002.txt", sha256 = "f3f874b82dfe3cdecb4d2509bd1615914e70c21638e3dc6bae3c0c9f9c9e9363" },
+  { file = "inputs/003.txt", sha256 = "438b2263c1647f5b5b7022e6628301afe897209114cc30363f5781a796e91f31" },
+  { file = "inputs/004.txt", sha256 = "d84289596e740cfbba7157964ba2b280293491e1505f9e8055e66763cd290f3e" },
 ]
 
 [[dataset]]
@@ -116,9 +116,61 @@ name = "cisco_ios.show_power_status"
 command = "show power status"
 platform = "cisco_ios"
 source = "ntc-templates"
-tags = ["medium"]
+tags = ["hard"]
 inputs = [
   { file = "inputs/001.txt", sha256 = "6a867d40fc887046a0305bb6bb25433515fe09e7a2ba6953038fecd3e922eb23" },
   { file = "inputs/002.txt", sha256 = "afac66b48e390913d7783336bb937f91100c2961210180271c9272f1b8b3647e" },
   { file = "inputs/003.txt", sha256 = "33a6bc06d38e2b02cdee2aa478f0b4f61ba5f36bf4b0b973724e13ff4b48cca6" },
+]
+
+[[dataset]]
+id = 9
+name = "oneaccess_oneos.show_voice_mos"
+command = "show voice mos"
+platform = "oneaccess_oneos"
+source = "ntc-templates"
+tags = ["easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "b45212d11822f1b71b7fddc37e835bc8a0b637962adff9e0507fde4487c7fc24" }
+schema = { file = "schema.json", sha256 = "236fe74b3b29f66a29e91d7eb24b40106896cc8fb68c61a33754795e4c808fee" }
+expected = { file = "expected.json", sha256 = "02ea896743d82e5a39a882ce47525b8ed6c53d8eca99e26e73156dadc9e06fb9" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "3b43b72100006d9a623ba92df931f3cf492b38e0552c40e07deb991da057fe75" },
+  { file = "inputs/002.txt", sha256 = "97fffb30e973da7f405e5b05f61d5199bfab56a11aff1efcf0eb6c86b9e74afb" },
+  { file = "inputs/003.txt", sha256 = "0b1981d9e3a459d3c7212fc24f58aab0676e2b46e266138b2c3866f6d9e4293d" },
+]
+
+[[dataset]]
+id = 10
+name = "cisco_nxos.show_interface_status"
+command = "show interface status"
+platform = "cisco_nxos"
+source = "ntc-templates"
+tags = ["medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "9cbfc075d9aa5fafb5d5290481d83ceb3dc559b701698bc61f23a5dc37f85b7e" }
+schema = { file = "schema.json", sha256 = "eb36491e5b6577f6d1df8f0bc54b0bd21a9f006795de8e55dbc936232dd530f6" }
+expected = { file = "expected.json", sha256 = "3d39168edacd14d2c4aeca5e0a17dee2955ef2bfa650332c52c10ace58cce8b0" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "92e981f491b5c4f2bdff87e9fc85294528aa0ae909f19e922c6283ea4cdfdaf5" },
+  { file = "inputs/002.txt", sha256 = "4c217de482d6e27ed5a1367a7ca9cb6fab5cfbc2bf024258c0b021b9418d41f3" },
+  { file = "inputs/003.txt", sha256 = "d3a32b4356a4f3c57623c5c03e2d695b955319010ba4cce8ee3a2c49fbb53268" },
+  { file = "inputs/004.txt", sha256 = "0552d4f00d02f36efc4f01cacc8604dbf0c0399e12dd1a436c364be8264d6216" },
+  { file = "inputs/005.txt", sha256 = "55528df06c039c8b2e7adb8d772d9124490a767b0a3cfdb8bd1eb3e91b3d05d9" },
+]
+
+[[dataset]]
+id = 11
+name = "cisco_ios.show_sdwan_control_connections"
+command = "show sdwan control connections"
+platform = "cisco_ios"
+source = "ntc-templates"
+tags = ["medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "e101d5159968fac08d2c3c628a4dfa53eeff1c75343b166e7d86ca48eae85417" }
+schema = { file = "schema.json", sha256 = "20fa460331b55fbe7ed676fba95f5d5f4a8abc2155b143be945a903ed46ca94f" }
+expected = { file = "expected.json", sha256 = "3b47c731abd0f81d9c2a5584ec677407072173fadc8e05cbe094ead74068052f" }
+inputs = [
+  { file = "inputs/001.txt", sha256 = "b9addffdb50332171282631061d9d8812ff00ead01efb5bc09b45e05c12647a9" },
+  { file = "inputs/002.txt", sha256 = "76124dc2185d00a7c178be8531e6baeec157a269da813f2ac8da640026b6b9d7" },
 ]
