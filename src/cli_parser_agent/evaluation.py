@@ -1022,7 +1022,12 @@ def _load_test_set_text(
         raise HarnessError(f"{label} is not strict UTF-8") from error
     if require_nonempty and not text.strip():
         raise HarnessError(f"{label} must not contain only whitespace")
-    return text
+    # Normalize after the digest so integrity still covers the bytes on disk.
+    # TTP anchors rows with (?=\n|\r\n) so CRLF still matches, but a greedy
+    # capture swallows the trailing CR while goldens hold CR-free values, which
+    # scores correct templates as failures. .gitattributes keeps the corpus LF;
+    # this is the backstop for inputs that arrive with CR anyway.
+    return text.replace("\r\n", "\n")
 
 
 def _load_test_set_json(

@@ -106,7 +106,7 @@ def test_load_test_set_manifest_validates_four_parts_and_order(tmp_path: Path) -
     assert len(manifest.cases) == 1
     case = manifest.cases[0]
     assert case.id == "demo.case"
-    assert [item.text for item in case.inputs] == ["value-1\r\n", "value-2\r\n"]
+    assert [item.text for item in case.inputs] == ["value-1\n", "value-2\n"]
     assert list(case.expected_records) == [
         {"lines": [{"text": "value-1"}]},
         {"lines": [{"text": "value-2"}]},

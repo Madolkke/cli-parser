@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 from types import ModuleType
 
@@ -47,11 +48,13 @@ def _write_dataset(
         (inputs / f"{index + 1:03d}.txt").write_text(
             f"Value: {values[index]}\n",
             encoding="utf-8",
+            newline="\n",
         )
     if template or complete:
         (case / "template.ttp").write_text(
             '{{ value | re("[^\\r\\n]+") }}\n',
             encoding="utf-8",
+            newline="\n",
         )
     if complete:
         (case / "schema.json").write_text(
@@ -65,6 +68,7 @@ def _write_dataset(
             )
             + "\n",
             encoding="utf-8",
+            newline="\n",
         )
         (case / "expected.json").write_text(
             json.dumps(
@@ -75,6 +79,7 @@ def _write_dataset(
             )
             + "\n",
             encoding="utf-8",
+            newline="\n",
         )
     lines = [
         "version = 1",
@@ -116,7 +121,11 @@ def _write_dataset(
             ],
         )
     registry = root / "datasets.toml"
-    registry.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    registry.write_text(
+        "\n".join(lines) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
     return registry
 
 
@@ -218,6 +227,37 @@ def test_default_scope_selects_only_the_registered_input(tmp_path: Path) -> None
     assert report.as_dict()["selected_inputs"] == [
         {"input_index": 1, "display_number": 2, "file": "inputs/002.txt"},
     ]
+
+
+def test_crlf_inputs_are_normalized_after_the_digest_is_verified(
+    tmp_path: Path,
+) -> None:
+    """CRLF must survive hashing but never reach the parser.
+
+    TTP anchors rows with (?=\\n|\\r\\n) so CRLF still matches, but a greedy
+    capture swallows the trailing CR while goldens hold CR-free values, which
+    scores otherwise-correct templates as failures.
+    """
+    registry_path = _write_dataset(tmp_path, template=True, complete=True)
+    source = tmp_path / "test_sets" / "demo.case" / "inputs" / "001.txt"
+    source.write_bytes(b"Value: alpha\r\n")
+    # Re-pin the digest to the CRLF bytes now on disk, so this exercises
+    # normalization rather than a hash mismatch.
+    registry_path.write_text(
+        re.sub(
+            r"(inputs/001\.txt', sha256 = ')[0-9a-f]{64}",
+            lambda match: match.group(1) + _sha(source),
+            registry_path.read_text(encoding="utf-8"),
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
+
+    assert report.status == "passed", report.as_dict()
+    assert report.case is not None
+    assert [item.text for item in report.case.inputs] == ["Value: alpha\n"]
 
 
 def test_default_scope_is_pending_without_a_default_input(tmp_path: Path) -> None:
