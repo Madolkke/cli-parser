@@ -169,6 +169,10 @@ class GenerationMetadata(ContractModel):
     termination_reason: str | None = Field(default=None, max_length=128)
     fault_domain: Literal["agent", "model", "budget"] | None = None
     model_retries_observed: int = Field(default=0, ge=0)
+    input_tokens_total: int = Field(default=0, ge=0)
+    output_tokens_total: int = Field(default=0, ge=0)
+    input_tokens_last: int = Field(default=0, ge=0)
+    model_calls_observed: int = Field(default=0, ge=0)
     laminar_trace_id: str | None = Field(
         default=None,
         min_length=1,

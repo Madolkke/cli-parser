@@ -2560,6 +2560,10 @@ def score_ttp_template_output(
         "ttp_no_tool_responses": 0.0,
         "ttp_no_tool_retries": 0.0,
         "model_retries_observed": 0.0,
+        "input_tokens_total": 0.0,
+        "output_tokens_total": 0.0,
+        "input_tokens_last": 0.0,
+        "model_calls_observed": 0.0,
     }
     raw_result = (
         output.get("generation_result") if isinstance(output, Mapping) else None
@@ -2638,6 +2642,10 @@ def score_ttp_template_output(
         "ttp_no_tool_responses",
         "ttp_no_tool_retries",
         "model_retries_observed",
+        "input_tokens_total",
+        "output_tokens_total",
+        "input_tokens_last",
+        "model_calls_observed",
     ):
         value = metadata.get(name, 0)
         if isinstance(value, int | float) and not isinstance(value, bool):

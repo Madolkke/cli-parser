@@ -121,6 +121,14 @@ class GenerationSession:
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None
     model_retries_observed: int = 0
+    # Token accounting observed from ModelCallEndEvent. ``input_tokens_last``
+    # is the context size of the final model call, which is the number the
+    # superseded-result collapse in the runner exists to hold down; keeping it
+    # local means measuring context growth no longer requires reading Laminar.
+    input_tokens_total: int = 0
+    output_tokens_total: int = 0
+    input_tokens_last: int = 0
+    model_calls_observed: int = 0
 
     def __post_init__(self) -> None:
         self.command_outputs = tuple(self.command_outputs)

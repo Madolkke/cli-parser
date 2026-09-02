@@ -762,6 +762,10 @@ class _GenerationWorkflow:
             termination_reason=termination_reason,
             fault_domain=_classify_fault_domain(termination_reason),
             model_retries_observed=self.session.model_retries_observed,
+            input_tokens_total=self.session.input_tokens_total,
+            output_tokens_total=self.session.output_tokens_total,
+            input_tokens_last=self.session.input_tokens_last,
+            model_calls_observed=self.session.model_calls_observed,
             laminar_trace_id=current_laminar_trace_id(),
         )
 

@@ -433,6 +433,12 @@ async def run_generation_phase(
                     last_call_interrupted = (
                         event.finished_reason == FinishedReason.INTERRUPTED
                     )
+                    session.model_calls_observed += 1
+                    if event.input_tokens:
+                        session.input_tokens_total += event.input_tokens
+                        session.input_tokens_last = event.input_tokens
+                    if event.output_tokens:
+                        session.output_tokens_total += event.output_tokens
 
                 elif isinstance(event, ToolCallStartEvent):
                     session.tool_call_starts += 1

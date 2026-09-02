@@ -612,6 +612,32 @@ async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() 
     assert "second-attempt" not in collapsed_text
 
 
+async def test_token_counters_accumulate_from_model_call_end_events() -> None:
+    """Token usage must land locally, not only as Laminar span attributes.
+
+    input_tokens_last is the context size of the final call, which is what the
+    superseded-result collapse exists to hold down; without it, measuring
+    context growth means querying Laminar by hand.
+    """
+    model = _ScriptedModel([_template_call(), _finish_call()])
+    session = _session(max_agent_rounds=3)
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+
+    await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    # _response() reports 11 input and 7 output tokens per call.
+    assert session.model_calls_observed == len(model.calls) == 2
+    assert session.input_tokens_total == 22
+    assert session.output_tokens_total == 14
+    assert session.input_tokens_last == 11
+
+
 async def test_valid_template_submission_waits_for_explicit_finish() -> None:
     model = _ScriptedModel([_template_call(), _finish_call()])
     session = _session(max_agent_rounds=3)
