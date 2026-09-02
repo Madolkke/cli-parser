@@ -166,24 +166,26 @@ inputs = [                              # 相对数据集目录的路径 + 实�
 宽表：第 2 份输入多一个尾列 `controller_group_id`，模板用两个行模式变体并依赖
 `method="table"` 使组内全部模式都成为记录起点（TTP 默认仅第一行模式为记录起点，多个
 行模式变体共存时必须加该组属性）；`uptime` 用严格 `re("(\d+:\d+:\d+:\d+)")` 防止吞掉
-可选尾列。
+可选尾列。`cisco_s300.show_lldp_neighbors`（2 份，标记 `medium`）与
+`hp_procurve.show_interfaces_status`（4 份，标记 `medium`）亦已完成四件套并通过
+baseline。`cisco_s300` 的定宽列内截断换行（Port ID/System Name 断成多行）用三种续行
+模式 + `joinmatches("")` 拼接还原：纯 hex 串与字母开头单词可凭正则区分；两列同时断行
+的行需要组合续行模式；`gi10` 行 System Name 整列为空，`re("(\S*)")` 忠实输出 `""`。
+`hp_procurve` 曾因 `_headers_` 表头自清洁的 PascalCase 冲突受阻，最终改用行形状分
+variant + `method="table"` 方案交付：8/7/6/5/4 个 token 的五种行模式各自唯一，缺列
+按变体省键；表头与分隔线由 `config_mode` 的 `re("([^\- \t\n]+)")` 排除（配置值不含
+连字符，而 `Config-mode` 表头与分隔线由连字符构成）；自定义字符类必须排除 `\n`，
+否则 TTP 的 DOTALL 语义会让 4-token 行跨行吸收下一行。原语料为 CRLF，已规范化为 LF。
 `fortinet` 为每键一行的扁平 `Key: value` 结构（值用 `ORPHRASE` 捕获）；
 `broadcom` 的点线填充用 `ignore("[.]+[ ]*")` 消耗，`Additional Packages` 跨行续行经
 `joinmatches` 合并为单字符串，含双空格的两个自由文本字段用 `ROW` 捕获；`paloalto` 以嵌套
 子组实现"一条根 record + `interfaces` 数组"，行模式为 4 个空白分列 token；`huawei` 的
 `vlan_list` 有意采用空格拼接的单字符串形式，与上游 ntc-templates TextFSM 的 token 数组
 形态不同——TTP 行级匹配模型每行每变量仅能捕获一个值，且安全白名单禁止 macro 等动态
-扩展，无法产出同值列表。模板制作受阻
-记录：`hp_procurve.show_interfaces_status`（4 份，`medium`）为定宽缺列表格，`_headers_`
-定宽解析虽能正确解析全部数据行，但其表头行自清洁机制要求字段名回显输入表头的原始
-大小写（PascalCase），与受限 Schema 的 snake_case 契约冲突；空白分列解析因缺列行被证明
-存在歧义，故暂不交付模板、维持 inputs-only，待白名单增加 strip 类过滤器后重做。
+扩展，无法产出同值列表。
 `cisco_ios.show_lldp_neighbors_detail`（5 份，标记 `hard`，重复邻居块、
-嵌套可选 MED 子块与多行文本叠加，为全库复杂度最高形态）、
-`cisco_s300.show_lldp_neighbors`（2 份，标记 `medium`，定宽列内截断换行需按列宽拼接）、
-`hp_procurve.show_interfaces_status`（4 份，标记 `medium`，
-表头一致的纯单表；模板制作受阻，见上）与
+嵌套可选 MED 子块与多行文本叠加，为全库复杂度最高形态）与
 `cisco_ios.show_power_status`（3 份，标记 `hard`，跨行表头加主/子两级行结构）
-仍为 inputs-only。这四个 inputs-only 数据集与 template 阶段的 `huawei` 均
-尚无 `schema.json`、`expected.json`，因此暂不具备 strict baseline 或 ttp-only 资格；
-`huawei` 仍可由 TOML runner 执行 template smoke。重新接入时不得复用旧的 expected、Schema、模板或历史目标记录。
+仍为 inputs-only，尚无 `schema.json`、`expected.json`，暂不具备 strict baseline 或
+ttp-only 资格；template 阶段的 `huawei` 仍可由 TOML runner 执行 template smoke。
+重新接入时不得复用旧的 expected、Schema、模板或历史目标记录。

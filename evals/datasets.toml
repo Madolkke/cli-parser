@@ -75,6 +75,10 @@ command = "show lldp neighbors"
 platform = "cisco_s300"
 source = "ntc-templates"
 tags = ["medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "70390e5cd53a85edcf0cb1c353e85e4362d3ee5fcd497e910e39f130c28be5be" }
+schema = { file = "schema.json", sha256 = "042141a4a74933e0f1ee54e2b3d60f27c961cd94a9811d20d86cb75271251b8a" }
+expected = { file = "expected.json", sha256 = "9605c2d4f575e2ec2dacef17cc52a6abf5c44798b3b799ea7084f7d93c2f85aa" }
 inputs = [
   { file = "inputs/001.txt", sha256 = "95f9eed876a379f15e0eda3324105560831cf3ae44f5ba68b4c22ab783bbeabf" },
   { file = "inputs/002.txt", sha256 = "79347150cf21d247c3e3d37496a30d0741c1b44c9d8e17a1bd4948d5c0f57fd9" },
@@ -103,6 +107,10 @@ command = "show interfaces status"
 platform = "hp_procurve"
 source = "ntc-templates"
 tags = ["medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp", sha256 = "34ea5650674119cdb89704f490d1c2754d252d3b45b5c938df332ce792362a73" }
+schema = { file = "schema.json", sha256 = "fdf4141aa4e66d439b907823f6252d49a140115617d29225f9e5eec467def732" }
+expected = { file = "expected.json", sha256 = "aeb7adf61139432150b6cf3314812f1e96ceed055f823efe6247e77b561fc620" }
 inputs = [
   { file = "inputs/001.txt", sha256 = "e19b8f766fcef5d3d6e00cd78dc49d9898565913ec1e3fac4cef06059433ec83" },
   { file = "inputs/002.txt", sha256 = "f3f874b82dfe3cdecb4d2509bd1615914e70c21638e3dc6bae3c0c9f9c9e9363" },

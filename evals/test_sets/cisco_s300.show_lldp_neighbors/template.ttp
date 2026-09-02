@@ -1,0 +1,8 @@
+<group>
+<group name="neighbors">
+{{ port }} {{ device_id }} {{ port_id }} {{ system_name | re("(\S*)") }} {{ capabilities }} {{ ttl | DIGIT }}
+{{ ignore("[ \t]*") }}{{ port_id | re("([0-9a-f:]+)") | joinmatches("") }}
+{{ ignore("[ \t]*") }}{{ system_name | re("([A-Za-z]\S*)") | joinmatches("") }}
+{{ ignore("[ \t]*") }}{{ port_id | re("([0-9a-f:]+)") | joinmatches("") }} {{ system_name | re("([A-Za-z]\S*)") | joinmatches("") }}
+</group>
+</group>

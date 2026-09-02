@@ -1,0 +1,66 @@
+[
+  {
+    "neighbors": [
+      {
+        "port": "gi27",
+        "device_id": "00:08:32:0f:1e:bd",
+        "port_id": "gi27",
+        "system_name": "prsw03freeporil",
+        "capabilities": "B",
+        "ttl": "99"
+      },
+      {
+        "port": "gi28",
+        "device_id": "00:08:32:0f:04:cc",
+        "port_id": "gi28",
+        "system_name": "prsw01freeportin",
+        "capabilities": "B",
+        "ttl": "90"
+      }
+    ]
+  },
+  {
+    "neighbors": [
+      {
+        "port": "gi10",
+        "device_id": "f8:b1:56:ac:07:64",
+        "port_id": "f8:b1:56:ac:07:64",
+        "system_name": "",
+        "capabilities": "O",
+        "ttl": "3482"
+      },
+      {
+        "port": "gi21",
+        "device_id": "28:6f:7f:0b:75:a0",
+        "port_id": "Gi0",
+        "system_name": "Fjallarodgardsforskola-AP03.net.norob.se",
+        "capabilities": "B",
+        "ttl": "105"
+      },
+      {
+        "port": "gi22",
+        "device_id": "a0:e0:af:ec:e9:d0",
+        "port_id": "a0:e0:af:ec:e9:d0",
+        "system_name": "Fjallarodgardsforskola-AP01.net.norob.se",
+        "capabilities": "B",
+        "ttl": "118"
+      },
+      {
+        "port": "gi23",
+        "device_id": "a0:e0:af:b1:c8:a0",
+        "port_id": "Gi0",
+        "system_name": "Fjallarodgardsforskola-AP04.net.norob.se",
+        "capabilities": "B",
+        "ttl": "105"
+      },
+      {
+        "port": "gi24",
+        "device_id": "a0:e0:af:22:3d:40",
+        "port_id": "Gi0",
+        "system_name": "Fjallarodgardsforskola-AP02.net.norob.se",
+        "capabilities": "B",
+        "ttl": "114"
+      }
+    ]
+  }
+]

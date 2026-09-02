@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "neighbors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "port": {
+            "type": "string"
+          },
+          "device_id": {
+            "type": "string"
+          },
+          "port_id": {
+            "type": "string"
+          },
+          "system_name": {
+            "type": "string"
+          },
+          "capabilities": {
+            "type": "string"
+          },
+          "ttl": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "port",
+          "device_id",
+          "port_id",
+          "system_name",
+          "capabilities",
+          "ttl"
+        ]
+      }
+    }
+  },
+  "required": [
+    "neighbors"
+  ]
+}

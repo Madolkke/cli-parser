@@ -1,0 +1,493 @@
+[
+  {
+    "interfaces": [
+      {
+        "port": "A1",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "140"
+      },
+      {
+        "port": "A6",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "704",
+        "untagged": "No"
+      },
+      {
+        "port": "A7",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "140"
+      },
+      {
+        "port": "A8",
+        "name": "SW-01-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "A9",
+        "name": "Srv-001...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "60"
+      },
+      {
+        "port": "A17",
+        "name": "AIR-AP1200",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "140"
+      },
+      {
+        "port": "A21",
+        "status": "Down",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "A22",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "5"
+      },
+      {
+        "port": "A24-Trk1",
+        "name": "Srv-003...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "B1",
+        "name": "Switch-001",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "B8",
+        "name": "Srv-002...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "B21",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "5"
+      },
+      {
+        "port": "B24-Trk1",
+        "name": "Srv-004...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "F22",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "11"
+      }
+    ]
+  },
+  {
+    "interfaces": [
+      {
+        "port": "1/1",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "141"
+      },
+      {
+        "port": "1/26",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "1000SX",
+        "tagged": "No",
+        "untagged": "No"
+      },
+      {
+        "port": "1/27",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "1"
+      },
+      {
+        "port": "1/28-...",
+        "name": "Srv-001...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "2/6",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "141"
+      },
+      {
+        "port": "2/28",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "1"
+      },
+      {
+        "port": "3/6",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "141"
+      },
+      {
+        "port": "3/28-...",
+        "name": "Srv-002...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "No"
+      }
+    ]
+  },
+  {
+    "interfaces": [
+      {
+        "port": "1/1",
+        "name": "SW-05-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "60"
+      },
+      {
+        "port": "1/2",
+        "name": "SW-05-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "60"
+      },
+      {
+        "port": "1/10",
+        "name": "AP-01-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "1/16",
+        "name": "aa:bb:c...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "1/20",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "1/25",
+        "name": "AP-02-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "1/27",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "1/49",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "No",
+        "untagged": "No"
+      },
+      {
+        "port": "1/50",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "No",
+        "untagged": "No"
+      },
+      {
+        "port": "1/51-...",
+        "name": "SW-07-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "1"
+      },
+      {
+        "port": "1/52",
+        "name": "Link to...",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "1"
+      },
+      {
+        "port": "2/4",
+        "name": "SW-05-0...",
+        "status": "Up",
+        "config_mode": "100FDx",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "multi",
+        "untagged": "60"
+      },
+      {
+        "port": "2/14",
+        "name": "Link to...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10HDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "2/15",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "2/27",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "2/49",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "No",
+        "untagged": "No"
+      },
+      {
+        "port": "2/52",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "1"
+      }
+    ]
+  },
+  {
+    "interfaces": [
+      {
+        "port": "A1",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "A3",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "4010"
+      },
+      {
+        "port": "A5",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "A9",
+        "name": "AP-001",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "A10",
+        "name": "AP-002-...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "A17",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "4010"
+      },
+      {
+        "port": "A21",
+        "status": "Down",
+        "tagged": "No",
+        "untagged": "1"
+      },
+      {
+        "port": "A24-Trk1",
+        "name": "SW-09-0...",
+        "status": "Up",
+        "config_mode": "Auto",
+        "speed": "10GigFD",
+        "type": "10GbE-GEN",
+        "tagged": "multi",
+        "untagged": "No"
+      },
+      {
+        "port": "C1",
+        "name": "AP-003",
+        "status": "Up",
+        "config_mode": "100FDx",
+        "speed": "100FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "2"
+      },
+      {
+        "port": "C20",
+        "name": "AP-004-...",
+        "status": "Down",
+        "config_mode": "Auto",
+        "speed": "1000FDx",
+        "type": "100/1000T",
+        "tagged": "No",
+        "untagged": "4010"
+      },
+      {
+        "port": "D1",
+        "status": "Down",
+        "config_mode": "Auto",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "D2",
+        "status": "Down",
+        "config_mode": "Auto",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "D5",
+        "status": "Down",
+        "config_mode": "Auto",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "D17",
+        "status": "Down",
+        "config_mode": "Auto",
+        "tagged": "No",
+        "untagged": "10"
+      },
+      {
+        "port": "D24",
+        "status": "Down",
+        "config_mode": "Auto",
+        "tagged": "No",
+        "untagged": "10"
+      }
+    ]
+  }
+]

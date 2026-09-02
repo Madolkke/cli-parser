@@ -1,0 +1,9 @@
+<group>
+<group name="interfaces" method="table">
+{{ ignore("[ \t]*") }}{{ port }} {{ name | re("(\S+(?: \S+)*)") }} {{ status }} {{ config_mode | re("([^\- \t\n]+)") }} {{ speed }} {{ type }} {{ tagged }} {{ untagged }}
+{{ ignore("[ \t]*") }}{{ port }} {{ status }} {{ config_mode | re("([^\- \t\n]+)") }} {{ speed }} {{ type }} {{ tagged }} {{ untagged }}
+{{ ignore("[ \t]*") }}{{ port }} {{ status }} {{ config_mode | re("([^\- \t\n]+)") }} {{ tagged }} {{ untagged }}
+{{ ignore("[ \t]*") }}{{ port }} {{ name | re("([0-9A-Za-z][^ \t\n-]*(?: [0-9A-Za-z][^ \t\n-]*)*)") }} {{ status }} {{ tagged }} {{ untagged }}
+{{ ignore("[ \t]*") }}{{ port }} {{ status }} {{ tagged }} {{ untagged }}
+</group>
+</group>
