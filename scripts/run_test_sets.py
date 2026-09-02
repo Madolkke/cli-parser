@@ -36,6 +36,11 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     score_ttp_template_output,
     select_dataset_entries,
 )
+from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
+    PROMPT_VERSION,
+    SCHEMA_SYSTEM_PROMPT,
+    TTP_SYSTEM_PROMPT,
+)
 
 RUNNER_VERSION = 2
 ScriptConfigurationError = _run_support.ScriptConfigurationError
@@ -117,6 +122,10 @@ def _fingerprint(value: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _text_digest(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _configuration() -> tuple[
     TtpGeneratorSettings,
     GenerationPolicy,
@@ -149,6 +158,16 @@ def _configuration() -> tuple[
             "extra_body_configured": settings.extra_body is not None,
         },
         "policy": policy.model_dump(mode="json"),
+        # The prompt is the most likely thing to be A/B tested, so it has to be
+        # part of the fingerprint or two runs of different prompts compare as
+        # identical configurations. Carry both: the version string keeps diffs
+        # readable, and the content hashes catch an edit that forgot to bump it
+        # (AGENTS.md and PROMPT_VERSION have already drifted apart once).
+        "prompt": {
+            "version": PROMPT_VERSION,
+            "schema_system_sha256": _text_digest(SCHEMA_SYSTEM_PROMPT),
+            "ttp_system_sha256": _text_digest(TTP_SYSTEM_PROMPT),
+        },
     }
     return settings, policy, artifact_root, configuration
 

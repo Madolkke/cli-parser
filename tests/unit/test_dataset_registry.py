@@ -15,6 +15,7 @@ from cli_parser_agent.evaluation import (
     preflight_dataset_registry,
     select_dataset_entries,
 )
+from cli_parser_agent.ttp_generation.agent import prompt as prompt_module
 
 
 def _sha(path: Path) -> str:
@@ -371,3 +372,35 @@ def test_runner_defaults_to_registered_default_input_scope() -> None:
                 "inputs/001.txt",
             ],
         )
+
+
+def test_config_fingerprint_covers_prompt_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A prompt-only change must not fingerprint as the same configuration.
+
+    Editing the system prompt is the most likely A/B, and before this the
+    fingerprint hashed only model settings and policy, so two runs of different
+    prompts were indistinguishable in summary.json.
+    """
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setenv("OPENAI_MODEL", "test-model")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid/v1")
+    runner = _load_runner()
+
+    _, _, _, configuration = runner._configuration()
+    baseline = runner._fingerprint(configuration)
+
+    assert configuration["prompt"]["version"] == prompt_module.PROMPT_VERSION
+    assert configuration["prompt"]["ttp_system_sha256"] == hashlib.sha256(
+        prompt_module.TTP_SYSTEM_PROMPT.encode("utf-8"),
+    ).hexdigest()
+
+    # Bumping the version alone moves it, and so does an unbumped content edit.
+    for key, value in (
+        ("version", "some-other-version"),
+        ("ttp_system_sha256", "0" * 64),
+    ):
+        mutated = json.loads(json.dumps(configuration))
+        mutated["prompt"][key] = value
+        assert runner._fingerprint(mutated) != baseline, key
