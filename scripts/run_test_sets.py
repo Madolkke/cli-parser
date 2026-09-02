@@ -35,6 +35,7 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     preflight_dataset_registry,
     score_ttp_template_output,
     select_dataset_entries,
+    wilson_interval,
 )
 from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
     PROMPT_VERSION,
@@ -493,6 +494,7 @@ async def _run_ttp(
             report.dataset.name for report in reports if report.status == "pending"
         ],
         "strict_pass_count": sum(item["strict_pass"] for item in trials),
+        "input_exact_match_micro": _input_exact_match_micro(trials),
         "metrics": aggregate_trial_scores(trials),
         "cases": {
             case.id: aggregate_trial_scores(
@@ -507,6 +509,30 @@ async def _run_ttp(
     print(f"status: {summary['status']}")
     print(f"summary_json: {summary_path}")
     return 0 if summary["status"] == "success" else 1
+
+
+def _input_exact_match_micro(trials: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Pool per-input exact matches across every trial.
+
+    aggregate_trial_scores averages input_exact_match_rate across trials, which
+    macro-weights cases with few inputs equally against cases with many. Pooling
+    the raw counts instead scores each *input*, so a full run observes one point
+    per input rather than one per trial -- roughly triple the sample, for free,
+    and still a strict exact match with no partial credit.
+    """
+    successes = sum(
+        float(trial["metrics"].get("input_exact_match_count", 0.0)) for trial in trials
+    )
+    observations = sum(
+        float(trial["metrics"].get("input_count", 0.0)) for trial in trials
+    )
+    low, high = wilson_interval(successes, observations)
+    return {
+        "successes": successes,
+        "observations": observations,
+        "rate": (successes / observations) if observations else 0.0,
+        "wilson_95": {"lower": low, "upper": high},
+    }
 
 
 def _list_cases(args: argparse.Namespace) -> int:

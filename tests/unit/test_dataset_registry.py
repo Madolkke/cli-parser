@@ -374,6 +374,32 @@ def test_runner_defaults_to_registered_default_input_scope() -> None:
         )
 
 
+def test_input_exact_match_micro_pools_inputs_rather_than_averaging_trials() -> None:
+    """Pooling raw counts scores each input; averaging rates scores each trial.
+
+    A 1-input case matching and a 5-input case missing everything is 1/6 pooled,
+    but 0.5 macro-averaged. Pooling is both the honest number and the tighter
+    one, since a full run then observes one point per input.
+    """
+    runner = _load_runner()
+    trials = [
+        {"metrics": {"input_exact_match_count": 1.0, "input_count": 1.0}},
+        {"metrics": {"input_exact_match_count": 0.0, "input_count": 5.0}},
+    ]
+
+    micro = runner._input_exact_match_micro(trials)
+
+    assert micro["successes"] == 1.0
+    assert micro["observations"] == 6.0
+    assert micro["rate"] == pytest.approx(1 / 6)
+    assert set(micro["wilson_95"]) == {"lower", "upper"}
+    assert micro["wilson_95"]["lower"] <= micro["rate"] <= micro["wilson_95"]["upper"]
+
+    empty = runner._input_exact_match_micro([])
+    assert empty["observations"] == 0.0
+    assert empty["rate"] == 0.0
+
+
 def test_config_fingerprint_covers_prompt_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
