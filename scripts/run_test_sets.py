@@ -43,7 +43,8 @@ from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
     TTP_SYSTEM_PROMPT,
 )
 
-RUNNER_VERSION = 2
+RUNNER_VERSION = 3
+BASELINE_VERSION = 1
 ScriptConfigurationError = _run_support.ScriptConfigurationError
 
 
@@ -73,6 +74,16 @@ def _concurrency(value: str) -> int:
 
 def _dataset_id(value: str) -> int:
     return _positive_int(value)
+
+
+def _tolerance(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be an integer") from error
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be non-negative")
+    return parsed
 
 
 def _add_selection_arguments(command: argparse.ArgumentParser) -> None:
@@ -109,6 +120,24 @@ def _build_parser() -> argparse.ArgumentParser:
     _add_input_scope_argument(run)
     run.add_argument("--trials", type=_trials, default=1)
     run.add_argument("--concurrency", type=_concurrency, default=1)
+    run.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help="compare per-case candidate_pass against this frozen baseline",
+    )
+    run.add_argument(
+        "--regression-tolerance",
+        type=_tolerance,
+        default=0,
+        help="per-case candidate_pass drop tolerated before reporting regressed",
+    )
+    run.add_argument(
+        "--write-baseline",
+        type=Path,
+        default=None,
+        help="write this run's numeric projection to PATH for use as a baseline",
+    )
     return parser
 
 
@@ -475,14 +504,28 @@ async def _run_ttp(
         ),
     )
     counts = _stage_counts(reports)
+    case_pass_counts = _case_pass_counts(trials)
+    baseline_document: Mapping[str, Any] | None = None
+    if args.baseline is not None:
+        baseline_document = _read_baseline(args.baseline)
+        comparison = _compare_to_baseline(
+            baseline_document,
+            case_pass_counts,
+            args.regression_tolerance,
+        )
+        status = "regressed" if comparison["regressed_cases"] else "passed"
+    else:
+        # Recording a run is not a failure. The old rule called every run since
+        # the project began "failed", because it demanded that all trials pass.
+        comparison = None
+        status = "recorded"
     summary = {
         "runner_version": RUNNER_VERSION,
         "mode": "ttp-only",
+        "captured_at": datetime.now(UTC).isoformat(),
         "input_scope": args.input_scope,
         "selected_inputs": _selection_metadata(reports),
-        "status": (
-            "success" if all(item["strict_pass"] for item in trials) else "failed"
-        ),
+        "status": status,
         "registry": {"path": str(registry.path), "sha256": registry.sha256},
         "config_fingerprint": config_fingerprint,
         "configuration": configuration,
@@ -495,6 +538,8 @@ async def _run_ttp(
         ],
         "strict_pass_count": sum(item["strict_pass"] for item in trials),
         "input_exact_match_micro": _input_exact_match_micro(trials),
+        "case_pass_counts": case_pass_counts,
+        "baseline_comparison": comparison,
         "metrics": aggregate_trial_scores(trials),
         "cases": {
             case.id: aggregate_trial_scores(
@@ -506,9 +551,34 @@ async def _run_ttp(
     }
     summary_path = run_directory / "summary.json"
     _run_support.write_json(summary_path, summary)
+    if args.write_baseline is not None:
+        args.write_baseline.parent.mkdir(parents=True, exist_ok=True)
+        _run_support.write_json(args.write_baseline, _baseline_document(summary))
+        print(f"baseline_json: {args.write_baseline}")
+    micro = summary["input_exact_match_micro"]
+    print(
+        f"candidate_pass: {summary['strict_pass_count']}/{summary['trial_count']}  "
+        f"input_exact_match_micro: {micro['successes']:.0f}"
+        f"/{micro['observations']:.0f}",
+    )
+    if comparison is not None:
+        for record in comparison["regressed_cases"]:
+            print(
+                f"REGRESSED {record['case_id']}: "
+                f"{record['baseline']} -> {record['current']}",
+            )
+        for record in comparison["improved_cases"]:
+            print(
+                f"improved  {record['case_id']}: "
+                f"{record['baseline']} -> {record['current']}",
+            )
+        for case_id in comparison["missing_cases"]:
+            print(f"missing from this run: {case_id}")
+        for case_id in comparison["unknown_cases"]:
+            print(f"not in baseline: {case_id}")
     print(f"status: {summary['status']}")
     print(f"summary_json: {summary_path}")
-    return 0 if summary["status"] == "success" else 1
+    return 1 if status == "regressed" else 0
 
 
 def _input_exact_match_micro(trials: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -532,6 +602,112 @@ def _input_exact_match_micro(trials: Sequence[Mapping[str, Any]]) -> dict[str, A
         "observations": observations,
         "rate": (successes / observations) if observations else 0.0,
         "wilson_95": {"lower": low, "upper": high},
+    }
+
+
+def _read_baseline(path: Path) -> Mapping[str, Any]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except OSError:
+        raise ScriptConfigurationError(f"baseline {path} could not be read") from None
+    except ValueError:
+        raise ScriptConfigurationError(f"baseline {path} is not valid JSON") from None
+    if not isinstance(document, Mapping):
+        raise ScriptConfigurationError(f"baseline {path} must be a JSON object")
+    version = document.get("baseline_version")
+    if version != BASELINE_VERSION:
+        raise ScriptConfigurationError(
+            f"baseline {path} has version {version!r}, expected {BASELINE_VERSION}",
+        )
+    return document
+
+
+def _case_pass_counts(
+    trials: Sequence[Mapping[str, Any]],
+) -> dict[str, dict[str, int]]:
+    """Per-case candidate_pass successes out of attempted trials."""
+    counts: dict[str, dict[str, int]] = {}
+    for trial in trials:
+        entry = counts.setdefault(
+            str(trial["case_id"]),
+            {"candidate_pass_successes": 0, "trials": 0},
+        )
+        entry["trials"] += 1
+        entry["candidate_pass_successes"] += int(bool(trial["strict_pass"]))
+    return counts
+
+
+def _compare_to_baseline(
+    baseline: Mapping[str, Any],
+    case_counts: Mapping[str, Mapping[str, int]],
+    tolerance: int,
+) -> dict[str, Any]:
+    """Compare per-case pass counts, not the aggregate rate.
+
+    The aggregate cannot move detectably on this corpus -- 24 observations are
+    8 clusters, and five of eight cases land on 0/3 or 3/3 -- but a single case
+    going 3/3 to 1/3 is real and attributable, so that is what gates.
+    """
+    baseline_cases = baseline.get("cases")
+    if not isinstance(baseline_cases, Mapping):
+        raise ScriptConfigurationError("baseline does not contain a cases mapping")
+    regressed: list[dict[str, Any]] = []
+    improved: list[dict[str, Any]] = []
+    missing = sorted(set(baseline_cases) - set(case_counts))
+    unknown = sorted(set(case_counts) - set(baseline_cases))
+    for case_id, current in sorted(case_counts.items()):
+        previous = baseline_cases.get(case_id)
+        if not isinstance(previous, Mapping):
+            continue
+        before = int(previous.get("candidate_pass_successes", 0))
+        before_trials = int(previous.get("trials", 0)) or 1
+        after = int(current["candidate_pass_successes"])
+        after_trials = int(current["trials"]) or 1
+        # Rates, because a baseline frozen at 5 trials is routinely compared
+        # against a 3-trial run. Express the gap back in trials so the
+        # tolerance stays readable as "how many trials may drop".
+        delta = (after / after_trials) - (before / before_trials)
+        record = {
+            "case_id": case_id,
+            "baseline": f"{before}/{before_trials}",
+            "current": f"{after}/{after_trials}",
+            "delta_rate": delta,
+        }
+        if -delta * after_trials > tolerance:
+            regressed.append(record)
+        elif delta > 0:
+            improved.append(record)
+    return {
+        "regressed_cases": regressed,
+        "improved_cases": improved,
+        "missing_cases": missing,
+        "unknown_cases": unknown,
+    }
+
+
+def _baseline_document(summary: Mapping[str, Any]) -> dict[str, Any]:
+    """Project a run into a committable, numbers-only baseline.
+
+    Deliberately carries no template, records, raw input, or model text, so it
+    can live in git while .artifacts/ stays ignored.
+    """
+    return {
+        "baseline_version": BASELINE_VERSION,
+        "captured_at": summary["captured_at"],
+        "runner_version": summary["runner_version"],
+        "registry_sha256": summary["registry"]["sha256"],
+        "config_fingerprint": summary["config_fingerprint"],
+        "configuration": summary["configuration"],
+        "input_scope": summary["input_scope"],
+        "trial_count": summary["trial_count"],
+        "cases": summary["case_pass_counts"],
+        "overall": {
+            "candidate_pass": {
+                "successes": summary["strict_pass_count"],
+                "observations": summary["trial_count"],
+            },
+            "input_exact_match_micro": summary["input_exact_match_micro"],
+        },
     }
 
 

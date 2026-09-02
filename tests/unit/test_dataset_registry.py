@@ -374,6 +374,74 @@ def test_runner_defaults_to_registered_default_input_scope() -> None:
         )
 
 
+def _counts(**cases: tuple[int, int]) -> dict[str, dict[str, int]]:
+    return {
+        case_id: {"candidate_pass_successes": passed, "trials": total}
+        for case_id, (passed, total) in cases.items()
+    }
+
+
+def test_case_pass_counts_group_trials_by_case() -> None:
+    runner = _load_runner()
+    trials = [
+        {"case_id": "a", "strict_pass": True},
+        {"case_id": "a", "strict_pass": False},
+        {"case_id": "b", "strict_pass": True},
+    ]
+
+    assert runner._case_pass_counts(trials) == _counts(a=(1, 2), b=(1, 1))
+
+
+def test_baseline_comparison_gates_per_case_and_tolerates_trial_count_changes() -> None:
+    """Per-case, because the aggregate cannot move detectably on 8 clusters.
+
+    Rates rather than raw counts, because a baseline frozen at 5 trials is
+    routinely compared against a 3-trial run.
+    """
+    runner = _load_runner()
+    baseline = {
+        "baseline_version": 1,
+        "cases": _counts(
+            steady=(5, 5),
+            broken=(5, 5),
+            fixed=(0, 5),
+            gone=(3, 5),
+        ),
+    }
+    current = _counts(steady=(3, 3), broken=(0, 3), fixed=(3, 3), added=(1, 3))
+
+    result = runner._compare_to_baseline(baseline, current, 0)
+
+    assert [item["case_id"] for item in result["regressed_cases"]] == ["broken"]
+    assert [item["case_id"] for item in result["improved_cases"]] == ["fixed"]
+    # 5/5 vs 3/3 is the same rate, so a changed trial count is not a regression.
+    assert "steady" not in {item["case_id"] for item in result["regressed_cases"]}
+    assert result["missing_cases"] == ["gone"]
+    assert result["unknown_cases"] == ["added"]
+
+
+def test_regression_tolerance_is_expressed_in_trials() -> None:
+    runner = _load_runner()
+    baseline = {"baseline_version": 1, "cases": _counts(wobbly=(3, 3))}
+    current = _counts(wobbly=(2, 3))
+
+    assert runner._compare_to_baseline(baseline, current, 0)["regressed_cases"]
+    assert not runner._compare_to_baseline(baseline, current, 1)["regressed_cases"]
+
+
+def test_baseline_version_mismatch_is_rejected(tmp_path: Path) -> None:
+    runner = _load_runner()
+    path = tmp_path / "baseline.json"
+    path.write_text(
+        json.dumps({"baseline_version": 999, "cases": {}}),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    with pytest.raises(runner.ScriptConfigurationError, match="version"):
+        runner._read_baseline(path)
+
+
 def test_input_exact_match_micro_pools_inputs_rather_than_averaging_trials() -> None:
     """Pooling raw counts scores each input; averaging rates scores each trial.
 
