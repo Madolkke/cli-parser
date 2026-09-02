@@ -2117,7 +2117,7 @@ def _leaf_counter(value: Any) -> Counter[tuple[str, str]]:
             for key, child in item.items():
                 child_path = f"/{key}" if path == "/" else f"{path}/{key}"
                 visit(child, child_path)
-        elif isinstance(item, list):
+        elif isinstance(item, (list, tuple)):
             for child in item:
                 visit(child, f"{path}/*")
         else:

@@ -12,9 +12,42 @@ from cli_parser_agent.evaluation import (
     project_candidate_trajectory,
     project_human_reviews,
     score_records_by_input,
+    score_ttp_template_output,
     summarize_span_metrics,
     wilson_interval,
 )
+
+
+def test_corpus_leaf_metrics_match_per_input_metrics_for_a_perfect_candidate() -> None:
+    """TestSetCase.expected_records is a tuple, and the leaf walker only
+    recursed into list, so the whole corpus collapsed to a single leaf whose
+    value was the entire JSON blob. Overlap with the actual (a real list) was
+    then always zero, which pinned corpus leaf_f1 at 0.0 on every trial -- even
+    ones scoring records_exact_match 1.0, because that path compares canonical
+    JSON and is blind to the list/tuple distinction.
+    """
+    records = [
+        {"lines": [{"port": "A1", "status": "up"}]},
+        {"lines": [{"port": "B2", "status": "down"}]},
+    ]
+    result = score_ttp_template_output(
+        {
+            "generation_result": {
+                "status": "success",
+                "artifact": {"records": list(records)},
+                "metadata": {},
+            },
+            "independent_acceptance": {"valid": True},
+        },
+        tuple(records),
+    )
+
+    metrics = result["metrics"]
+    assert metrics["records_exact_match"] == 1.0
+    assert metrics["input_leaf_f1_macro"] == 1.0
+    assert metrics["leaf_precision"] == 1.0
+    assert metrics["leaf_recall"] == 1.0
+    assert metrics["leaf_f1"] == 1.0
 
 
 def test_wilson_interval_is_bounded_and_handles_empty_samples() -> None:
