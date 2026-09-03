@@ -1,0 +1,95 @@
+{
+  "baseline_version": 1,
+  "captured_at": "2026-09-03T14:23:11.406259+00:00",
+  "runner_version": 3,
+  "registry_sha256": "2210580b61e624f41af1708e32a342136b66c37a05323e86c21e17bc0479cf96",
+  "config_fingerprint": "adbf8e27ce2bfa10629118646c8da3833a58f777bef17361f743357ea68bf46d",
+  "configuration": {
+    "model": {
+      "name": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "stream": false,
+      "temperature": 0.0,
+      "parallel_tool_calls": false,
+      "max_tokens": 8192,
+      "context_size": 128000,
+      "model_timeout_seconds": 60.0,
+      "thinking_enable": null,
+      "reasoning_effort": null,
+      "extra_body_configured": false
+    },
+    "policy": {
+      "total_timeout_seconds": 7200.0,
+      "max_agent_rounds": 32,
+      "max_ttp_submissions": 24,
+      "max_schema_no_tool_retries": 3,
+      "max_ttp_no_tool_retries": 3,
+      "ttp_validation_timeout_seconds": 20.0,
+      "model_input_char_budget": 240000,
+      "max_ttp_template_bytes": 65536,
+      "max_ttp_group_depth": 16,
+      "max_ttp_regex_chars": 2048,
+      "max_ttp_argument_chars": 4096,
+      "max_parse_result_bytes": 8388608,
+      "max_schema_bytes": 65536,
+      "max_schema_depth": 16,
+      "max_schema_properties": 256
+    },
+    "prompt": {
+      "version": "ttp-generator-v26-test-then-submit-zh-cn",
+      "schema_system_sha256": "5f55c66587319dd6d345c4c47057dd2ffb1429f05c31a618e44f1c4ecd33bd18",
+      "ttp_system_sha256": "fca866b084cf273ff87eb40b3d83c0804a38c0c5e83719bf8e6b6c5e3a7cf4a7"
+    }
+  },
+  "input_scope": "full",
+  "trial_count": 40,
+  "cases": {
+    "broadcom_icos.show_version": {
+      "candidate_pass_successes": 0,
+      "trials": 5
+    },
+    "fortinet.get_system_status": {
+      "candidate_pass_successes": 5,
+      "trials": 5
+    },
+    "cisco_s300.show_lldp_neighbors": {
+      "candidate_pass_successes": 0,
+      "trials": 5
+    },
+    "paloalto_panos.show_interface_hardware": {
+      "candidate_pass_successes": 5,
+      "trials": 5
+    },
+    "hp_procurve.show_interfaces_status": {
+      "candidate_pass_successes": 2,
+      "trials": 5
+    },
+    "oneaccess_oneos.show_voice_mos": {
+      "candidate_pass_successes": 5,
+      "trials": 5
+    },
+    "cisco_nxos.show_interface_status": {
+      "candidate_pass_successes": 0,
+      "trials": 5
+    },
+    "cisco_ios.show_sdwan_control_connections": {
+      "candidate_pass_successes": 0,
+      "trials": 5
+    }
+  },
+  "overall": {
+    "candidate_pass": {
+      "successes": 17,
+      "observations": 40
+    },
+    "input_exact_match_micro": {
+      "successes": 62.0,
+      "observations": 130.0,
+      "rate": 0.47692307692307695,
+      "wilson_95": {
+        "lower": 0.39296542216305513,
+        "upper": 0.5622054191228418
+      }
+    }
+  }
+}
