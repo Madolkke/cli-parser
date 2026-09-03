@@ -147,7 +147,42 @@ def _contains_chinese(text: str) -> bool:
     return any("\u4e00" <= character <= "\u9fff" for character in text)
 
 
-def test_phase_prompts_are_independent_chinese_protocols() -> None:
+def test_validation_summary_is_bounded_and_structural() -> None:
+    from cli_parser_agent.ttp_generation.agent.tools import _validation_feedback_summary
+
+    summary = _validation_feedback_summary(
+        issues=[
+            {
+                "code": "schema.record_mismatch",
+                "output_index": 0,
+                "path": "/status",
+                "details": {"missing_required": ["status"]},
+            },
+            {
+                "code": "schema.record_mismatch",
+                "output_index": 1,
+                "path": "/extra",
+                "details": {"unexpected_property_count": 1},
+            },
+        ],
+        matched_records=[{}, {"extra": "secret"}],
+        expected_record_count=3,
+    )
+
+    assert summary["expected_record_count"] == 3
+    assert summary["actual_record_count"] == 2
+    assert summary["missing_paths"] == ["/status"]
+    assert summary["unexpected_paths"] == ["/extra"]
+    assert summary["inputs"][-1] == {
+        "input_index": 2,
+        "issues": [],
+        "actual_present": False,
+        "actual_root_object": False,
+        "actual_empty_object": False,
+    }
+    assert "secret" not in json.dumps(summary)
+
+
     assert PROMPT_VERSION == "ttp-generator-v30-candidate-protection-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)

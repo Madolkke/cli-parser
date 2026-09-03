@@ -136,6 +136,80 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+_MAX_FEEDBACK_PATHS = 24
+
+
+def _validation_feedback_summary(
+    *,
+    issues: Sequence[Any],
+    matched_records: Sequence[Any],
+    expected_record_count: int,
+) -> dict[str, Any]:
+    """Build bounded structural feedback without returning source values."""
+
+    by_input: dict[int, dict[str, Any]] = {}
+    missing_paths: list[str] = []
+    unexpected_paths: list[str] = []
+    mismatch_paths: list[str] = []
+    for issue in issues:
+        item = _jsonable(issue)
+        if not isinstance(item, Mapping):
+            continue
+        output_index = item.get("output_index")
+        if isinstance(output_index, int) and output_index >= 0:
+            entry = by_input.setdefault(
+                output_index,
+                {"input_index": output_index, "issues": []},
+            )
+            codes = entry["issues"]
+            if isinstance(codes, list) and len(codes) < 8:
+                code = item.get("code")
+                if isinstance(code, str) and code not in codes:
+                    codes.append(code)
+        path = item.get("path")
+        if not isinstance(path, str):
+            continue
+        details = item.get("details")
+        if not isinstance(details, Mapping):
+            details = {}
+        code = str(item.get("code", ""))
+        if "required" in code or details.get("missing_required"):
+            if path not in missing_paths and len(missing_paths) < _MAX_FEEDBACK_PATHS:
+                missing_paths.append(path)
+        elif "additional" in code or details.get("unexpected_property_count"):
+            if (
+                path not in unexpected_paths
+                and len(unexpected_paths) < _MAX_FEEDBACK_PATHS
+            ):
+                unexpected_paths.append(path)
+        elif path not in mismatch_paths and len(mismatch_paths) < _MAX_FEEDBACK_PATHS:
+            mismatch_paths.append(path)
+
+    for input_index in range(expected_record_count):
+        entry = by_input.setdefault(
+            input_index,
+            {"input_index": input_index, "issues": []},
+        )
+        if input_index < len(matched_records):
+            record = matched_records[input_index]
+            entry["actual_present"] = True
+            entry["actual_root_object"] = isinstance(record, dict)
+            entry["actual_empty_object"] = record == {}
+        else:
+            entry["actual_present"] = False
+            entry["actual_root_object"] = False
+            entry["actual_empty_object"] = False
+
+    return {
+        "expected_record_count": expected_record_count,
+        "actual_record_count": len(matched_records),
+        "inputs": [by_input[index] for index in sorted(by_input)],
+        "missing_paths": missing_paths,
+        "unexpected_paths": unexpected_paths,
+        "mismatch_paths": mismatch_paths,
+    }
+
+
 def _result_payload(
     *,
     phase: str,
@@ -987,6 +1061,11 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             capture=capture,
             issues=issues,
             matched_records=outcome.records,
+            validation_summary=_validation_feedback_summary(
+                issues=issues,
+                matched_records=outcome.records,
+                expected_record_count=len(self.session.command_outputs),
+            ),
             validated_candidate_available=candidate_available,
             candidate_updated=candidate_updated,
             retained_candidate_version=self.session.validated_ttp_candidate_version,
