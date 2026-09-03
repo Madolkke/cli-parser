@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from copy import deepcopy
 from typing import Any
@@ -44,7 +45,9 @@ from cli_parser_agent.ttp_generation.agent.session import (
     ValidatorOutcome,
 )
 from cli_parser_agent.ttp_generation.agent.tools import (
+    FINISH_GENERATION_TOOL_NAME,
     SUBMIT_SCHEMA_TOOL_NAME,
+    SUBMIT_TEMPLATE_TOOL_NAME,
     build_submission_tools,
 )
 from cli_parser_agent.ttp_generation.progress import ProgressEmitter
@@ -544,3 +547,80 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
     assert "secret-key" not in json.dumps(
         [event.model_dump(mode="json") for event in observed],
     )
+
+
+async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
+    """The digest is what distinguishes a stuck loop from real iteration.
+
+    A burned-out trial records agent_rounds=32 with no other detail, so
+    comparing consecutive digests is the only way to tell whether the model
+    kept resubmitting the same candidate. The template body must never appear.
+    """
+    template = "value: {{ value }}"
+    model = _ScriptedModel(
+        [
+            _response(
+                ToolCallBlock(
+                    id="template-call",
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"ttp_template": template}),
+                ),
+            ),
+            _response(
+                ToolCallBlock(
+                    id="finish-call",
+                    name=FINISH_GENERATION_TOOL_NAME,
+                    input="{}",
+                ),
+            ),
+        ],
+    )
+    session = GenerationSession(
+        command_outputs=("value: one",),
+        schema_validator=lambda _: ValidatorOutcome(valid=True),
+        template_validator=lambda _: ValidatorOutcome(
+            valid=True,
+            records=({"value": "one"},),
+        ),
+        max_agent_rounds=3,
+    )
+    session.frozen_schema = _schema()
+    observed: list[Any] = []
+    progress = ProgressEmitter(request_id="digest-request", observer=observed.append)
+    agent = Agent(
+        name="ttp_generator",
+        system_prompt="ttp system prompt",
+        model=model,  # type: ignore[arg-type]
+        toolkit=Toolkit(
+            tools=build_submission_tools(session, "ttp", progress=progress),
+        ),
+        state=AgentState(),
+        react_config=ReActConfig(
+            max_iters=session.max_agent_rounds,
+            interruption_raise_cancelled_error=True,
+        ),
+    )
+
+    await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+        progress=progress,
+    )
+
+    submissions = [
+        event
+        for event in observed
+        if isinstance(event, CustomEvent)
+        and event.name == "cli_parser.ttp.submission"
+    ]
+    assert len(submissions) == 1
+    value = submissions[0].value
+    assert value["submission_index"] == 1
+    assert value["template_chars"] == len(template)
+    assert value["template_sha256"] == hashlib.sha256(
+        template.encode("utf-8"),
+    ).hexdigest()
+    assert submissions[0].metadata["sensitive"] is False
+    assert template not in json.dumps(value)

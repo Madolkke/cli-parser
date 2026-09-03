@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from copy import deepcopy
@@ -859,6 +860,22 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
 
         self.session.ttp_submissions += 1
         self.session.last_ttp_template = submission.ttp_template
+        if self.progress is not None and self.progress.enabled:
+            # Digest only, never the template body. Comparing consecutive
+            # digests is what distinguishes "stuck resubmitting the same
+            # candidate" from "iterating", which the counters alone cannot show.
+            self.progress.custom(
+                "cli_parser.ttp.submission",
+                {
+                    "submission_index": self.session.ttp_submissions,
+                    "template_sha256": hashlib.sha256(
+                        submission.ttp_template.encode("utf-8"),
+                    ).hexdigest(),
+                    "template_chars": len(submission.ttp_template),
+                },
+                phase="ttp",
+                sensitive=False,
+            )
 
         candidate = TemplateCandidate(
             ttp_template=submission.ttp_template,

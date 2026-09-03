@@ -138,6 +138,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="write this run's numeric projection to PATH for use as a baseline",
     )
+    run.add_argument(
+        "--trace-rounds",
+        action="store_true",
+        help="record safe per-round facts to trial-NN.rounds.jsonl for loop diagnosis",
+    )
     return parser
 
 
@@ -312,7 +317,12 @@ def _write_preflight_artifacts(
     return run_directory
 
 
-async def _run_ttp_trial(case: Any, settings: Any, policy: Any) -> dict[str, Any]:
+async def _run_ttp_trial(
+    case: Any,
+    settings: Any,
+    policy: Any,
+    tracer: _RoundTracer | None = None,
+) -> dict[str, Any]:
     try:
         request = TemplateRequest(
             command_outputs=[item.text for item in case.inputs],
@@ -321,7 +331,7 @@ async def _run_ttp_trial(case: Any, settings: Any, policy: Any) -> dict[str, Any
         result = await TtpGenerator(
             settings=settings,
             policy=policy,
-        ).generate_from_schema(request)
+        ).generate_from_schema(request, observer=tracer)
         acceptance = await asyncio.to_thread(
             independent_acceptance,
             result,
@@ -457,7 +467,8 @@ async def _run_ttp(
     async def execute(case: Any, trial_index: int) -> dict[str, Any]:
         async with semaphore:
             started_at = datetime.now(UTC).isoformat()
-            payload = await _run_ttp_trial(case, settings, policy)
+            tracer = _RoundTracer() if args.trace_rounds else None
+            payload = await _run_ttp_trial(case, settings, policy, tracer)
             finished_at = datetime.now(UTC).isoformat()
             document = {
                 "runner_version": RUNNER_VERSION,
@@ -475,6 +486,15 @@ async def _run_ttp(
                 case_directory / f"trial-{trial_index + 1:02d}.json",
                 document,
             )
+            if tracer is not None:
+                trace_path = (
+                    case_directory / f"trial-{trial_index + 1:02d}.rounds.jsonl"
+                )
+                with trace_path.open("w", encoding="utf-8", newline="\n") as handle:
+                    for row in tracer.rows:
+                        handle.write(
+                            json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n",
+                        )
             metrics = payload["score"]["metrics"]
             result_payload = payload["generation_result"]
             trace_id = (
@@ -579,6 +599,49 @@ async def _run_ttp(
     print(f"status: {summary['status']}")
     print(f"summary_json: {summary_path}")
     return 1 if status == "regressed" else 0
+
+
+class _RoundTracer:
+    """Collect one safe record per observed event for loop diagnosis.
+
+    A burned-out trial records agent_rounds=32, ttp_submissions=0 and nothing
+    else, so 32 rounds of behaviour are invisible. This keeps the sequence of
+    model calls, tool names, token growth and template digests.
+
+    Only events the emitter marked non-sensitive are kept, and only scalar
+    facts from them -- never a template, record, or command output. Comparing
+    consecutive template digests shows whether the model is resubmitting the
+    same candidate; run_agent_tui.py remains the full-fidelity channel.
+    """
+
+    def __init__(self) -> None:
+        self.rows: list[dict[str, Any]] = []
+
+    def __call__(self, event: Any) -> None:
+        metadata = getattr(event, "metadata", None) or {}
+        if metadata.get("sensitive") is not False:
+            return
+        row: dict[str, Any] = {
+            "sequence": metadata.get("sequence"),
+            "phase": metadata.get("phase"),
+            "elapsed_seconds": metadata.get("elapsed_seconds"),
+            "event": type(event).__name__,
+        }
+        for field in ("finished_reason", "input_tokens", "output_tokens"):
+            value = getattr(event, field, None)
+            if value is not None:
+                row[field] = value if isinstance(value, int) else str(value)
+        name = getattr(event, "tool_call_name", None) or getattr(event, "name", None)
+        if name is not None:
+            row["name"] = str(name)
+        value = getattr(event, "value", None)
+        if isinstance(value, Mapping):
+            row["value"] = {
+                key: item
+                for key, item in value.items()
+                if isinstance(item, str | int | float | bool | None)
+            }
+        self.rows.append(row)
 
 
 def _input_exact_match_micro(trials: Sequence[Mapping[str, Any]]) -> dict[str, Any]:

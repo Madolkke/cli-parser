@@ -381,6 +381,56 @@ def _counts(**cases: tuple[int, int]) -> dict[str, dict[str, int]]:
     }
 
 
+def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
+    """The trace must never carry a template, record, or command output.
+
+    Sensitivity is decided by the emitter; the tracer trusts that flag and
+    additionally keeps only scalars, so a future non-sensitive event carrying a
+    nested payload cannot leak it into the artifact.
+    """
+    runner = _load_runner()
+    tracer = runner._RoundTracer()
+
+    class _Event:
+        def __init__(self, **fields: object) -> None:
+            self.__dict__.update(fields)
+
+    tracer(
+        _Event(
+            metadata={"sensitive": True, "sequence": 1, "phase": "ttp"},
+            name="cli_parser.untrusted",
+            value={"command_output": "secret"},
+        ),
+    )
+    tracer(
+        _Event(
+            metadata={"sensitive": False, "sequence": 2, "phase": "ttp"},
+            input_tokens=41233,
+            output_tokens=812,
+        ),
+    )
+    tracer(
+        _Event(
+            metadata={"sensitive": False, "sequence": 3, "phase": "ttp"},
+            name="cli_parser.ttp.submission",
+            value={
+                "template_sha256": "ab12",
+                "template_chars": 640,
+                "records": [{"leaked": True}],
+            },
+        ),
+    )
+
+    assert [row["sequence"] for row in tracer.rows] == [2, 3]
+    assert tracer.rows[0]["input_tokens"] == 41233
+    assert tracer.rows[0]["output_tokens"] == 812
+    assert tracer.rows[1]["value"] == {
+        "template_sha256": "ab12",
+        "template_chars": 640,
+    }
+    assert "secret" not in json.dumps(tracer.rows)
+
+
 def test_case_pass_counts_group_trials_by_case() -> None:
     runner = _load_runner()
     trials = [
