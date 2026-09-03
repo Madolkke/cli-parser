@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from cli_parser_agent.ttp_generation.agent.prompt import TTP_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.validation import (
     inspect_ttp_template,
     parse_ttp_template,
@@ -1073,3 +1074,62 @@ def test_unknown_group_method_is_rejected() -> None:
 
     assert not result.valid
     assert "ttp.invalid_group_method" in _codes(result.issues)
+
+
+def test_joinmatches_continuation_rejoins_a_column_wrapped_row() -> None:
+    """Wrapped rows are the opposite case from column-count variants.
+
+    A default-method group's later match line continues the current record,
+    which is exactly what a wrapped row needs. Adding method="table" here
+    would turn each continuation into its own record instead.
+
+    The template is extracted from the system prompt so the documented recipe
+    cannot drift away from working TTP.
+    """
+    start = TTP_SYSTEM_PROMPT.index('<group name="neighbors*">')
+    end = TTP_SYSTEM_PROMPT.index("</group>", start) + len("</group>")
+    template = (
+        "\n".join(line.strip() for line in TTP_SYSTEM_PROMPT[start:end].splitlines())
+        + "\n"
+    )
+    source = (
+        "gi21 28:6f:7f:0b:75:a0 Gi0 Fjallarodgardsfor 105\n"
+        "                                skola-AP03\n"
+        "gi22 28:6f:7f:0b:75:a1 Gi1 Short 100\n"
+    )
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "neighbors": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "port": {"type": "string"},
+                        "device_id": {"type": "string"},
+                        "port_id": {"type": "string"},
+                        "name": {"type": "string"},
+                        "ttl": {"type": "string"},
+                    },
+                    "required": [
+                        "port",
+                        "device_id",
+                        "port_id",
+                        "name",
+                        "ttl",
+                    ],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["neighbors"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(template, [source], schema)
+
+    assert result.valid, _codes(result.issues)
+    rows = result.records[0]["neighbors"]
+    assert [row["port"] for row in rows] == ["gi21", "gi22"]
+    assert rows[0]["name"] == "Fjallarodgardsforskola-AP03"

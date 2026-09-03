@@ -148,7 +148,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v28-table-method-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v29-joinmatches-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -183,6 +183,12 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "sibling group" in TTP_SYSTEM_PROMPT
     assert "group 只使用 name" not in TTP_SYSTEM_PROMPT
     assert "或 group 变体" not in TTP_SYSTEM_PROMPT
+    # Wrapped rows are the opposite case and need a plain group, so the two
+    # rules must be stated as a contrast rather than conflated.
+    assert "joinmatches" in TTP_SYSTEM_PROMPT
+    assert "与列数变体相反" in TTP_SYSTEM_PROMPT
+    # The old advice told the model to roll back the only construct that works.
+    assert "上下半部分，说明行控制拆开了同一实体；立即" not in TTP_SYSTEM_PROMPT
     assert "三个工具之一" in TTP_SYSTEM_PROMPT
     assert "不会成为可 finish 的候选" in TTP_SYSTEM_PROMPT
     assert "ToolResult 已进入" in TTP_SYSTEM_PROMPT
@@ -220,7 +226,7 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     assert "绝不能用来捕获空 string" in TTP_SYSTEM_PROMPT
     assert 'pid | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?")' in TTP_SYSTEM_PROMPT
     assert "不会替你消费可变空白" in TTP_SYSTEM_PROMPT
-    assert "说明行控制拆开了同一实体" in TTP_SYSTEM_PROMPT
+    assert "说明是行控制拆开了同一实体" in TTP_SYSTEM_PROMPT
     assert "最外层 group 必须省略 name" in TTP_SYSTEM_PROMPT
     assert "未命名的最外层 group 对应根 object 本身" in TTP_SYSTEM_PROMPT
     assert '{{ ignore("\\s*") }}' in TTP_SYSTEM_PROMPT

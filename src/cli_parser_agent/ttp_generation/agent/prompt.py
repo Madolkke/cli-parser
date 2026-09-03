@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v28-table-method-zh-cn"
+PROMPT_VERSION = "ttp-generator-v29-joinmatches-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -243,8 +243,19 @@ submit_ttp_template 的 ToolResult 已进入后续
 - 若只有原文字段槽为空的实体缺少该物理行上的多个字段，优先判定为空捕获模式失败：
   保留已经正确的 group 边界，只把该空字段改为由右侧分隔符约束的零长度 `re`。不要
   用 `_start_`、`_end_` 或 `_exact_space_` 修复行内空白。若修改后 records 数量接近
-  翻倍，且相邻 object 分别只含多行实体的上下半部分，说明行控制拆开了同一实体；立即
-  回退行控制，不要在其上继续修补。
+  翻倍，且相邻 object 分别只含多行实体的上下半部分，先判断原文是否存在列宽折行：
+  是折行就按下一条的续行 + joinmatches 规则修复，不要回退；只有在原文没有折行时，
+  才说明是行控制拆开了同一实体，此时立即回退行控制，不要在其上继续修补。
+- 一行数据因列宽被折行时，处理方式与列数变体相反：折行必须写在没有 method="table"
+  的普通 group 里，用续行匹配行加 joinmatches 合并回同一条 record。普通 group 的
+  续行会并入当前 record，正是折行需要的语义；加上 method="table" 反而会把每条续行
+  变成独立 record。例如：
+    <group name="neighbors*">
+    {{ port }} {{ device_id }} {{ port_id }} {{ name | re("(\\S*)") }} {{ ttl | DIGIT }}
+    {{ ignore("[ \\t]*") }}{{ name | re("([A-Za-z]\\S*)") | joinmatches("") }}
+    </group>
+  续行匹配行只捕获真正会折行的字段，并用足够严格的 re 保证它不会匹配到下一条完整
+  数据行。joinmatches 的参数是拼接分隔符：折行拼接用 ""，空格分隔的多值累积用 " "。
 - 源文本明显包含业务记录，而 record 是空对象或关键数组为空、仅含空容器或只捕获
   少数行时，必须视为漏解析，不能调用 finish_generation。发现字段错列、表头混入、过宽
   匹配或跨样例不一致时必须提交修正版。若 finish_generation 因内部没有有效候选而被
