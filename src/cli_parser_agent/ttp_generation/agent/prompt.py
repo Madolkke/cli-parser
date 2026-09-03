@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v29-joinmatches-zh-cn"
+PROMPT_VERSION = "ttp-generator-v30-candidate-protection-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -167,6 +167,16 @@ submit_ttp_template 的 ToolResult 已进入后续
   行控制或改用 `_headers_`。需要继续修正时先简化过滤器和条件，不能因此删除
   required 字段捕获。
 - 固定宽度表格先执行以下步骤，再写模板：逐样例识别表头列顺序；排除空行和纯分隔
+  行；确认同一物理数据行上的字段边界和每列是否可能包含空格。若表头列数或顺序
+  在输入间变化，优先使用 method="table"，让每个重复数据行从同一列结构产生一个
+  record；不要为同名兄弟字段创建多个具名 group，也不要把列数变化当成多个根对象。
+- 一条业务记录跨多行时，先确认后续行没有自己的记录起点，再在同一个具名 group 中
+  使用 joinmatches 拼接同一字段；折行字段使用空分隔符，空格分隔的多值字段使用
+  单个空格。不要把独立的下一条记录拼入上一条，也不要同时用 table 和 joinmatches
+  掩盖尚未确认的行边界。
+- 每次 submit_ttp_template 后，先检查所有输入的 record 数量、根结构、字段路径和
+  字段来源。若工具返回一个已经通过验证的候选，除非发现明确的跨输入结构或语义错误，
+  应优先复核并调用 finish_generation；后续探索不得无证据地替换已有正确候选。
   线后数出预期数据行；为第一条、中间一条和最后一条数据标出每个冻结字段所在物理
   列。模板必须按该物理顺序捕获字段，并为未建模列保留明确的 ignore 占位，不能跨列
   匹配。只由一条重复数据行构成的表格 group 不使用 _start_、_end_ 或 _line_。

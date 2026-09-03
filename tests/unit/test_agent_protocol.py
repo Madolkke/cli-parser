@@ -148,7 +148,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v29-joinmatches-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v30-candidate-protection-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -240,6 +240,9 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     # the placeholder as a parse failure or resubmit the same template.
     assert "只有最近一次提交的独立解析结果块会完整保留" in TTP_SYSTEM_PROMPT
     assert "不表示那次" in TTP_SYSTEM_PROMPT
+    assert "优先使用 method=\"table\"" in TTP_SYSTEM_PROMPT
+    assert "在同一个具名 group 中" in TTP_SYSTEM_PROMPT
+    assert "后续探索不得无证据地替换已有正确候选" in TTP_SYSTEM_PROMPT
     # required is the weakest measured schema dimension; force enumeration.
     assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
     assert "只有每行都有的列才是" in SCHEMA_SYSTEM_PROMPT
