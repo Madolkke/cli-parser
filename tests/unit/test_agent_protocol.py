@@ -148,7 +148,7 @@ def _contains_chinese(text: str) -> bool:
 
 
 def test_phase_prompts_are_independent_chinese_protocols() -> None:
-    assert PROMPT_VERSION == "ttp-generator-v27-test-budget-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v28-table-method-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -176,6 +176,13 @@ def test_phase_prompts_are_independent_chinese_protocols() -> None:
     # The test-call budget is enforced in code; the model must also be told,
     # since a budget it cannot see is one it hits blind.
     assert "最多只能调用 3 次" in TTP_SYSTEM_PROMPT
+    # Column-count variants need method="table" in one group. Sibling same-name
+    # groups scramble source order, and a default-method group silently drops
+    # rows that only match a later line.
+    assert 'method="table"' in TTP_SYSTEM_PROMPT
+    assert "sibling group" in TTP_SYSTEM_PROMPT
+    assert "group 只使用 name" not in TTP_SYSTEM_PROMPT
+    assert "或 group 变体" not in TTP_SYSTEM_PROMPT
     assert "三个工具之一" in TTP_SYSTEM_PROMPT
     assert "不会成为可 finish 的候选" in TTP_SYSTEM_PROMPT
     assert "ToolResult 已进入" in TTP_SYSTEM_PROMPT

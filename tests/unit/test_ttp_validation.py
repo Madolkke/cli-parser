@@ -1014,3 +1014,62 @@ def test_isolated_worker_applies_tightened_result_size_limit() -> None:
 
     assert result.records == []
     assert _codes(result.issues) == {"ttp.result_too_large"}
+
+
+def test_group_method_table_is_accepted_and_preserves_source_order() -> None:
+    """The prompt now steers toward method="table"; pin that it is legal.
+
+    Sibling same-name groups are parsed separately and appended per group, so
+    source order is lost. Multiple match lines in one default-method group lose
+    rows entirely, because a later line is a continuation of the current
+    record. method="table" is the only construct that does both correctly.
+    """
+    template = (
+        '<group name="rows*" method="table">\n'
+        "{{ port }} {{ status }} {{ speed }}\n"
+        "{{ port }} {{ status }}\n"
+        "</group>\n"
+    )
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+            "rows": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "port": {"type": "string"},
+                        "status": {"type": "string"},
+                        "speed": {"type": "string"},
+                    },
+                    "required": ["port", "status"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["rows"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(
+        template,
+        ["a1 up 1\na2 down\na3 up 3\n"],
+        schema,
+    )
+
+    assert result.valid, _codes(result.issues)
+    assert [row["port"] for row in result.records[0]["rows"]] == ["a1", "a2", "a3"]
+
+
+def test_unknown_group_method_is_rejected() -> None:
+    template = '<group name="rows*" method="bogus">\n{{ port }}\n</group>\n'
+
+    result = validate_ttp_template(
+        template,
+        ["a1\n"],
+        _array_schema("rows", "port"),
+    )
+
+    assert not result.valid
+    assert "ttp.invalid_group_method" in _codes(result.issues)

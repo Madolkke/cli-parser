@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v27-test-budget-zh-cn"
+PROMPT_VERSION = "ttp-generator-v28-table-method-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -141,8 +141,9 @@ submit_ttp_template 的 ToolResult 已进入后续
   ORPHRASE 才能匹配一个 token 或多个 token，只在字段本身确实可能包含空格且右侧
   列边界明确时使用，例如 Status 同时存在 `up` 和 `administratively down`。绝不要
   因为 token 含标点而把 WORD 改成 PHRASE。
-- 不要使用 condition 或任何未列出的变量属性。group 只使用 name；不要把 _start_、
-  _end_、_line_ 等行控制写成 group XML 属性。不要捕获 _line_ 等辅助字段来帮助
+- group 只允许两个 XML 属性：name 和 method。method 只能取 "group"（默认）或
+  "table"。不要使用 condition 或任何未列出的变量属性；不要把 _start_、_end_、
+  _line_ 等行控制写成 group XML 属性。不要捕获 _line_ 等辅助字段来帮助
   匹配，因为冻结 Schema 是封闭的，而且辅助整行会掩盖字段错位。
 - 每个数据捕获 pipeline 都以冻结 Schema 中当前路径的字段名开头。`_exact_` 和
   `_exact_space_` 是真实字段捕获的 modifier，不能作为独立变量名。需要
@@ -169,6 +170,18 @@ submit_ttp_template 的 ToolResult 已进入后续
   线后数出预期数据行；为第一条、中间一条和最后一条数据标出每个冻结字段所在物理
   列。模板必须按该物理顺序捕获字段，并为未建模列保留明确的 ignore 占位，不能跨列
   匹配。只由一条重复数据行构成的表格 group 不使用 _start_、_end_ 或 _line_。
+- 同一张表的不同列数变体必须写在同一个 group 内的多条匹配行里，并给该 group 加
+  method="table"。绝不要为同一张表写多个同名 sibling group：TTP 会分别解析每个
+  group 再按 group 顺序追加结果，源文件中的行顺序会被打乱，即使每个字段都正确，
+  records 仍与原文不一致。也不要在没有 method="table" 的普通 group 里写多条数据行
+  变体：普通 group 的后续匹配行是“续行”，只会并入当前 record，只匹配到后续行的
+  整行数据会被直接丢弃。例如：
+    <group name="interfaces*" method="table">
+    {{ ignore("[ \\t]*") }}{{ port }} {{ name | ORPHRASE }} {{ status }} {{ speed }}
+    {{ ignore("[ \\t]*") }}{{ port }} {{ status }} {{ speed }}
+    {{ ignore("[ \\t]*") }}{{ port }} {{ status }}
+    </group>
+  把列数最多的变体写在最前面，逐行按列数递减排列。
 - 表格 records 比预期恰好多一条，且第一条把表头标签当作字段值时，在一个真实具名
   捕获上添加判别条件，使表头整行不能匹配。优先排除不可能成为业务值的表头字面量，
   例如 `{{ interface | WORD | exclude("Interface") }}`；只有所有数据行确实共享稳定值
@@ -178,7 +191,8 @@ submit_ttp_template 的 ToolResult 已进入后续
   第一条和最后一条数据。
 - 当两个冻结字段之间存在可空或变长的未建模列时，不要用 `.*`、`\\S.*`、ROW、
   ORPHRASE 或其他贪心表达式直接跨过它；贪心回溯通常会把右侧最后一列误当成目标
-  字段。应按可见列边界设计不同的具名匹配行或 group 变体，并分别在各样例的代表行
+  字段。应按可见列边界在同一个 method="table" 的 group 内设计不同的具名匹配行，
+  并分别在各样例的代表行
   上逐字段模拟。无法证明字段来自正确列时，继续简化模板，不能靠宽泛正则碰运气。
 - 不得把表头或分隔线捕获为记录。不得把完整数据行放入 port、status、name 等具体
   字段。每个语义字段只捕获其对应列的细粒度值。
