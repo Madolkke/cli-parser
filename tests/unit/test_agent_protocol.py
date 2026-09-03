@@ -1192,8 +1192,8 @@ async def test_finish_generation_locks_the_selected_candidate() -> None:
     await submit_tool.call("first: {{ value }}")
     await submit_tool.call("second: {{ value }}")
 
-    assert session.validated_ttp_template == "second: {{ value }}"
-    assert session.records == ({"value": "candidate-2"},)
+    assert session.validated_ttp_template == "first: {{ value }}"
+    assert session.records == ({"value": "candidate-1"},)
     assert not session.succeeded
 
     assert _payload(await finish_tool.call())["accepted"] is True
@@ -1203,8 +1203,8 @@ async def test_finish_generation_locks_the_selected_candidate() -> None:
     assert repeated_finish["accepted"] is False
     assert repeated_finish["issues"][0]["code"] == "generation_already_succeeded"
     assert rejected_submit == "[]\n错误：模板未产生可用的匹配结果。"
-    assert session.validated_ttp_template == "second: {{ value }}"
-    assert session.records == ({"value": "candidate-2"},)
+    assert session.validated_ttp_template == "first: {{ value }}"
+    assert session.records == ({"value": "candidate-1"},)
     assert session.ttp_submissions == 2
 
 

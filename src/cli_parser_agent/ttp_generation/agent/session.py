@@ -121,6 +121,7 @@ class GenerationSession:
     last_ttp_template: str | None = None
     validated_ttp_template: str | None = None
     records: tuple[dict[str, Any], ...] = ()
+    validated_ttp_candidate_version: int = 0
     generation_finished: bool = False
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None

@@ -960,8 +960,19 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         self.session.last_issues = tuple(issues)
 
         if accepted:
-            self.session.validated_ttp_template = submission.ttp_template
-            self.session.records = records
+            if not self.session.has_validated_ttp_candidate:
+                self.session.validated_ttp_template = submission.ttp_template
+                self.session.records = records
+                self.session.validated_ttp_candidate_version += 1
+                candidate_updated = True
+            else:
+                # A validator can establish structural validity, but it cannot
+                # prove that a later valid candidate is semantically better
+                # than the one already retained. Keep the first valid candidate
+                # until the generation agent explicitly finishes it.
+                candidate_updated = False
+        else:
+            candidate_updated = False
 
         if (
             self.session.ttp_submissions >= self.session.max_ttp_submissions
@@ -977,6 +988,8 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             issues=issues,
             matched_records=outcome.records,
             validated_candidate_available=candidate_available,
+            candidate_updated=candidate_updated,
+            retained_candidate_version=self.session.validated_ttp_candidate_version,
             ttp_submission=self.session.ttp_submissions,
             remaining_submissions=max(
                 0,
