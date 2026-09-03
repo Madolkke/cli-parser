@@ -119,6 +119,10 @@ class GenerationPolicy(BaseModel):
     total_timeout_seconds: float = Field(default=900.0, gt=0)
     max_agent_rounds: int = Field(default=13, ge=1)
     max_ttp_submissions: int = Field(default=9, ge=1)
+    # Experimenting is cheap in isolation but was unbudgeted, so a phase could
+    # spend its entire round budget on test_ttp_template and never produce a
+    # candidate. Trials that pass use at most two; runaway ones use 25+.
+    max_ttp_test_calls: int = Field(default=3, ge=0)
     max_schema_no_tool_retries: int = Field(default=3, ge=0)
     max_ttp_no_tool_retries: int = Field(default=3, ge=0)
     ttp_validation_timeout_seconds: float = Field(default=20.0, gt=0)
@@ -157,6 +161,7 @@ class GenerationPolicy(BaseModel):
             "total_timeout_seconds": "CLI_PARSER_GENERATION_TIMEOUT_SECONDS",
             "max_agent_rounds": "CLI_PARSER_MAX_AGENT_ITERS",
             "max_ttp_submissions": "CLI_PARSER_MAX_TEMPLATE_SUBMISSIONS",
+            "max_ttp_test_calls": "CLI_PARSER_MAX_TTP_TEST_CALLS",
             "max_schema_no_tool_retries": "CLI_PARSER_MAX_SCHEMA_NO_TOOL_RETRIES",
             "max_ttp_no_tool_retries": "CLI_PARSER_MAX_TTP_NO_TOOL_RETRIES",
             "ttp_validation_timeout_seconds": (

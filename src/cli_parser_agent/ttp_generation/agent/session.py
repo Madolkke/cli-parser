@@ -88,6 +88,7 @@ class GenerationSession:
     template_validator: TemplateValidator
     ttp_test_validator: TtpTestValidator | None = None
     max_ttp_submissions: int = 9
+    max_ttp_test_calls: int = 3
     max_agent_rounds: int = 13
     max_schema_no_tool_retries: int = 3
     max_ttp_no_tool_retries: int = 3
@@ -101,6 +102,9 @@ class GenerationSession:
     schema_submissions: int = 0
     ttp_submissions: int = 0
     ttp_test_calls: int = 0
+    # Counted separately from ttp_test_calls so that metric stays "tests that
+    # actually ran" and a refused call never looks like an executed one.
+    ttp_test_calls_refused: int = 0
     agent_rounds: int = 0
     schema_agent_rounds: int = 0
     ttp_agent_rounds: int = 0
@@ -136,6 +140,8 @@ class GenerationSession:
             raise ValueError("command_outputs must contain at least one item")
         if self.max_ttp_submissions < 1:
             raise ValueError("max_ttp_submissions must be positive")
+        if self.max_ttp_test_calls < 0:
+            raise ValueError("max_ttp_test_calls must be non-negative")
         if self.max_agent_rounds < 1:
             raise ValueError("max_agent_rounds must be positive")
         if self.max_schema_no_tool_retries < 0:

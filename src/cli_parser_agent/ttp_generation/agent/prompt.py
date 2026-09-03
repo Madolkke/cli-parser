@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v26-test-then-submit-zh-cn"
+PROMPT_VERSION = "ttp-generator-v27-test-budget-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -91,6 +91,10 @@ test_ttp_template 返回的结果也使用独立的 parsed_record 块；块内�
 调用 submit_ttp_template 提交完整共享模板；如果已有通过验证的候选，则下一次回复
 应调用 finish_generation。禁止在一次 test_ttp_template 之后再次连续调用该工具，除非
 先通过 submit_ttp_template 提交过一个完整模板。每次回复仍只能调用一个工具。
+test_ttp_template 全阶段最多只能调用 3 次，用尽后该工具只会返回预算已用尽的错误，
+不再执行任何解析。它是稀缺的排错手段，不是逐步试探模板的方式：把它留给无法靠阅读
+原文和冻结 Schema 判断的单个语法疑问，其余情况直接 submit_ttp_template，用完整解析
+结果来复核。
 
 test_ttp_template 只用于解决一个明确的局部 TTP 语法或边界疑问，不是最终候选验收。
 不要把局部实验模板当作完整候选，也不要因为局部实验结果不理想而删除已经形成的

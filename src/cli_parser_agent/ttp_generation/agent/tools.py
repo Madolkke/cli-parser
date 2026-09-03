@@ -232,6 +232,11 @@ def _issue_code(issue: Any) -> str | None:
 
 def _brief_ttp_error(issues: Sequence[Any]) -> str:
     codes = {_issue_code(issue) for issue in issues}
+    if "ttp.test_call_limit" in codes:
+        return (
+            "错误：test_ttp_template 的调用次数已用尽。"
+            "请直接调用 submit_ttp_template 提交完整模板。"
+        )
     if any(code in _TTP_PARSE_FAILURE_CODES for code in codes):
         return "错误：模板解析未能完成。"
     if any(code in _TTP_SYNTAX_OR_SAFETY_CODES for code in codes):
@@ -516,6 +521,21 @@ class TestTtpTemplateTool(_SubmissionToolBase):
         ttp_template: str | None = None,
         **unexpected_arguments: Any,
     ) -> ToolChunk:
+        if self.session.ttp_test_calls >= self.session.max_ttp_test_calls:
+            # Refuse before incrementing, so ttp_test_calls stays "tests that
+            # ran". A refusal is a budget fact, not a tool error: raising
+            # ERROR here would inflate tool_result_errors and trip the
+            # submission_tool_call_invalid path in the runner.
+            self.session.ttp_test_calls_refused += 1
+            return _ttp_test_result_chunk(
+                issues=(
+                    {
+                        "code": "ttp.test_call_limit",
+                        "stage": "template",
+                        "message": "The test_ttp_template budget is exhausted.",
+                    },
+                ),
+            ).chunk
         self.session.ttp_test_calls += 1
         traced_input: dict[str, Any] = {
             "text": text,
@@ -1089,11 +1109,13 @@ def build_submission_tools(
     if phase == "schema":
         return [SubmitResultSchemaTool(session, progress)]
     if phase == "ttp":
-        return [
-            SubmitTtpTemplateTool(session, progress),
-            TestTtpTemplateTool(session, progress),
-            FinishGenerationTool(session, progress),
-        ]
+        tools: list[ToolBase] = [SubmitTtpTemplateTool(session, progress)]
+        # At zero the tool is withheld rather than offered and always refused,
+        # so the model is never shown an option it cannot use.
+        if session.max_ttp_test_calls > 0:
+            tools.append(TestTtpTemplateTool(session, progress))
+        tools.append(FinishGenerationTool(session, progress))
+        return tools
     raise ValueError(f"unsupported generation phase: {phase!r}")
 
 
