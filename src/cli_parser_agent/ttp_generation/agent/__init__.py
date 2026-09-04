@@ -6,7 +6,6 @@ from .builder import (
     build_ttp_task_message,
     estimate_initial_model_tokens,
 )
-from .middleware import LosslessContextMiddleware
 from .prompt import (
     PROMPT_VERSION,
     SCHEMA_NO_TOOL_RETRY_PROMPT,
@@ -48,7 +47,6 @@ __all__ = [
     "GenerationSession",
     "FinishGenerationTool",
     "FINISH_GENERATION_TOOL_NAME",
-    "LosslessContextMiddleware",
     "AgentRunOutcome",
     "PROMPT_VERSION",
     "SCHEMA_NO_TOOL_RETRY_PROMPT",

@@ -515,11 +515,8 @@ async def test_builder_sends_complete_extra_body_on_every_model_request(
         assert "tool_choice" not in request
 
 
-def test_retry_log_filter_scrubs_text_and_counts_against_current_session() -> None:
-    secret_provider_text = "provider echoed secret command output"
-    session = _build_session()
-
-    _build_test_agent("schema", session=session)
+def test_agentscope_retry_log_preserves_provider_details() -> None:
+    provider_text = "provider returned details"
 
     logger = logging.getLogger("as")
     record = logger.makeRecord(
@@ -528,36 +525,10 @@ def test_retry_log_filter_scrubs_text_and_counts_against_current_session() -> No
         __file__,
         0,
         "Attempt %d failed for model %s: %s. Retrying in %.1fs...",
-        (1, "test-model", secret_provider_text, 1.0),
+        (1, "test-model", provider_text, 1.0),
         None,
     )
+
     assert all(handler_filter.filter(record) for handler_filter in logger.filters)
-
-    assert session.model_retries_observed == 1
-    formatted = record.getMessage()
-    assert secret_provider_text not in formatted
-    assert formatted == "Model request failed; retrying without response details."
-
-
-def test_retry_log_filter_scopes_counting_to_the_most_recently_built_session() -> None:
-    first_session = _build_session()
-    second_session = _build_session()
-
-    _build_test_agent("schema", session=first_session)
-    _build_test_agent("schema", session=second_session)
-
-    logger = logging.getLogger("as")
-    record = logger.makeRecord(
-        logger.name,
-        logging.WARNING,
-        __file__,
-        0,
-        "Attempt %d failed for model %s: %s. Retrying in %.1fs...",
-        (1, "test-model", "irrelevant", 1.0),
-        None,
-    )
-    for handler_filter in logger.filters:
-        handler_filter.filter(record)
-
-    assert second_session.model_retries_observed == 1
-    assert first_session.model_retries_observed == 0
+    assert provider_text in record.getMessage()
+    assert record.getMessage().startswith("Attempt 1 failed for model test-model:")

@@ -24,7 +24,6 @@ from cli_parser_agent.ttp_generation.agent import (
     FinishGenerationTool,
     GenerationPhase,
     GenerationSession,
-    LosslessContextMiddleware,
     SchemaCandidate,
     SubmitResultSchemaTool,
     SubmitTtpTemplateTool,
@@ -1512,20 +1511,3 @@ def test_phase_toolkit_builder_returns_fixed_phase_tools(
     tools = build_submission_tools(session, phase)
 
     assert [type(tool) for tool in tools] == tool_types
-
-
-@pytest.mark.asyncio
-async def test_lossless_middleware_never_compresses_source_context() -> None:
-    called = False
-
-    async def next_handler(**kwargs: Any) -> None:
-        nonlocal called
-        called = True
-
-    await LosslessContextMiddleware().on_compress_context(
-        object(),
-        {},
-        next_handler,
-    )
-
-    assert called is False

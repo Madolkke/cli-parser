@@ -29,7 +29,6 @@ from agentscope.tool import Toolkit
 from cli_parser_agent.ttp_generation.agent import runner as runner_module
 from cli_parser_agent.ttp_generation.agent.prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
-    SUPERSEDED_TTP_RESULT_NOTICE,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
 from cli_parser_agent.ttp_generation.agent.runner import run_generation_phase
@@ -596,15 +595,8 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert session.records == ({"value": "one"},)
 
 
-async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() -> None:
-    """Only the newest submission keeps its records.
-
-    Every ``submit_ttp_template`` result carries a complete labelled result
-    block for each input and AgentScope only appends to the context, so
-    superseded results were re-sent on every later round (3.9k to 92k input
-    tokens observed). The review contract only requires the current result to
-    be complete.
-    """
+async def test_ttp_records_remain_complete_across_submissions() -> None:
+    """Every submission keeps its complete validator result in context."""
 
     records_by_submission = [
         ({"value": "first-attempt"},),
@@ -641,7 +633,7 @@ async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() 
         "ttp",
     )
 
-    # The final request shows two superseded results and one intact result.
+    # The final request preserves all three complete validator results.
     final_messages = model.calls[-1]["messages"]
     tool_results = [
         block
@@ -651,22 +643,13 @@ async def test_superseded_ttp_records_are_collapsed_but_the_newest_stays_full() 
         and block.name == SUBMIT_TEMPLATE_TOOL_NAME
     ]
     assert len(tool_results) == 3
-
-    for superseded in tool_results[:-1]:
-        assert len(superseded.output) == 1
-        assert superseded.output[0].text == SUPERSEDED_TTP_RESULT_NOTICE
-
-    newest = tool_results[-1]
-    assert _parse_record_blocks(newest.output[0].text) == [{"value": "one"}]
-
-    # Superseded bodies must not leak diagnostics, and source data is untouched.
-    collapsed_text = "\n".join(
-        block.output[0].text for block in tool_results[:-1]
-    )
-    for forbidden in ("accepted", "issues", "remaining_submissions", "next_action"):
-        assert forbidden not in collapsed_text
-    assert "first-attempt" not in collapsed_text
-    assert "second-attempt" not in collapsed_text
+    assert _parse_record_blocks(tool_results[0].output[0].text) == [
+        {"value": "first-attempt"},
+    ]
+    assert _parse_record_blocks(tool_results[1].output[0].text) == [
+        {"value": "second-attempt"},
+    ]
+    assert _parse_record_blocks(tool_results[2].output[0].text) == [{"value": "one"}]
 
 
 async def test_token_counters_accumulate_from_model_call_end_events() -> None:
