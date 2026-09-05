@@ -126,7 +126,18 @@ class GenerationSession:
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None
     model_retries_observed: int = 0
-    # Token accounting observed from ModelCallEndEvent. ``input_tokens_last``
+    stream_enabled: bool = False
+    # Streaming observations are populated from AgentScope model-call and delta
+    # events. Token accounting below uses the same ModelCallEndEvent source.
+    stream_first_delta_seconds: float | None = None
+    stream_model_call_elapsed_seconds: float = 0.0
+    stream_chunk_count: int = 0
+    stream_tool_call_delta_count: int = 0
+    stream_usage_seen: bool = False
+    _model_call_started_at: float | None = None
+    _model_call_first_delta_at: float | None = None
+    _model_call_chunks: int = 0
+    _model_call_tool_deltas: int = 0
     # is the context size of the final model call, which is the number the
     # superseded-result collapse in the runner exists to hold down; keeping it
     # local means measuring context growth no longer requires reading Laminar.

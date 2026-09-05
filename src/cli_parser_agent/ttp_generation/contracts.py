@@ -170,6 +170,12 @@ class GenerationMetadata(ContractModel):
     termination_reason: str | None = Field(default=None, max_length=128)
     fault_domain: Literal["agent", "model", "budget"] | None = None
     model_retries_observed: int = Field(default=0, ge=0)
+    stream_enabled: bool = False
+    stream_first_delta_seconds: float | None = Field(default=None, ge=0.0)
+    stream_model_call_elapsed_seconds: float = Field(default=0.0, ge=0.0)
+    stream_chunk_count: int = Field(default=0, ge=0)
+    stream_tool_call_delta_count: int = Field(default=0, ge=0)
+    stream_usage_seen: bool = False
     input_tokens_total: int = Field(default=0, ge=0)
     output_tokens_total: int = Field(default=0, ge=0)
     input_tokens_last: int = Field(default=0, ge=0)

@@ -1805,6 +1805,11 @@ def score_ttp_template_output(
         "ttp_no_tool_responses": 0.0,
         "ttp_no_tool_retries": 0.0,
         "model_retries_observed": 0.0,
+        "stream_first_delta_seconds": 0.0,
+        "stream_model_call_elapsed_seconds": 0.0,
+        "stream_chunk_count": 0.0,
+        "stream_tool_call_delta_count": 0.0,
+        "stream_usage_seen": 0.0,
         "input_tokens_total": 0.0,
         "output_tokens_total": 0.0,
         "input_tokens_last": 0.0,
@@ -1888,6 +1893,11 @@ def score_ttp_template_output(
         "ttp_no_tool_responses",
         "ttp_no_tool_retries",
         "model_retries_observed",
+        "stream_first_delta_seconds",
+        "stream_model_call_elapsed_seconds",
+        "stream_chunk_count",
+        "stream_tool_call_delta_count",
+        "stream_usage_seen",
         "input_tokens_total",
         "output_tokens_total",
         "input_tokens_last",
@@ -2387,6 +2397,11 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "schema_no_tool_retries": 0.0,
         "ttp_no_tool_retries": 0.0,
         "model_retries_observed": 0.0,
+        "stream_first_delta_seconds": 0.0,
+        "stream_model_call_elapsed_seconds": 0.0,
+        "stream_chunk_count": 0.0,
+        "stream_tool_call_delta_count": 0.0,
+        "stream_usage_seen": 0.0,
     }
     if not isinstance(output, Mapping) or not isinstance(target, Mapping):
         return zero
@@ -2549,6 +2564,11 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "schema_no_tool_retries",
         "ttp_no_tool_retries",
         "model_retries_observed",
+        "stream_first_delta_seconds",
+        "stream_model_call_elapsed_seconds",
+        "stream_chunk_count",
+        "stream_tool_call_delta_count",
+        "stream_usage_seen",
     ):
         value = metadata.get(name, 0)
         if isinstance(value, int | float) and not isinstance(value, bool):

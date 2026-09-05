@@ -622,6 +622,7 @@ class _GenerationWorkflow:
             # A round that cannot fit one model call cannot finish inside the
             # deadline; starting it only overruns the request.
             min_round_seconds=settings.model_timeout_seconds,
+            stream_enabled=settings.stream,
         )
 
     def _validate_schema_candidate(
@@ -764,6 +765,14 @@ class _GenerationWorkflow:
             termination_reason=termination_reason,
             fault_domain=_classify_fault_domain(termination_reason),
             model_retries_observed=self.session.model_retries_observed,
+            stream_enabled=self.session.stream_enabled,
+            stream_first_delta_seconds=self.session.stream_first_delta_seconds,
+            stream_model_call_elapsed_seconds=(
+                self.session.stream_model_call_elapsed_seconds
+            ),
+            stream_chunk_count=self.session.stream_chunk_count,
+            stream_tool_call_delta_count=self.session.stream_tool_call_delta_count,
+            stream_usage_seen=self.session.stream_usage_seen,
             input_tokens_total=self.session.input_tokens_total,
             output_tokens_total=self.session.output_tokens_total,
             input_tokens_last=self.session.input_tokens_last,

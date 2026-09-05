@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -15,10 +16,13 @@ from agentscope.event import (
     ModelCallStartEvent,
     ReplyEndEvent,
     ReplyStartEvent,
+    TextBlockDeltaEvent,
     TextBlockEndEvent,
     TextBlockStartEvent,
+    ThinkingBlockDeltaEvent,
     ThinkingBlockEndEvent,
     ThinkingBlockStartEvent,
+    ToolCallDeltaEvent,
     ToolCallEndEvent,
     ToolCallStartEvent,
     ToolResultEndEvent,
@@ -291,6 +295,9 @@ async def run_generation_phase(
                     session.max_agent_rounds - session.agent_rounds,
                 ),
                 "remaining_seconds": remaining_seconds(),
+                "stream_enabled": session.stream_enabled,
+                "stream_chunk_count": session._model_call_chunks,
+                "stream_tool_call_delta_count": session._model_call_tool_deltas,
             },
         )
         round_span_manager.__exit__(None, None, None)
@@ -342,9 +349,28 @@ async def run_generation_phase(
                         ),
                     )
 
+                if session.stream_enabled and isinstance(
+                    event,
+                    TextBlockDeltaEvent | ThinkingBlockDeltaEvent | ToolCallDeltaEvent,
+                ):
+                    now = time.monotonic()
+                    if session._model_call_first_delta_at is None:
+                        session._model_call_first_delta_at = now
+                        if session._model_call_started_at is not None:
+                            first_delta = now - session._model_call_started_at
+                            if session.stream_first_delta_seconds is None:
+                                session.stream_first_delta_seconds = first_delta
+                    session._model_call_chunks += 1
+                    if isinstance(event, ToolCallDeltaEvent):
+                        session._model_call_tool_deltas += 1
+
                 if isinstance(event, ModelCallStartEvent):
                     close_round()
                     session.record_agent_round(phase)
+                    session._model_call_started_at = time.monotonic()
+                    session._model_call_first_delta_at = None
+                    session._model_call_chunks = 0
+                    session._model_call_tool_deltas = 0
                     round_span_attributes = {
                         "phase": phase,
                         "round_index": session.agent_rounds,
@@ -389,6 +415,23 @@ async def run_generation_phase(
                         event.finished_reason == FinishedReason.INTERRUPTED
                     )
                     session.model_calls_observed += 1
+                    if session._model_call_started_at is not None:
+                        session.stream_model_call_elapsed_seconds += (
+                            time.monotonic() - session._model_call_started_at
+                        )
+                    session.stream_chunk_count += session._model_call_chunks
+                    session.stream_tool_call_delta_count += (
+                        session._model_call_tool_deltas
+                    )
+                    session._model_call_started_at = None
+                    session._model_call_first_delta_at = None
+                    session._model_call_chunks = 0
+                    session._model_call_tool_deltas = 0
+                    if (
+                        session.stream_enabled
+                        and (event.input_tokens or event.output_tokens)
+                    ):
+                        session.stream_usage_seen = True
                     if event.input_tokens:
                         session.input_tokens_total += event.input_tokens
                         session.input_tokens_last = event.input_tokens

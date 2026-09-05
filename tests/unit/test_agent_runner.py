@@ -169,6 +169,7 @@ def _session(
     max_ttp_no_tool_retries: int = 3,
     max_ttp_submissions: int = 9,
     max_ttp_test_calls: int = 3,
+    stream_enabled: bool = False,
 ) -> GenerationSession:
     return GenerationSession(
         command_outputs=("value: one",),
@@ -186,6 +187,7 @@ def _session(
         max_ttp_no_tool_retries=max_ttp_no_tool_retries,
         max_ttp_submissions=max_ttp_submissions,
         max_ttp_test_calls=max_ttp_test_calls,
+        stream_enabled=stream_enabled,
     )
 
 
@@ -660,7 +662,7 @@ async def test_token_counters_accumulate_from_model_call_end_events() -> None:
     context growth means querying Laminar by hand.
     """
     model = _ScriptedModel([_template_call(), _finish_call()])
-    session = _session(max_agent_rounds=3)
+    session = _session(max_agent_rounds=3, stream_enabled=True)
     _freeze_schema(session)
     agent = _agent(model, session, "ttp")
 
@@ -676,6 +678,10 @@ async def test_token_counters_accumulate_from_model_call_end_events() -> None:
     assert session.input_tokens_total == 22
     assert session.output_tokens_total == 14
     assert session.input_tokens_last == 11
+    assert session.stream_first_delta_seconds is not None
+    assert session.stream_chunk_count >= 1
+    assert session.stream_tool_call_delta_count >= 0
+    assert session.stream_usage_seen
 
 
 async def test_valid_template_submission_waits_for_explicit_finish() -> None:
