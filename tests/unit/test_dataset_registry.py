@@ -378,35 +378,26 @@ def _counts(**cases: tuple[int, int]) -> dict[str, dict[str, int]]:
 
 
 def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
-    """The trace must never carry a template, record, or command output.
+    from agentscope.event import CustomEvent, ModelCallEndEvent
 
-    Sensitivity is decided by the emitter; the tracer trusts that flag and
-    additionally keeps only scalars, so a future non-sensitive event carrying a
-    nested payload cannot leak it into the artifact.
-    """
-    runner = _load_runner()
-    tracer = runner._RoundTracer()
-
-    class _Event:
-        def __init__(self, **fields: object) -> None:
-            self.__dict__.update(fields)
-
+    tracer = _load_runner()._RoundTracer()
     tracer(
-        _Event(
+        CustomEvent(
             metadata={"sensitive": True, "sequence": 1, "phase": "ttp"},
             name="cli_parser.untrusted",
             value={"command_output": "secret"},
         ),
     )
     tracer(
-        _Event(
+        ModelCallEndEvent(
             metadata={"sensitive": False, "sequence": 2, "phase": "ttp"},
+            reply_id="reply",
             input_tokens=41233,
             output_tokens=812,
         ),
     )
     tracer(
-        _Event(
+        CustomEvent(
             metadata={"sensitive": False, "sequence": 3, "phase": "ttp"},
             name="cli_parser.ttp.submission",
             value={
@@ -429,13 +420,13 @@ def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
 
 
 def test_round_tracer_collects_execution_facts_without_recording_rows() -> None:
-    from types import SimpleNamespace
+    from agentscope.event import CustomEvent
 
     runner = _load_runner()
     tracer = runner._RoundTracer(record_rows=False)
     other = runner._RoundTracer(record_rows=False)
     tracer(
-        SimpleNamespace(
+        CustomEvent(
             metadata={"sensitive": False},
             name="cli_parser.generation.execution_facts",
             value={
@@ -450,7 +441,7 @@ def test_round_tracer_collects_execution_facts_without_recording_rows() -> None:
     assert not tracer.rows
     assert not other.execution_facts
     tracer(
-        SimpleNamespace(
+        CustomEvent(
             metadata={"sensitive": True},
             name="cli_parser.generation.execution_facts",
             value={"schema_frozen": False},
@@ -488,11 +479,11 @@ async def test_runner_collects_facts_without_rows_on_schema_rejection() -> None:
 
 
 def test_round_tracer_keeps_attempt_diagnostics_without_exception_text() -> None:
-    from types import SimpleNamespace
+    from agentscope.event import CustomEvent
 
     tracer = _load_runner()._RoundTracer()
     tracer(
-        SimpleNamespace(
+        CustomEvent(
             metadata={"sensitive": False, "phase": "ttp"},
             name="cli_parser.model.attempt",
             value={
@@ -713,3 +704,76 @@ def test_config_fingerprint_covers_retry_tls_and_extra_body(
         altered = json.loads(json.dumps(configuration))
         altered["model"][key] = value
         assert runner._fingerprint(altered) != fingerprint
+
+
+def test_round_tracer_redacts_unknown_tool_names_and_reason_values() -> None:
+    from agentscope.event import ModelCallEndEvent, ToolCallStartEvent
+
+    tracer = _load_runner()._RoundTracer()
+    metadata = {"sensitive": False, "phase": "ttp"}
+    for name in (
+        "submit_result_schema",
+        "submit_ttp_template",
+        "test_ttp_template",
+        "finish_generation",
+        "secret input in tool name",
+    ):
+        tracer(
+            ToolCallStartEvent(
+                metadata=metadata,
+                reply_id="reply",
+                tool_call_id="call",
+                tool_call_name=name,
+            )
+        )
+    for reason in ("completed", "interrupted", "secret provider reason"):
+        event = ModelCallEndEvent(
+            metadata=metadata,
+            reply_id="reply",
+            input_tokens=1,
+            output_tokens=2,
+        ).model_copy(update={"finished_reason": reason})
+        tracer(event)
+    assert [row["name"] for row in tracer.rows[:5]] == [
+        "submit_result_schema",
+        "submit_ttp_template",
+        "test_ttp_template",
+        "finish_generation",
+        "unknown_tool",
+    ]
+    assert [row.get("finished_reason") for row in tracer.rows[5:]] == [
+        "completed",
+        "interrupted",
+        None,
+    ]
+    assert "secret" not in json.dumps(tracer.rows)
+
+
+def test_round_tracer_rejects_unknown_event_classes() -> None:
+    from agentscope.event import CustomEvent, ReplyStartEvent, TextBlockDeltaEvent
+
+    tracer = _load_runner()._RoundTracer()
+    metadata = {"sensitive": False, "phase": "ttp"}
+    tracer(
+        TextBlockDeltaEvent(
+            metadata=metadata, reply_id="reply", block_id="block", delta="secret"
+        )
+    )
+    tracer(
+        CustomEvent(
+            metadata=metadata, name="secret unknown event", value={"status": "secret"}
+        )
+    )
+    assert tracer.rows == []
+    tracer(
+        ReplyStartEvent(
+            metadata=metadata,
+            session_id="session",
+            reply_id="reply",
+            name="secret agent name",
+        )
+    )
+    assert len(tracer.rows) == 1
+    assert tracer.rows[0]["event"] == "ReplyStartEvent"
+    assert "name" not in tracer.rows[0]
+    assert "secret" not in json.dumps(tracer.rows)

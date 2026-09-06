@@ -53,3 +53,5 @@ expected records 的临时排查可以使用专用单次 TTP 诊断脚本，但�
 strict TTP-only 统计；缺少默认回显的完整数据集在该范围会作为 pending。`inputs-only` 和
 template 阶段同样会作为 pending 或 smoke 结果单独报告。标签可用
 `--tag` 过滤，未指定过滤条件时运行 TOML 注册表中的全部数据集。
+
+逐事件明细只接受固定事件类型与项目事件名；工具名限于四个注册工具，未知值统一为 `unknown_tool`，完成原因限定为框架枚举。这个本地投影不会改变 Agent 决策或工具行为。

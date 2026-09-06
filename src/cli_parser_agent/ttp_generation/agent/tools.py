@@ -1085,8 +1085,9 @@ class FinishGenerationTool(_SubmissionToolBase):
 
     name = FINISH_GENERATION_TOOL_NAME
     description = (
-        "确认最近一次通过验证的 TTP 模板及其 capture 已满足要求，并结束生成。"
-        "只有在 submit_ttp_template 已保存有效候选后才能调用；本工具不接收参数。"
+        "在 submit_ttp_template 返回后，逐输入复核匹配结果符合冻结 Schema "
+        "且忠实于原文；"
+        "确认满意后调用本工具结束生成。本工具不接收参数。"
     )
     input_schema = FinishGenerationInput.model_json_schema()
 

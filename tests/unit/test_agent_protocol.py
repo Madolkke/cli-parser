@@ -185,7 +185,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-    assert PROMPT_VERSION == "ttp-generator-v30-candidate-protection-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v31-section-boundaries-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -251,8 +251,12 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     assert "独立的 `<parsed_record>` 块" in TTP_SYSTEM_PROMPT
     assert "不要把不同块拼成一个业务数组" in TTP_SYSTEM_PROMPT
     assert "input_index" in TTP_SYSTEM_PROMPT
-    assert "accepted、issues" in TTP_SYSTEM_PROMPT
+    assert "accepted" not in TTP_SYSTEM_PROMPT
+    assert "issues" not in TTP_SYSTEM_PROMPT
+    assert "details." not in TTP_SYSTEM_PROMPT
     assert "存在结果块不代表候选已通过内部验收" in TTP_SYSTEM_PROMPT
+    assert "每次 submit_ttp_template 反馈中的" in TTP_SYSTEM_PROMPT
+    assert "每次工具反馈中的" not in TTP_SYSTEM_PROMPT
     assert "预期数据行数完全相等" in TTP_SYSTEM_PROMPT
     assert "不能把末列 Type 当作中间 Status" in TTP_SYSTEM_PROMPT
     assert "不要使用 condition" in TTP_SYSTEM_PROMPT
@@ -280,6 +284,13 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     assert '优先使用 method="table"' in TTP_SYSTEM_PROMPT
     assert "在同一个具名 group 中" in TTP_SYSTEM_PROMPT
     assert "后续探索不得无证据地替换已有正确候选" in TTP_SYSTEM_PROMPT
+    assert "已有完整共享模板时直接 submit_ttp_template" in TTP_SYSTEM_PROMPT
+    assert "不要先用全文和相同" in TTP_SYSTEM_PROMPT
+    assert "不能为排版额外缩进" in TTP_SYSTEM_PROMPT
+    assert "结构性的 <template>、<group>" in TTP_SYSTEM_PROMPT
+    assert "章节唯一的完整标题" in TTP_SYSTEM_PROMPT
+    assert "独立的 `_start_` 不能用来按标题限定章节" in TTP_SYSTEM_PROMPT
+    assert "此标题规则只用于明确的章节边界" in TTP_SYSTEM_PROMPT
     # required is the weakest measured schema dimension; force enumeration.
     assert "required 的判定必须逐实例枚举" in SCHEMA_SYSTEM_PROMPT
     assert "只有每行都有的列才是" in SCHEMA_SYSTEM_PROMPT
@@ -293,15 +304,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     for token in schema_tokens:
         assert token in SCHEMA_SYSTEM_PROMPT
 
-    ttp_tokens = (
-        "TTP",
-        "XML",
-        "forbidden_tag",
-        "invalid_xml",
-        "unsafe_variable_attribute",
-        "ttp.invalid_ignore_syntax",
-        "replace_with_ignore_call",
-    )
+    ttp_tokens = ("TTP", "XML", "ignore", "additionalProperties")
     for token in ttp_tokens:
         assert token in TTP_SYSTEM_PROMPT
     assert "ttp.no_match" not in TTP_SYSTEM_PROMPT
@@ -350,6 +353,9 @@ def test_submission_tool_contracts_are_chinese_with_stable_names() -> None:
     assert finish_contract["properties"] == {}
     assert finish_contract["additionalProperties"] is False
     assert _contains_chinese(FinishGenerationTool.description)
+    assert "逐输入复核匹配结果" in FinishGenerationTool.description
+    assert "通过验证" not in FinishGenerationTool.description
+    assert "已保存有效候选" not in FinishGenerationTool.description
 
 
 def test_phase_task_prompts_round_trip_only_their_inputs() -> None:
@@ -386,6 +392,8 @@ def test_phase_task_prompts_round_trip_only_their_inputs() -> None:
     assert json.loads(serialized_schema) == schema
     assert "evidence" not in ttp_prompt
     assert "assumptions" not in ttp_prompt
+    assert "通过候选" not in ttp_prompt
+    assert "匹配结果符合冻结 Schema" in ttp_prompt
 
 
 @pytest.mark.asyncio

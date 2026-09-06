@@ -21,6 +21,7 @@ if str(SCRIPT_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIRECTORY))
 
 import _agent_run_support as _run_support  # noqa: E402
+from agentscope import event as agent_events  # noqa: E402
 
 from cli_parser_agent import (  # noqa: E402
     GenerationPolicy,
@@ -664,6 +665,34 @@ async def _run_ttp(
 class _RoundTracer:
     """Always collect execution facts; optionally retain allowlisted event rows."""
 
+    _EVENT_TYPES = frozenset(
+        {
+            agent_events.ReplyStartEvent,
+            agent_events.ReplyEndEvent,
+            agent_events.ModelCallStartEvent,
+            agent_events.ModelCallEndEvent,
+            agent_events.TextBlockStartEvent,
+            agent_events.TextBlockEndEvent,
+            agent_events.ThinkingBlockStartEvent,
+            agent_events.ThinkingBlockEndEvent,
+            agent_events.DataBlockStartEvent,
+            agent_events.DataBlockEndEvent,
+            agent_events.ToolCallStartEvent,
+            agent_events.ToolCallEndEvent,
+            agent_events.ToolResultStartEvent,
+            agent_events.ToolResultEndEvent,
+            agent_events.ExceedMaxItersEvent,
+        }
+    )
+    _TOOL_NAMES = frozenset(
+        {
+            "submit_result_schema",
+            "submit_ttp_template",
+            "test_ttp_template",
+            "finish_generation",
+        }
+    )
+    _FINISHED_REASONS = frozenset({"completed", "interrupted", "exceed_max_iters"})
     _VALUE_FIELDS = frozenset(
         {
             "submission_index",
@@ -722,7 +751,10 @@ class _RoundTracer:
         metadata = getattr(event, "metadata", None) or {}
         if metadata.get("sensitive") is not False:
             return
-        custom_name = getattr(event, "name", None)
+        is_custom = type(event) is agent_events.CustomEvent
+        if not is_custom and type(event) not in self._EVENT_TYPES:
+            return
+        custom_name = event.name if is_custom else None
         value = getattr(event, "value", None)
         if custom_name == "cli_parser.generation.execution_facts":
             self.execution_facts = project_execution_facts(value)
@@ -737,15 +769,22 @@ class _RoundTracer:
             "elapsed_seconds": metadata.get("elapsed_seconds"),
             "event": type(event).__name__,
         }
-        for field in ("finished_reason", "input_tokens", "output_tokens"):
+        reason = getattr(event, "finished_reason", None)
+        if isinstance(reason, str) and reason in self._FINISHED_REASONS:
+            row["finished_reason"] = reason
+        for field in ("input_tokens", "output_tokens"):
             field_value = getattr(event, field, None)
-            if field_value is not None:
-                row[field] = (
-                    field_value if isinstance(field_value, int) else str(field_value)
-                )
-        name = getattr(event, "tool_call_name", None) or getattr(event, "name", None)
+            if isinstance(field_value, int) and not isinstance(field_value, bool):
+                row[field] = field_value
+        name = getattr(event, "tool_call_name", None)
         if name is not None:
-            row["name"] = str(name)
+            row["name"] = (
+                name
+                if isinstance(name, str) and name in self._TOOL_NAMES
+                else "unknown_tool"
+            )
+        elif custom_name is not None:
+            row["name"] = custom_name
         if isinstance(value, Mapping):
             row["value"] = {
                 key: item

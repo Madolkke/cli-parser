@@ -250,6 +250,7 @@ async def test_phase_agents_have_independent_runtime_components() -> None:
             TTP_SYSTEM_PROMPT,
         ),
     ],
+    ids=["schema", "ttp"],
 )
 async def test_initial_token_estimate_counts_phase_tools(
     monkeypatch: pytest.MonkeyPatch,

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import keyword
+import re
 import time
 from pathlib import Path
 
@@ -53,6 +54,7 @@ def test_parse_ttp_template_rejects_blank_and_oversized_test_input() -> None:
     assert [issue.code for issue in oversized_utf8.issues] == [
         "ttp.test_input_too_large",
     ]
+
 
 _PYTHON_SNAKE_CASE_KEYWORDS = tuple(
     field_name for field_name in keyword.kwlist if field_name.islower()
@@ -489,12 +491,10 @@ def test_real_linux_outputs_are_fully_parsed_with_ignore_calls() -> None:
 def test_real_inventory_outputs_capture_every_serial_number() -> None:
     outputs = [
         "\n".join(
-            f'PID: module-{index}, VID: 1.0, SN: SN{index:04d}'
-            for index in range(1, 5)
+            f"PID: module-{index}, VID: 1.0, SN: SN{index:04d}" for index in range(1, 5)
         ),
         "\n".join(
-            f'PID: module-{index}, VID: 1.0, SN: SN{index:04d}'
-            for index in range(1, 7)
+            f"PID: module-{index}, VID: 1.0, SN: SN{index:04d}" for index in range(1, 7)
         ),
     ]
     template = """\
@@ -518,7 +518,7 @@ def test_delimiter_bounded_regex_captures_empty_inventory_pid() -> None:
     source = "\n".join(
         (
             f'NAME: "component {index}", DESCR: "description {index}"\n'
-            f'PID: {pid} , VID: 0xFF, SN: SN{index:04d}'
+            f"PID: {pid} , VID: 0xFF, SN: SN{index:04d}"
         )
         for index, pid in enumerate(("", "module-a", "module-b", "module-c"), start=1)
     )
@@ -1076,6 +1076,298 @@ def test_unknown_group_method_is_rejected() -> None:
     assert "ttp.invalid_group_method" in _codes(result.issues)
 
 
+def _prompt_template(marker: str) -> str:
+    templates = re.findall(r"```(?:xml|text)\n(.*?)\n```", TTP_SYSTEM_PROMPT, re.DOTALL)
+    matches = [template for template in templates if marker in template]
+    assert len(matches) == 1
+    return matches[0] + "\n"
+
+
+def test_prompt_basic_array_recipe_preserves_each_row() -> None:
+    template = _prompt_template('<group name="interfaces*">')
+    schema = {
+        "type": "object",
+        "properties": {
+            "interfaces": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        key: {"type": "string"} for key in ("port", "name", "status")
+                    },
+                    "required": ["port", "name", "status"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["interfaces"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(
+        template,
+        ["a1  core switch  up\na2  edge  down\n"],
+        schema,
+    )
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {
+            "interfaces": [
+                {"port": "a1", "name": "core switch", "status": "up"},
+                {"port": "a2", "name": "edge", "status": "down"},
+            ]
+        }
+    ]
+
+
+def test_prompt_ignore_recipe_skips_multiple_tokens_without_extra_fields() -> None:
+    template = _prompt_template("{{ ignore(DIGIT) }}:")
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"} for key in ("name", "mtu", "state")},
+        "required": ["name", "mtu", "state"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(
+        template,
+        ["2: eth0: <BROADCAST MULTICAST>\nmtu 1500 qdisc fq state UP\n"],
+        schema,
+    )
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [{"name": "eth0", "mtu": "1500", "state": "UP"}]
+
+
+def test_prompt_section_headings_keep_same_labels_in_their_own_sections() -> None:
+    template = _prompt_template('<group name="primary">')
+    counter_schema = {
+        "type": "object",
+        "properties": {
+            "packets": {"type": "string"},
+            "errors": {"type": "string"},
+        },
+        "required": ["packets", "errors"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"primary": counter_schema, "backup": counter_schema},
+        "required": ["primary", "backup"],
+        "additionalProperties": False,
+    }
+    sources = [
+        "Primary counters:\nPackets: 120\nErrors: 2\n"
+        "Backup counters:\nPackets: 85\nErrors: 0\n",
+        "Backup counters:\nPackets: 300\nErrors: 7\n"
+        "Primary counters:\nPackets: 410\nErrors: 9\n",
+    ]
+
+    result = validate_ttp_template(template, sources, schema)
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {
+            "primary": {"packets": "120", "errors": "2"},
+            "backup": {"packets": "85", "errors": "0"},
+        },
+        {
+            "primary": {"packets": "410", "errors": "9"},
+            "backup": {"packets": "300", "errors": "7"},
+        },
+    ]
+
+
+def test_prompt_section_start_alone_can_capture_a_later_optional_field() -> None:
+    """Pin the documented limit instead of promising a false section boundary."""
+    template = _prompt_template('<group name="primary">').replace(
+        "Errors: {{ errors | DIGIT }}\n",
+        "Errors: {{ errors | DIGIT }}\nLabel: {{ label | WORD }}\n",
+    )
+    counter_schema = {
+        "type": "object",
+        "properties": {
+            "packets": {"type": "string"},
+            "errors": {"type": "string"},
+            "label": {"type": "string"},
+        },
+        "required": ["packets", "errors"],
+        "additionalProperties": False,
+    }
+    schema = {
+        "type": "object",
+        "properties": {"primary": counter_schema, "backup": counter_schema},
+        "required": ["primary", "backup"],
+        "additionalProperties": False,
+    }
+    sources = [
+        "Primary counters:\nPackets: 120\nErrors: 2\nLabel: active\n"
+        "Backup counters:\nPackets: 85\nErrors: 0\n",
+        "Backup counters:\nPackets: 300\nErrors: 7\nLabel: standby\n"
+        "Primary counters:\nPackets: 410\nErrors: 9\n",
+        "Primary counters:\nPackets: 120\nErrors: 2\n"
+        "Backup counters:\nPackets: 85\nErrors: 0\nLabel: standby\n",
+        "Backup counters:\nPackets: 300\nErrors: 7\n"
+        "Primary counters:\nPackets: 410\nErrors: 9\nLabel: active\n",
+    ]
+
+    result = validate_ttp_template(template, sources, schema)
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {
+            "primary": {"packets": "120", "errors": "2", "label": "active"},
+            "backup": {"packets": "85", "errors": "0"},
+        },
+        {
+            "primary": {"packets": "410", "errors": "9"},
+            "backup": {"packets": "300", "errors": "7", "label": "standby"},
+        },
+        {
+            "primary": {"packets": "120", "errors": "2", "label": "standby"},
+            "backup": {"packets": "85", "errors": "0", "label": "standby"},
+        },
+        {
+            "primary": {"packets": "410", "errors": "9", "label": "active"},
+            "backup": {"packets": "300", "errors": "7", "label": "active"},
+        },
+    ]
+    assert "仅起始标题不足以防止从后续章节补捕缺失字段" in TTP_SYSTEM_PROMPT
+
+
+def test_prompt_structure_tags_and_literal_xml_have_distinct_roles() -> None:
+    template = _prompt_template('<group name="link">')
+    schema = {
+        "type": "object",
+        "properties": {
+            "link": {
+                "type": "object",
+                "properties": {
+                    "state": {"type": "string"},
+                    "status": {"type": "string"},
+                },
+                "required": ["state", "status"],
+                "additionalProperties": False,
+            },
+        },
+        "required": ["link"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(template, ["State: <up> & ready\n"], schema)
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [{"link": {"state": "up", "status": "ready"}}]
+
+
+def test_prompt_table_variants_preserve_indented_row_order_and_exclude_header() -> None:
+    template = _prompt_template('<group name="interfaces*" method="table">')
+    schema = {
+        "type": "object",
+        "properties": {
+            "interfaces": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        key: {"type": "string"}
+                        for key in ("port", "name", "status", "speed")
+                    },
+                    "required": ["port", "status"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["interfaces"],
+        "additionalProperties": False,
+    }
+    source = (
+        "Port Name Status Speed\n"
+        "  a1 core switch up 1000\n"
+        "\ta2 down 100\n"
+        "    a3 up\n"
+        "a4 edge up 10\n"
+    )
+
+    result = validate_ttp_template(template, [source], schema)
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {
+            "interfaces": [
+                {"port": "a1", "name": "core switch", "status": "up", "speed": "1000"},
+                {"port": "a2", "status": "down", "speed": "100"},
+                {"port": "a3", "status": "up"},
+                {"port": "a4", "name": "edge", "status": "up", "speed": "10"},
+            ]
+        }
+    ]
+
+
+def test_prompt_empty_field_recipe_keeps_literal_empty_strings() -> None:
+    template = _prompt_template("PID: {{ pid")
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"} for key in ("pid", "vid", "sn")},
+        "required": ["pid", "vid", "sn"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(
+        template,
+        ["PID:  ,\nVID: V1, SN: ABC\n", "PID: PID123  ,\nVID: V2, SN: DEF\n"],
+        schema,
+    )
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {"pid": "", "vid": "V1", "sn": "ABC"},
+        {"pid": "PID123", "vid": "V2", "sn": "DEF"},
+    ]
+
+
+def test_prompt_mixed_root_recipe_keeps_scalar_and_nested_array() -> None:
+    template = _prompt_template("Routing Tables: {{ routing_table_type")
+    schema = {
+        "type": "object",
+        "properties": {
+            "routing_table_type": {"type": "string"},
+            "routes": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "destination_mask": {"type": "string"},
+                        "protocol": {"type": "string"},
+                    },
+                    "required": ["destination_mask", "protocol"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["routing_table_type", "routes"],
+        "additionalProperties": False,
+    }
+
+    result = validate_ttp_template(
+        template,
+        ["Routing Tables: IPv4\n  10.0.0.0/24 OSPF\n\t192.0.2.0/24 Static\n"],
+        schema,
+    )
+
+    assert result.valid, _codes(result.issues)
+    assert result.records == [
+        {
+            "routing_table_type": "IPv4",
+            "routes": [
+                {"destination_mask": "10.0.0.0/24", "protocol": "OSPF"},
+                {"destination_mask": "192.0.2.0/24", "protocol": "Static"},
+            ],
+        }
+    ]
+
+
 def test_joinmatches_continuation_rejoins_a_column_wrapped_row() -> None:
     """Wrapped rows are the opposite case from column-count variants.
 
@@ -1086,12 +1378,7 @@ def test_joinmatches_continuation_rejoins_a_column_wrapped_row() -> None:
     The template is extracted from the system prompt so the documented recipe
     cannot drift away from working TTP.
     """
-    start = TTP_SYSTEM_PROMPT.index('<group name="neighbors*">')
-    end = TTP_SYSTEM_PROMPT.index("</group>", start) + len("</group>")
-    template = (
-        "\n".join(line.strip() for line in TTP_SYSTEM_PROMPT[start:end].splitlines())
-        + "\n"
-    )
+    template = _prompt_template('<group name="neighbors*">')
     source = (
         "gi21 28:6f:7f:0b:75:a0 Gi0 Fjallarodgardsfor 105\n"
         "                                skola-AP03\n"
