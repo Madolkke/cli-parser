@@ -59,7 +59,7 @@ def _schema() -> dict[str, Any]:
 def _parse_record_blocks(text: str) -> list[Any]:
     matches = re.findall(
         r'<parsed_record input_index="\d+" display_number="\d+">\n'
-        r'(.*?)\n</parsed_record>',
+        r"(.*?)\n</parsed_record>",
         text,
         flags=re.DOTALL,
     )
@@ -130,6 +130,7 @@ def _response(*blocks: Any) -> ChatResponse:
 class _ScriptedModel:
     model = "scripted-model"
     context_size = 128_000
+    formatter = SimpleNamespace(supported_input_media_types=())
 
     def __init__(self, responses: list[ChatResponse]) -> None:
         self.responses = list(responses)
@@ -195,7 +196,11 @@ def _agent(
     model: _ScriptedModel,
     session: GenerationSession,
     phase: GenerationPhase,
+    *,
+    template_validator: Any | None = None,
 ) -> Agent:
+    if template_validator is not None:
+        session.template_validator = template_validator
     return Agent(
         name=f"{phase}_generator",
         system_prompt="test",
@@ -597,8 +602,8 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert session.records == ({"value": "one"},)
 
 
-async def test_ttp_records_remain_complete_across_submissions() -> None:
-    """Every submission keeps its complete validator result in context."""
+async def test_ttp_history_compacts_only_stale_submission_results() -> None:
+    """History keeps tool inputs and thinking while replacing old captures."""
 
     records_by_submission = [
         ({"value": "first-attempt"},),
@@ -613,53 +618,237 @@ async def test_ttp_records_remain_complete_across_submissions() -> None:
         return ValidatorOutcome(
             valid=index == len(records_by_submission) - 1,
             records=records_by_submission[index],
+            issues=(
+                ()
+                if index == len(records_by_submission) - 1
+                else ({"code": f"wrong_{index}", "message": "secret feedback"},)
+            ),
         )
 
     model = _ScriptedModel(
         [
-            _template_call("t1", "first: {{ value }}"),
+            _response(
+                ThinkingBlock(thinking="Preserve this reasoning."),
+                ToolCallBlock(
+                    id="t1",
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"ttp_template": "first: {{ value }}"}),
+                ),
+            ),
             _template_call("t2", "second: {{ value }}"),
             _template_call("t3", "value: {{ value }}"),
             _finish_call(),
         ],
     )
     session = _session(max_agent_rounds=6)
-    session.template_validator = validate_template
     _freeze_schema(session)
-    agent = _agent(model, session, "ttp")
+    agent = _agent(model, session, "ttp", template_validator=validate_template)
 
-    await run_generation_phase(
+    outcome = await run_generation_phase(
         agent,
         UserMsg(name="user", content="value: one"),
         session,
         "ttp",
     )
 
-    # The final request preserves all three complete validator results.
-    final_messages = model.calls[-1]["messages"]
-    tool_results = [
-        block
-        for message in final_messages
-        for block in message.content
+    assert outcome.phase_completed
+    assert session.succeeded
+    assert session.ttp_history_compacted_interactions == 2
+    assert session.ttp_history_compacted_input_chars == 0
+    assert session.ttp_history_compaction_skips == 0
+    final_blocks = [
+        block for message in model.calls[-1]["messages"] for block in message.content
+    ]
+    assert [
+        json.loads(block.input)["ttp_template"]
+        for block in final_blocks
+        if isinstance(block, ToolCallBlock)
+    ] == submissions
+    assert [
+        block.thinking for block in final_blocks if isinstance(block, ThinkingBlock)
+    ] == ["Preserve this reasoning."]
+    result_texts = [
+        block.output[0].text
+        for block in final_blocks
         if isinstance(block, ToolResultBlock)
-        and block.name == SUBMIT_TEMPLATE_TOOL_NAME
     ]
-    assert len(tool_results) == 3
-    assert _parse_record_blocks(tool_results[0].output[0].text) == [
-        {"value": "first-attempt"},
+    assert result_texts[:2] == ["该次提交的匹配结果已被后续提交取代"] * 2
+    assert _parse_record_blocks(result_texts[2]) == [{"value": "one"}]
+    for forbidden in (
+        "first-attempt",
+        "second-attempt",
+        "accepted",
+        "wrong_0",
+        "wrong_1",
+        "secret feedback",
+        "remaining_submissions",
+        "validated_candidate_available",
+        "next_action",
+    ):
+        assert forbidden not in "\n".join(result_texts)
+
+    context_before = deepcopy(agent.state.context)
+    events_before = session.ttp_history_compaction_events
+    runner_module._compact_ttp_history(agent, session)
+    assert agent.state.context == context_before
+    assert session.ttp_history_compaction_events == events_before
+    assert session.ttp_history_compacted_interactions == 2
+
+
+async def test_ttp_history_preserves_tests_and_latest_valid_candidate() -> None:
+    original_template = "value: {{ value | ORPHRASE }}"
+    accepted_template = "value: {{ value }}"
+    failed_template = "wrong: {{ value }}"
+    model = _ScriptedModel(
+        [
+            _template_call("original", original_template),
+            _test_call("test-before-correction"),
+            _template_call("accepted", accepted_template),
+            _test_call("test-before-failure"),
+            _template_call("failed", failed_template),
+            _test_call("test-after-failure"),
+            _finish_call(),
+        ],
+    )
+
+    def validate_template(candidate: Any) -> ValidatorOutcome:
+        if candidate.ttp_template == original_template:
+            return ValidatorOutcome(valid=True, records=({"value": "overcaptured"},))
+        if candidate.ttp_template == accepted_template:
+            return ValidatorOutcome(valid=True, records=({"value": "one"},))
+        return ValidatorOutcome(
+            valid=False,
+            issues=({"code": "wrong_candidate", "message": "secret feedback"},),
+            records=({"value": "bad"},),
+        )
+
+    session = _session(max_agent_rounds=8)
+    session.template_validator = validate_template
+    session.ttp_test_validator = lambda _: TtpParseResult(
+        result=[{"value": "experimental"}],
+        issues=[],
+    )
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="value: one"),
+        session,
+        "ttp",
+    )
+
+    assert outcome.phase_completed
+    assert session.succeeded
+    assert session.validated_ttp_template == accepted_template
+    assert session.records == ({"value": "one"},)
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
+    assert session.ttp_test_calls == 3
+    assert session.ttp_history_compacted_interactions == 2
+    assert session.ttp_history_compacted_input_chars == 0
+    final_blocks = [
+        block for message in model.calls[-1]["messages"] for block in message.content
     ]
-    assert _parse_record_blocks(tool_results[1].output[0].text) == [
-        {"value": "second-attempt"},
-    ]
-    assert _parse_record_blocks(tool_results[2].output[0].text) == [{"value": "one"}]
+    calls_by_id = {
+        block.id: block for block in final_blocks if isinstance(block, ToolCallBlock)
+    }
+    for call_id, template in (
+        ("original", original_template),
+        ("accepted", accepted_template),
+        ("failed", failed_template),
+    ):
+        assert json.loads(calls_by_id[call_id].input) == {"ttp_template": template}
+    results_by_id = {
+        block.id: block.output[0].text
+        for block in final_blocks
+        if isinstance(block, ToolResultBlock)
+    }
+    for call_id in ("original", "accepted"):
+        assert results_by_id[call_id] == "该次提交的匹配结果已被后续提交取代"
+    assert _parse_record_blocks(results_by_id["failed"]) == [{"value": "bad"}]
+    for call_id in (
+        "test-before-correction",
+        "test-before-failure",
+        "test-after-failure",
+    ):
+        assert json.loads(calls_by_id[call_id].input) == {
+            "text": "value: experimental",
+            "ttp_template": "value: {{ value }}",
+        }
+        assert _parse_record_blocks(results_by_id[call_id]) == [
+            [{"value": "experimental"}],
+        ]
+    for forbidden in (
+        "overcaptured",
+        "secret feedback",
+        "wrong_candidate",
+        "accepted",
+        "candidate_updated",
+        "retained_candidate_version",
+        "validation_summary",
+    ):
+        assert forbidden not in "\n".join(results_by_id.values())
+
+
+@pytest.mark.parametrize(
+    "invalid_pairing",
+    [
+        "missing_result",
+        "orphan_result",
+        "duplicate_call",
+        "duplicate_result",
+        "wrong_name",
+    ],
+)
+def test_ttp_history_skips_ambiguous_or_incomplete_pairs(invalid_pairing: str) -> None:
+    blocks: list[Any] = []
+    for call_id in ("first", "second"):
+        blocks.extend(
+            [
+                ToolCallBlock(
+                    id=call_id,
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"ttp_template": f"{call_id}: {{{{ value }}}}"}),
+                ),
+                ToolResultBlock(
+                    id=call_id,
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    output=[TextBlock(text=f"capture-{call_id}")],
+                    state=ToolResultState.SUCCESS,
+                ),
+            ],
+        )
+    if invalid_pairing == "missing_result":
+        blocks.pop()
+    elif invalid_pairing == "orphan_result":
+        blocks.pop(2)
+    elif invalid_pairing == "duplicate_call":
+        blocks.append(deepcopy(blocks[0]))
+    elif invalid_pairing == "duplicate_result":
+        blocks.append(deepcopy(blocks[1]))
+    else:
+        blocks[1] = blocks[1].model_copy(update={"name": TEST_TEMPLATE_TOOL_NAME})
+    context = [AssistantMsg(name="ttp_generator", content=blocks)]
+    agent = SimpleNamespace(state=SimpleNamespace(context=context))
+    session = _session()
+    session.ttp_submissions = 2
+    context_before = deepcopy(context)
+
+    runner_module._compact_ttp_history(agent, session)
+
+    assert context == context_before
+    assert session.ttp_history_compaction_skips == 1
+    assert session.ttp_history_compaction_events == 0
+    assert session.ttp_history_compacted_interactions == 0
 
 
 async def test_token_counters_accumulate_from_model_call_end_events() -> None:
     """Token usage must land locally, not only as Laminar span attributes.
 
     input_tokens_last is the context size of the final call, which is what the
-    superseded-result collapse exists to hold down; without it, measuring
-    context growth means querying Laminar by hand.
+    history compaction exists to hold down; without it, measuring context growth
+    means querying Laminar by hand.
     """
     model = _ScriptedModel([_template_call(), _finish_call()])
     session = _session(max_agent_rounds=3, stream_enabled=True)

@@ -50,6 +50,46 @@ def test_corpus_leaf_metrics_match_per_input_metrics_for_a_perfect_candidate() -
     assert metrics["leaf_f1"] == 1.0
 
 
+def test_score_ttp_template_output_projects_history_compaction_metrics() -> None:
+    result = score_ttp_template_output(
+        {
+            "generation_result": {
+                "status": "success",
+                "artifact": {"records": [{"value": "one"}]},
+                "metadata": {
+                    "ttp_history_compaction_events": 2,
+                    "ttp_history_compacted_interactions": 5,
+                    "ttp_history_compacted_input_chars": 120,
+                    "ttp_history_compacted_result_chars": 340,
+                    "ttp_history_compaction_skips": 1,
+                },
+            },
+            "independent_acceptance": {"valid": True},
+        },
+        ({"value": "one"},),
+    )
+
+    metrics = result["metrics"]
+    assert metrics["ttp_history_compaction_events"] == 2.0
+    assert metrics["ttp_history_compacted_interactions"] == 5.0
+    assert metrics["ttp_history_compacted_input_chars"] == 120.0
+    assert metrics["ttp_history_compacted_result_chars"] == 340.0
+    assert metrics["ttp_history_compaction_skips"] == 1.0
+
+
+def test_score_ttp_template_output_defaults_history_compaction_metrics() -> None:
+    result = score_ttp_template_output({}, ())
+
+    for name in (
+        "ttp_history_compaction_events",
+        "ttp_history_compacted_interactions",
+        "ttp_history_compacted_input_chars",
+        "ttp_history_compacted_result_chars",
+        "ttp_history_compaction_skips",
+    ):
+        assert result["metrics"][name] == 0.0
+
+
 def test_wilson_interval_is_bounded_and_handles_empty_samples() -> None:
     lower, upper = wilson_interval(5, 10)
 

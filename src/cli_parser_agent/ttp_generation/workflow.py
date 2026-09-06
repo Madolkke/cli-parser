@@ -122,9 +122,7 @@ async def _fit_sampled_outputs(
                         "sampled_char_count": sum(
                             item.sampled_char_count for item in sampled
                         ),
-                        "truncated_count": sum(
-                            item.truncated for item in sampled
-                        ),
+                        "truncated_count": sum(item.truncated for item in sampled),
                     },
                 )
             # A truncated marker without any source character is not a usable
@@ -142,9 +140,7 @@ async def _fit_sampled_outputs(
                     "sampled_char_count": sum(
                         item.sampled_char_count for item in sampled
                     ),
-                    "truncated_count": sum(
-                        item.truncated for item in sampled
-                    ),
+                    "truncated_count": sum(item.truncated for item in sampled),
                 },
             )
         if (
@@ -777,6 +773,17 @@ class _GenerationWorkflow:
             output_tokens_total=self.session.output_tokens_total,
             input_tokens_last=self.session.input_tokens_last,
             model_calls_observed=self.session.model_calls_observed,
+            ttp_history_compaction_events=(self.session.ttp_history_compaction_events),
+            ttp_history_compacted_interactions=(
+                self.session.ttp_history_compacted_interactions
+            ),
+            ttp_history_compacted_input_chars=(
+                self.session.ttp_history_compacted_input_chars
+            ),
+            ttp_history_compacted_result_chars=(
+                self.session.ttp_history_compacted_result_chars
+            ),
+            ttp_history_compaction_skips=(self.session.ttp_history_compaction_skips),
             laminar_trace_id=current_laminar_trace_id(),
         )
 
@@ -830,8 +837,7 @@ class _GenerationWorkflow:
         elif _is_agent_request_error(error):
             issue = _issue(
                 "model.request_rejected",
-                "The provider rejected the request as malformed or "
-                "unauthorized.",
+                "The provider rejected the request as malformed or unauthorized.",
                 stage="model",
                 details={
                     "exception_type": type(error).__name__,
@@ -915,8 +921,7 @@ class _GenerationWorkflow:
                 self.session.submission_tool_call_invalids > invalid_calls_before
             )
             ended_after_invalid_tool_call = bool(
-                run_outcome is not None
-                and run_outcome.ended_after_invalid_tool_call
+                run_outcome is not None and run_outcome.ended_after_invalid_tool_call
             )
             if invalid_tool_call_observed and (
                 phase_submissions == 0 or ended_after_invalid_tool_call
@@ -1063,9 +1068,7 @@ class _GenerationWorkflow:
                 self.progress.custom(
                     "cli_parser.phase.sampling_completed",
                     {
-                        "sampled_outputs": [
-                            asdict(item) for item in candidate_sample
-                        ],
+                        "sampled_outputs": [asdict(item) for item in candidate_sample],
                         "input_fits": input_fits,
                         "sampled_char_count": sum(
                             item.sampled_char_count for item in candidate_sample
@@ -1219,9 +1222,7 @@ class _GenerationWorkflow:
         trace_summary: dict[str, Any] | None = None,
     ) -> GenerationResult:
         trace_summary = (
-            self._acceptance_trace_summary
-            if trace_summary is None
-            else trace_summary
+            self._acceptance_trace_summary if trace_summary is None else trace_summary
         )
         schema_started = time.monotonic()
         try:
@@ -1481,9 +1482,7 @@ class _GenerationWorkflow:
             value: dict[str, Any] = {
                 "status": result.status,
                 "valid": result.status == "success",
-                "issues": [
-                    item.model_dump(mode="json") for item in result.issues
-                ],
+                "issues": [item.model_dump(mode="json") for item in result.issues],
             }
             if result.artifact is not None:
                 value["records"] = deepcopy(result.artifact.records)

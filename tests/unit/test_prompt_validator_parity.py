@@ -9,8 +9,6 @@ agent will receive incorrect guidance.
 
 import re
 
-import pytest
-
 
 def test_prompt_documents_all_validator_allowed_attributes():
     """Prompt's attribute list must cover every validator-allowed attribute."""
@@ -46,11 +44,31 @@ def test_prompt_documents_all_validator_allowed_attributes():
 
     # Items explicitly named in prompt should be in validator
     named_in_prompt = {
-        "WORD", "PHRASE", "ORPHRASE", "ROW", "DIGIT", "IP", "IPV6", "MAC",
-        "PREFIX", "PREFIXV6",
-        "_start_", "_end_", "_line_", "_exact_", "_exact_space_", "_headers_",
-        "re", "joinmatches", "item",
-        "to_int", "to_float", "to_str", "to_ip", "to_net", "to_cidr",
+        "WORD",
+        "PHRASE",
+        "ORPHRASE",
+        "ROW",
+        "DIGIT",
+        "IP",
+        "IPV6",
+        "MAC",
+        "PREFIX",
+        "PREFIXV6",
+        "_start_",
+        "_end_",
+        "_line_",
+        "_exact_",
+        "_exact_space_",
+        "_headers_",
+        "re",
+        "joinmatches",
+        "item",
+        "to_int",
+        "to_float",
+        "to_str",
+        "to_ip",
+        "to_net",
+        "to_cidr",
     }
 
     missing_from_validator = named_in_prompt - validator_attrs
@@ -61,15 +79,23 @@ def test_prompt_documents_all_validator_allowed_attributes():
     # Validator should not have attributes completely missing from prompt context
     # We allow string/regex conditions to be summarized rather than listed
     string_conditions = {
-        "contains", "equal", "exclude", "notequal",
-        "contains_re", "endswith_re", "exclude_re",
-        "notendswith_re", "notstartswith_re", "startswith_re",
+        "contains",
+        "equal",
+        "exclude",
+        "notequal",
+        "contains_re",
+        "endswith_re",
+        "exclude_re",
+        "notendswith_re",
+        "notstartswith_re",
+        "startswith_re",
     }
 
     # Known items that validator has but prompt summarizes or doesn't need to document
     validator_only_ok = string_conditions | {
         "columns",  # Related to table processing, not commonly needed
-        "isdigit", "notdigit",  # Rarely used filters
+        "isdigit",
+        "notdigit",  # Rarely used filters
         "is_ip",  # Type check, rarely needed
     }
 
@@ -99,7 +125,7 @@ def test_prompt_documents_group_method_allowlist():
     from cli_parser_agent.ttp_generation.agent.prompt import TTP_SYSTEM_PROMPT
 
     # The rule states: "method 只能取 "group"（默认）或 "table""
-    assert 'method' in TTP_SYSTEM_PROMPT, (
+    assert "method" in TTP_SYSTEM_PROMPT, (
         "Prompt should document the group method attribute"
     )
 
@@ -123,10 +149,10 @@ def test_prompt_documents_group_attribute_allowlist():
     from cli_parser_agent.ttp_generation.agent.prompt import TTP_SYSTEM_PROMPT
 
     # The rule states: "group 只允许两个 XML 属性：name 和 method"
-    assert "group 只允许两个 XML 属性" in TTP_SYSTEM_PROMPT or \
-           "group 只允许两个属性" in TTP_SYSTEM_PROMPT, (
-        "Prompt should state that group only allows two XML attributes"
-    )
+    assert (
+        "group 只允许两个 XML 属性" in TTP_SYSTEM_PROMPT
+        or "group 只允许两个属性" in TTP_SYSTEM_PROMPT
+    ), "Prompt should state that group only allows two XML attributes"
 
     assert "name" in TTP_SYSTEM_PROMPT and "method" in TTP_SYSTEM_PROMPT, (
         "Prompt should document both 'name' and 'method' as allowed group attributes"

@@ -37,7 +37,11 @@ from cli_parser_agent.ttp_generation.agent import (
 )
 from cli_parser_agent.ttp_generation.agent import tools as tools_module
 from cli_parser_agent.ttp_generation.progress import ProgressEmitter
-from cli_parser_agent.ttp_generation.validation import TtpParseResult
+from cli_parser_agent.ttp_generation.validation import (
+    TtpParseResult,
+    TtpValidationResult,
+    validate_ttp_template,
+)
 
 
 def _schema(field_name: str = "value") -> dict[str, Any]:
@@ -69,7 +73,7 @@ def _matched_records(chunk: ToolChunk) -> list[Any]:
         re.finditer(
             r'<parsed_record input_index="(?P<input_index>\d+)" '
             r'display_number="(?P<display_number>\d+)">\n'
-            r'(?P<record>.*?)\n</parsed_record>',
+            r"(?P<record>.*?)\n</parsed_record>",
             _tool_text(chunk),
             flags=re.DOTALL,
         ),
@@ -181,7 +185,6 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-
     assert PROMPT_VERSION == "ttp-generator-v30-candidate-protection-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
@@ -274,7 +277,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     # the placeholder as a parse failure or resubmit the same template.
     assert "只有最近一次提交的独立解析结果块会完整保留" in TTP_SYSTEM_PROMPT
     assert "不表示那次" in TTP_SYSTEM_PROMPT
-    assert "优先使用 method=\"table\"" in TTP_SYSTEM_PROMPT
+    assert '优先使用 method="table"' in TTP_SYSTEM_PROMPT
     assert "在同一个具名 group 中" in TTP_SYSTEM_PROMPT
     assert "后续探索不得无证据地替换已有正确候选" in TTP_SYSTEM_PROMPT
     # required is the weakest measured schema dimension; force enumeration.
@@ -560,8 +563,7 @@ async def test_legacy_schema_arguments_are_rejected_without_disclosure(
         },
     ]
     assert any(
-        isinstance(event, ToolResultEndEvent)
-        and event.state == ToolResultState.SUCCESS
+        isinstance(event, ToolResultEndEvent) and event.state == ToolResultState.SUCCESS
         for event in events
     )
     assert session.schema_submissions == 0
@@ -976,11 +978,7 @@ async def test_template_progress_retains_diagnostic_payload() -> None:
     )
 
     assert _matched_records(result) == [{}]
-    completed = [
-        event
-        for event in observed
-        if event.name == "cli_parser.tool.result"
-    ]
+    completed = [event for event in observed if event.name == "cli_parser.tool.result"]
     assert len(completed) == 1
     diagnostic = completed[0].value["output"]
     assert diagnostic["accepted"] is False
@@ -1193,9 +1191,7 @@ async def test_finish_generation_rejects_without_a_validated_candidate() -> None
 
     payload = _payload(result)
     assert payload["accepted"] is False
-    assert payload["issues"][0]["code"] == (
-        "generation.finish_without_valid_candidate"
-    )
+    assert payload["issues"][0]["code"] == ("generation.finish_without_valid_candidate")
     assert payload["generation_finished"] is False
     assert payload["validated_candidate_available"] is False
     assert payload["next_action"] == "correct_and_resubmit_template"
@@ -1229,8 +1225,10 @@ async def test_finish_generation_locks_the_selected_candidate() -> None:
     await submit_tool.call("first: {{ value }}")
     await submit_tool.call("second: {{ value }}")
 
-    assert session.validated_ttp_template == "first: {{ value }}"
-    assert session.records == ({"value": "candidate-1"},)
+    assert session.validated_ttp_template == "second: {{ value }}"
+    assert session.records == ({"value": "candidate-2"},)
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
     assert not session.succeeded
 
     assert _payload(await finish_tool.call())["accepted"] is True
@@ -1240,9 +1238,77 @@ async def test_finish_generation_locks_the_selected_candidate() -> None:
     assert repeated_finish["accepted"] is False
     assert repeated_finish["issues"][0]["code"] == "generation_already_succeeded"
     assert rejected_submit == "[]\n错误：模板未产生可用的匹配结果。"
-    assert session.validated_ttp_template == "first: {{ value }}"
-    assert session.records == ({"value": "candidate-1"},)
+    assert session.validated_ttp_template == "second: {{ value }}"
+    assert session.records == ({"value": "candidate-2"},)
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
     assert session.ttp_submissions == 2
+
+
+@pytest.mark.asyncio
+async def test_semantic_correction_replaces_valid_candidate_before_finish() -> None:
+    def validate_template(candidate: TemplateCandidate) -> TtpValidationResult:
+        return validate_ttp_template(
+            candidate.ttp_template,
+            candidate.command_outputs,
+            candidate.result_schema,
+        )
+
+    session = GenerationSession(
+        command_outputs=[
+            "Previous: old_one\nCurrent: new_one",
+            "Previous: old_two\nCurrent: new_two",
+        ],
+        schema_validator=_unused_schema_validator,
+        template_validator=validate_template,
+    )
+    session.frozen_schema = _schema()
+    submit_tool = SubmitTtpTemplateTool(session)
+    first_template = "Previous: {{ value }}"
+    corrected_template = "Current: {{ value }}"
+    invalid_template = "Missing: {{ value }}"
+
+    # Both captures satisfy the schema; only Current represents the intended value.
+    first = await submit_tool.call(first_template)
+
+    assert first.metadata["accepted"] is True
+    assert _matched_records(first) == [{"value": "old_one"}, {"value": "old_two"}]
+    assert session.validated_ttp_template == first_template
+    assert session.validated_ttp_candidate_version == 1
+    assert session.validated_ttp_submission_index == 1
+
+    corrected = await submit_tool.call(corrected_template)
+    expected_records = ({"value": "new_one"}, {"value": "new_two"})
+
+    assert corrected.metadata == {"phase": "template", "accepted": True}
+    assert _matched_records(corrected) == list(expected_records)
+    assert session.validated_ttp_template == corrected_template
+    assert session.records == expected_records
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
+    assert not session.succeeded
+
+    rejected = await submit_tool.call(invalid_template)
+
+    assert rejected.metadata == {"phase": "template", "accepted": False}
+    assert session.last_issues
+    assert session.last_ttp_template == invalid_template
+    assert session.ttp_submissions == 3
+    assert session.validated_ttp_template == corrected_template
+    assert session.records == expected_records
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
+
+    finished = await FinishGenerationTool(session).call()
+
+    assert _payload(finished)["accepted"] is True
+    assert session.succeeded
+    assert session.terminal_reason == "success"
+    assert session.validated_ttp_template == corrected_template
+    assert session.records == expected_records
+    assert session.validated_ttp_candidate_version == 2
+    assert session.validated_ttp_submission_index == 2
+    assert session.frozen_schema == _schema()
 
 
 @pytest.mark.asyncio

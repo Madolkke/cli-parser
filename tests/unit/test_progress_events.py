@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import json
 from copy import deepcopy
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -218,9 +219,9 @@ async def test_generate_emits_request_lifecycle_and_accepts_keyword_observer(
     ]
     assert lifecycle[0].value["request"]["command_outputs"] == ["value: one"]
     assert lifecycle[1].value["result"]["status"] == "success"
-    assert {
-        event.metadata["request_id"] for event in lifecycle
-    } == {result.metadata.request_id}
+    assert {event.metadata["request_id"] for event in lifecycle} == {
+        result.metadata.request_id
+    }
 
 
 async def test_generate_emits_cancelled_without_exception_event(
@@ -296,6 +297,7 @@ def _response(*blocks: Any) -> ChatResponse:
 class _ScriptedModel:
     model = "scripted-model"
     context_size = 128_000
+    formatter = SimpleNamespace(supported_input_media_types=())
 
     def __init__(self, responses: list[ChatResponse]) -> None:
         self.responses = list(responses)
@@ -402,9 +404,7 @@ async def test_runner_forwards_model_events_and_emits_debug_context() -> None:
     assert secret not in json.dumps(snapshots[1], ensure_ascii=False)
 
     tool_result = next(
-        event.value
-        for event in custom
-        if event.name == "cli_parser.tool.result"
+        event.value for event in custom if event.name == "cli_parser.tool.result"
     )
     assert tool_result["tool_name"] == SUBMIT_SCHEMA_TOOL_NAME
     assert tool_result["output"]["accepted"] is True
@@ -441,9 +441,7 @@ async def test_real_agent_context_snapshot_excludes_model_api_key() -> None:
 
     serialized = json.dumps(observed[0].model_dump(mode="json"))
     assert "secret-key" not in serialized
-    assert observed[0].value["model"]["parameters"][
-        "parallel_tool_calls"
-    ] is False
+    assert observed[0].value["model"]["parameters"]["parallel_tool_calls"] is False
     assert observed[0].value["tool_schemas"][0]["function"]["name"] == (
         SUBMIT_SCHEMA_TOOL_NAME
     )
@@ -526,9 +524,7 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
         "cli_parser.generation.completed",
     ]
     sampling = [
-        event
-        for event in custom
-        if event.name == "cli_parser.phase.sampling_completed"
+        event for event in custom if event.name == "cli_parser.phase.sampling_completed"
     ]
     assert [event.metadata["phase"] for event in sampling] == ["schema", "ttp"]
     assert sampling[0].value["sampled_outputs"][0]["text"] == "value: one"
@@ -547,6 +543,99 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
     assert "secret-key" not in json.dumps(
         [event.model_dump(mode="json") for event in observed],
     )
+
+
+async def test_ttp_history_compaction_event_is_bounded() -> None:
+    secret_template = "secret-template: {{ value }}"
+    secret_input = "secret-command-output"
+    model = _ScriptedModel(
+        [
+            _response(
+                ToolCallBlock(
+                    id="first",
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"ttp_template": secret_template}),
+                ),
+            ),
+            _response(
+                ToolCallBlock(
+                    id="second",
+                    name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"ttp_template": "value: {{ value }}"}),
+                ),
+            ),
+            _response(
+                ToolCallBlock(
+                    id="finish",
+                    name=FINISH_GENERATION_TOOL_NAME,
+                    input="{}",
+                ),
+            ),
+        ],
+    )
+    session = GenerationSession(
+        command_outputs=(secret_input,),
+        schema_validator=lambda _: ValidatorOutcome(valid=True),
+        template_validator=lambda candidate: ValidatorOutcome(
+            valid=candidate.ttp_template == "value: {{ value }}",
+            records=(
+                ({"value": "one"},)
+                if candidate.ttp_template == "value: {{ value }}"
+                else ({"secret": "record"},)
+            ),
+            issues=(
+                ()
+                if candidate.ttp_template == "value: {{ value }}"
+                else ({"code": "bad_candidate", "message": "secret-message"},)
+            ),
+        ),
+        max_agent_rounds=5,
+    )
+    session.frozen_schema = _schema()
+    observed: list[Any] = []
+    progress = ProgressEmitter(request_id="compact-request", observer=observed.append)
+    agent = Agent(
+        name="ttp_generator",
+        system_prompt="ttp system prompt",
+        model=model,  # type: ignore[arg-type]
+        toolkit=Toolkit(
+            tools=build_submission_tools(session, "ttp", progress=progress),
+        ),
+        state=AgentState(),
+        react_config=ReActConfig(
+            max_iters=session.max_agent_rounds,
+            interruption_raise_cancelled_error=True,
+        ),
+    )
+
+    await run_generation_phase(
+        agent,
+        UserMsg(name="user", content=secret_input),
+        session,
+        "ttp",
+        progress=progress,
+    )
+
+    events = [
+        event
+        for event in observed
+        if isinstance(event, CustomEvent)
+        and event.name == "cli_parser.ttp.history_compacted"
+    ]
+    assert events
+    payload = events[0].value
+    assert events[0].metadata["sensitive"] is False
+    assert set(payload) == {
+        "compacted_interactions",
+        "retained_interactions",
+        "compacted_input_chars",
+        "compacted_result_chars",
+    }
+    serialized = json.dumps(payload, ensure_ascii=True)
+    assert secret_template not in serialized
+    assert secret_input not in serialized
+    assert "secret-message" not in serialized
+    assert "record" not in serialized
 
 
 async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
@@ -612,15 +701,17 @@ async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
     submissions = [
         event
         for event in observed
-        if isinstance(event, CustomEvent)
-        and event.name == "cli_parser.ttp.submission"
+        if isinstance(event, CustomEvent) and event.name == "cli_parser.ttp.submission"
     ]
     assert len(submissions) == 1
     value = submissions[0].value
     assert value["submission_index"] == 1
     assert value["template_chars"] == len(template)
-    assert value["template_sha256"] == hashlib.sha256(
-        template.encode("utf-8"),
-    ).hexdigest()
+    assert (
+        value["template_sha256"]
+        == hashlib.sha256(
+            template.encode("utf-8"),
+        ).hexdigest()
+    )
     assert submissions[0].metadata["sensitive"] is False
     assert template not in json.dumps(value)

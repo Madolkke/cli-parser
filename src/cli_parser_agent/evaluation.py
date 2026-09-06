@@ -669,9 +669,7 @@ def dataset_input_scope_metadata(
 
     if input_scope == "default":
         indices = (
-            ()
-            if entry.default_input_index is None
-            else (entry.default_input_index,)
+            () if entry.default_input_index is None else (entry.default_input_index,)
         )
     else:
         indices = tuple(range(len(entry.inputs)))
@@ -1814,6 +1812,11 @@ def score_ttp_template_output(
         "output_tokens_total": 0.0,
         "input_tokens_last": 0.0,
         "model_calls_observed": 0.0,
+        "ttp_history_compaction_events": 0.0,
+        "ttp_history_compacted_interactions": 0.0,
+        "ttp_history_compacted_input_chars": 0.0,
+        "ttp_history_compacted_result_chars": 0.0,
+        "ttp_history_compaction_skips": 0.0,
     }
     raw_result = (
         output.get("generation_result") if isinstance(output, Mapping) else None
@@ -1902,6 +1905,11 @@ def score_ttp_template_output(
         "output_tokens_total",
         "input_tokens_last",
         "model_calls_observed",
+        "ttp_history_compaction_events",
+        "ttp_history_compacted_interactions",
+        "ttp_history_compacted_input_chars",
+        "ttp_history_compacted_result_chars",
+        "ttp_history_compaction_skips",
     ):
         value = metadata.get(name, 0)
         if isinstance(value, int | float) and not isinstance(value, bool):

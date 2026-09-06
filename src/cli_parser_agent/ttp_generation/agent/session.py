@@ -122,6 +122,15 @@ class GenerationSession:
     validated_ttp_template: str | None = None
     records: tuple[dict[str, Any], ...] = ()
     validated_ttp_candidate_version: int = 0
+    # The submission that produced the latest valid candidate, even when a
+    # later rejected submission supersedes its model-visible result.
+    validated_ttp_submission_index: int | None = None
+    ttp_history_compaction_events: int = 0
+    ttp_history_compacted_interactions: int = 0
+    # Tool arguments remain intact; retained for compatibility with eval metrics.
+    ttp_history_compacted_input_chars: int = 0
+    ttp_history_compacted_result_chars: int = 0
+    ttp_history_compaction_skips: int = 0
     generation_finished: bool = False
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None

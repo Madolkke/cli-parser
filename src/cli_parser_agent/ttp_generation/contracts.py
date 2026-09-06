@@ -180,6 +180,11 @@ class GenerationMetadata(ContractModel):
     output_tokens_total: int = Field(default=0, ge=0)
     input_tokens_last: int = Field(default=0, ge=0)
     model_calls_observed: int = Field(default=0, ge=0)
+    ttp_history_compaction_events: int = Field(default=0, ge=0)
+    ttp_history_compacted_interactions: int = Field(default=0, ge=0)
+    ttp_history_compacted_input_chars: int = Field(default=0, ge=0)
+    ttp_history_compacted_result_chars: int = Field(default=0, ge=0)
+    ttp_history_compaction_skips: int = Field(default=0, ge=0)
     laminar_trace_id: str | None = Field(
         default=None,
         min_length=1,

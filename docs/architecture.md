@@ -37,11 +37,13 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 1. Schema Agent 只拥有 `submit_result_schema`。无效提交及其结构化问题留在 Schema `AgentState` 内，模型可修正后重提。
 2. 第一个通过 Draft 2020-12 受限子集校验的 Schema 被深拷贝并永久冻结；对应 `ToolResultEndEvent` 是阶段安全暂停点，runner 立即结束 Schema reply。
 3. 若仍有全局轮次和总时长预算，私有 generation workflow 创建新的 TTP 模型、Agent、`AgentState` 和 Toolkit。首次 TTP UserMsg 只含冻结 Schema 与该阶段重新采样的命令输出。
-4. TTP Agent 固定拥有 `submit_ttp_template`、`test_ttp_template` 和无参数的 `finish_generation`。测试工具可随时对独立文本运行 parse-only TTP 解析，返回保留原始 JSON 形状的单个结果块，但不读取或修改冻结 Schema、候选、records 或提交计数；测试结果不是可 finish 的候选。有效模板只保存为最新候选并向模型返回按 `input_index` 分隔的独立完整解析结果块，不结束 Agent；每个块只对应一个输入，模型根据结果块、冻结 Schema 和原始输入复核记录数量、异常空容器、表头/分隔线误捕获、字段粒度和多样例一致性后，选择继续提交或 finish。后续无效提交保留先前有效候选，新的有效提交替换它。
+4. TTP Agent 固定拥有 `submit_ttp_template`、`test_ttp_template` 和无参数的 `finish_generation`。测试工具可随时对独立文本运行 parse-only TTP 解析，返回保留原始 JSON 形状的单个结果块，但不读取或修改冻结 Schema、候选、records 或提交计数；测试结果不是可 finish 的候选。有效模板只保存为最新候选并向模型返回按 `input_index` 分隔的独立完整解析结果块，不结束 Agent；每个块只对应一个输入，模型根据结果块、冻结 Schema 和原始输入复核记录数量、异常空容器、表头/分隔线误捕获、字段粒度和多样例一致性后，选择继续提交或 finish。后续无效提交保留先前有效候选，新的有效提交替换它，并同步更新内部候选版本与来源提交索引；finish 和最终验收均使用最新有效候选，历史结果折叠不改变 session 中的候选。
 5. 如果一轮模型调用正常完成但没有工具调用，runner 不解析其 assistant 文本，只追加固定中文提醒并在当前阶段重试。提醒不引用或摘要模型回复；两个阶段分别受独立重试上限约束。
 6. 只有存在有效候选且 `finish_generation` 调用成功，TTP reply 才以成功结束；无候选的 finish 返回结构化拒绝并允许继续。任一轮次、零工具重试、模板提交或总时长预算耗尽时，即使已经保留有效候选也返回失败。runner 使用 AgentScope 支持的中断清理路径结束 reply，移除清理阶段新增的消息和 usage。
 
 模型可见的 `submit_ttp_template` 和 `test_ttp_template` ToolResult 均只包含按输入独立分隔的 `<parsed_record>` 块；测试结果块固定使用 `input_index="0"`，并保留 TTP 原始单输入结果的 object、array、匿名组外壳或多根形状。每块同时提供 0-based `input_index` 和 1-based `display_number`，一个 record 内部的嵌套数组仍保持原样。无结果时追加固定中文错误，不暴露 accepted、issues、候选状态、预算或下一步提示。内部 ToolResult 诊断 payload 仍保留 `validated_candidate_available`、issues 和有界 capture，供 Laminar、observer/TUI 与评测使用。`finish_generation` 不接收参数、不重复解析候选且不计入模板提交数；无候选时返回 `generation.finish_without_valid_candidate`。
+
+TTP runner 只折叠更早 `submit_ttp_template` 的 ToolResult 正文，替换为固定中文“该次提交的匹配结果已被后续提交取代”。最近一次提交的结果、全部测试结果、工具调用参数与 Thinking 保持原样；占位正文不含 accepted、issues、候选状态或预算。仅在工具调用和结果完整配对时更新上下文，重复调用不会重复计数，配对异常时跳过折叠。折叠事件、结果数量、结果字符数和跳过次数作为纯数值 metadata/observer 事件与评测指标提供；工具参数折叠字符数恒为 0。
 
 两个阶段共享同一 deadline、总模型轮次和 TTP 提交预算。Schema 用尽全部轮次后即使恰好被接受，也不会启动 TTP Agent；TTP 失败不会回流 Schema 阶段、解冻 Schema 或重建 Schema Agent。这种协议既不依赖自由文本 JSON 提取，也从结构上消除了跨阶段对话污染。
 
@@ -57,7 +59,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v25-test-ttp-template-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v30-candidate-protection-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -81,6 +83,7 @@ cli_parser.phase.started|input_prepared|sampling_completed|completed
 cli_parser.model.context_snapshot|output_discarded
 cli_parser.no_tool.retry
 cli_parser.tool.result
+cli_parser.ttp.history_compacted
 cli_parser.final_validation.started|completed
 ```
 
@@ -268,7 +271,12 @@ GenerationMetadata
   schema_no_tool_retries: int         # 实际发起的 Schema 中文提醒重试次数
   ttp_no_tool_retries: int            # 实际发起的 TTP 中文提醒重试次数
   fault_domain: agent | model | budget | None  # 失败归因：本方代码/配置、外部模型、还是预算耗尽；成功时为 None
-  model_retries_observed: int         # AgentScope 内部对模型请求的透明重试次数（含重试后成功、否则不可见的情况）
+  model_retries_observed: int         # 预留计数，当前尚未接入 AgentScope 透明重试，不能据此判断无重试
+  ttp_history_compaction_events: int  # 实际修改旧提交结果的次数
+  ttp_history_compacted_interactions: int  # 被固定说明替换的旧提交结果数
+  ttp_history_compacted_input_chars: int   # 恒为 0，工具调用参数保持原样
+  ttp_history_compacted_result_chars: int  # 被替换结果的原始正文字符数
+  ttp_history_compaction_skips: int    # 配对异常等导致的安全跳过次数
 ```
 
 `TtpGenerator.from_env()` 从环境创建模型配置；也可使用 `TtpGeneratorSettings` 和独立的 `GenerationPolicy` 程序化构造。普通构造从进程环境初始化可选 Laminar tracing，`from_env(environ=...)` 则使用传入 mapping；公共辅助函数 `initialize_laminar_from_env(environ=None) -> bool` 可供其他入口显式初始化，缺少 Key 时返回 `False`，已初始化或成功初始化时返回 `True`。请求格式和缺失配置由 Pydantic/配置异常报告；模型请求、零工具协议、超时、预算和生成失败统一返回 `status="failed"` 的结构化结果；`asyncio.CancelledError` 原样传播。

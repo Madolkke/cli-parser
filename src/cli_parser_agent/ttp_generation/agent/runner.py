@@ -29,6 +29,9 @@ from agentscope.event import (
     ToolResultStartEvent,
 )
 from agentscope.message import (
+    TextBlock,
+    ToolCallBlock,
+    ToolResultBlock,
     ToolResultState,
     UserMsg,
 )
@@ -106,6 +109,115 @@ def _restore_context(agent: Any, checkpoint: _ContextCheckpoint) -> None:
     del context[checkpoint.context_length :]
     if checkpoint.context_length:
         context[-1] = deepcopy(checkpoint.last_message)
+
+
+_SUPERSEDED_TTP_RESULT = "该次提交的匹配结果已被后续提交取代"
+
+
+def _compact_ttp_history(
+    agent: Any,
+    session: GenerationSession,
+    *,
+    progress: ProgressEmitter | None = None,
+) -> None:
+    """Collapse only superseded submission results, keeping all test evidence."""
+
+    if session.ttp_submissions < 2:
+        return
+    context = agent.state.context
+    target_names = {SUBMIT_TEMPLATE_TOOL_NAME, TEST_TEMPLATE_TOOL_NAME}
+    try:
+        calls: dict[str, ToolCallBlock] = {}
+        results: dict[str, tuple[int, ToolResultBlock]] = {}
+        for message_index, message in enumerate(context):
+            for block in getattr(message, "content", ()):
+                if isinstance(block, ToolCallBlock) and block.name in target_names:
+                    if block.id in calls:
+                        session.ttp_history_compaction_skips += 1
+                        return
+                    calls[block.id] = block
+                elif isinstance(block, ToolResultBlock) and block.name in target_names:
+                    if block.id in results:
+                        session.ttp_history_compaction_skips += 1
+                        return
+                    results[block.id] = (message_index, block)
+
+        # Wait for complete, unambiguous call/result pairs before rewriting.
+        if set(calls) != set(results) or any(
+            call.name != results[call_id][1].name for call_id, call in calls.items()
+        ):
+            session.ttp_history_compaction_skips += 1
+            return
+        submission_ids = [
+            call_id
+            for call_id, call in calls.items()
+            if call.name == SUBMIT_TEMPLATE_TOOL_NAME
+        ]
+        if len(submission_ids) < 2:
+            return
+
+        replacements: dict[int, dict[str, ToolResultBlock]] = {}
+        result_chars = 0
+        compacted = 0
+        for call_id in submission_ids[:-1]:
+            message_index, result = results[call_id]
+            if isinstance(result.output, str):
+                text = result.output
+                output = _SUPERSEDED_TTP_RESULT
+            elif isinstance(result.output, list) and all(
+                isinstance(block, TextBlock) for block in result.output
+            ):
+                text = "".join(block.text for block in result.output)
+                output = [TextBlock(text=_SUPERSEDED_TTP_RESULT)]
+            else:
+                session.ttp_history_compaction_skips += 1
+                return
+            if text == _SUPERSEDED_TTP_RESULT:
+                continue
+            replacements.setdefault(message_index, {})[call_id] = result.model_copy(
+                update={"output": output},
+            )
+            result_chars += len(text)
+            compacted += 1
+        if not compacted:
+            return
+
+        updated_messages = {}
+        for message_index, replacement_by_id in replacements.items():
+            message = context[message_index]
+            updated_messages[message_index] = message.model_copy(
+                update={
+                    "content": [
+                        replacement_by_id.get(block.id, block)
+                        if isinstance(block, ToolResultBlock)
+                        else block
+                        for block in message.content
+                    ],
+                },
+            )
+        for message_index, message in updated_messages.items():
+            context[message_index] = message
+
+        session.ttp_history_compaction_events += 1
+        session.ttp_history_compacted_interactions += compacted
+        session.ttp_history_compacted_result_chars += result_chars
+        if progress is not None and progress.enabled:
+            progress.custom(
+                "cli_parser.ttp.history_compacted",
+                {
+                    "compacted_interactions": compacted,
+                    "retained_interactions": 1
+                    + sum(
+                        call.name == TEST_TEMPLATE_TOOL_NAME for call in calls.values()
+                    ),
+                    "compacted_input_chars": 0,
+                    "compacted_result_chars": result_chars,
+                },
+                phase="ttp",
+                sensitive=False,
+            )
+    except Exception:
+        session.ttp_history_compaction_skips += 1
 
 
 def _submission_count(session: GenerationSession, tool_name: str) -> int:
@@ -331,6 +443,13 @@ async def run_generation_phase(
         try:
             async for event in stream:
                 if stopped_after_terminal_tool:
+                    # Cancellation can arrive just after AgentScope has
+                    # yielded the next model-call marker. That marker is
+                    # before the provider await, so closing here prevents an
+                    # unnecessary model request without consuming another
+                    # scripted/API response.
+                    if isinstance(event, ModelCallStartEvent):
+                        break
                     # AgentScope emits this event before logging its ordinary
                     # max-iteration warning. Stop at this safe suspension
                     # point; the reply's cleanup has no terminal event to
@@ -365,6 +484,15 @@ async def run_generation_phase(
                         session._model_call_tool_deltas += 1
 
                 if isinstance(event, ModelCallStartEvent):
+                    if session.agent_rounds >= session.max_agent_rounds:
+                        exceeded_max_iters = True
+                        break
+                    if phase == "ttp":
+                        _compact_ttp_history(
+                            agent,
+                            session,
+                            progress=progress,
+                        )
                     close_round()
                     session.record_agent_round(phase)
                     session._model_call_started_at = time.monotonic()
@@ -427,9 +555,8 @@ async def run_generation_phase(
                     session._model_call_first_delta_at = None
                     session._model_call_chunks = 0
                     session._model_call_tool_deltas = 0
-                    if (
-                        session.stream_enabled
-                        and (event.input_tokens or event.output_tokens)
+                    if session.stream_enabled and (
+                        event.input_tokens or event.output_tokens
                     ):
                         session.stream_usage_seen = True
                     if event.input_tokens:
@@ -452,6 +579,11 @@ async def run_generation_phase(
 
                 elif isinstance(event, ExceedMaxItersEvent):
                     exceeded_max_iters = True
+                    # AgentScope may emit the max-iteration marker before the
+                    # reply generator yields its final cleanup events. Stop at
+                    # that safe suspension point instead of allowing a stale
+                    # ModelCallStartEvent to trigger one more provider call.
+                    break
 
                 if isinstance(event, ToolResultEndEvent):
                     pending = pending_tool_calls.pop(event.tool_call_id, None)
@@ -478,12 +610,21 @@ async def run_generation_phase(
                     elif pending_expected:
                         last_model_call_invalid = False
 
-                    # The complete tool result remains in context so the model
-                    # can inspect the actual validator feedback on every round.
-                    # AgentScope's own ReAct loop issues further model calls
-                    # inside this single reply, so the budget must also be
-                    # enforced here.  A tool result is the safe suspension
-                    # point; ``_terminal_tool_observed`` stops the reply once
+                    if (
+                        phase == "ttp"
+                        and pending is not None
+                        and pending[0]
+                        in {SUBMIT_TEMPLATE_TOOL_NAME, TEST_TEMPLATE_TOOL_NAME}
+                        and event.state == ToolResultState.SUCCESS
+                    ):
+                        _compact_ttp_history(
+                            agent,
+                            session,
+                            progress=progress,
+                        )
+
+                    # A tool result is the safe suspension point;
+                    # ``_terminal_tool_observed`` stops the reply once
                     # the timeout reason is set.
                     if (
                         session.terminal_reason is None
