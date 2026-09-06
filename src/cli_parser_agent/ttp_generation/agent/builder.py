@@ -14,6 +14,7 @@ from agentscope.state import AgentState
 from agentscope.tool import Toolkit
 
 from ..progress import ProgressEmitter
+from .model_attempts import ModelAttemptRecorder, ObservedOpenAIChatModel
 from .prompt import (
     SCHEMA_SYSTEM_PROMPT,
     TTP_SYSTEM_PROMPT,
@@ -45,7 +46,6 @@ _PHASE_TOOL_NAMES: dict[GenerationPhase, tuple[str, ...]] = {
         FINISH_GENERATION_TOOL_NAME,
     ),
 }
-
 
 
 class SettingsLike(Protocol):
@@ -120,9 +120,8 @@ def build_agent(
         thinking_enable=bool(thinking_enable),
         reasoning_effort=reasoning_effort,
     )
-    # ``model_timeout_seconds`` must cap one model call, so it is applied to
-    # every httpx phase rather than left as a per-event read timeout.  The
-    # OpenAI SDK also retries internally (``DEFAULT_MAX_RETRIES``), which would
+    # This is an HTTP I/O timeout per phase, not a total model-call deadline.
+    # The OpenAI SDK also retries internally (``DEFAULT_MAX_RETRIES``), which would
     # multiply with AgentScope's own ``max_retries + 1`` loop; forwarding
     # ``max_retries=0`` keeps retry accounting in a single place.
     request_timeout = httpx.Timeout(
@@ -142,7 +141,8 @@ def build_agent(
             timeout=request_timeout,
         )
 
-    model = OpenAIChatModel(
+    model = ObservedOpenAIChatModel(
+        attempt_recorder=ModelAttemptRecorder(session, phase, progress),
         credential=credential,
         model=settings.model_name,
         parameters=parameters,
@@ -205,9 +205,7 @@ async def estimate_initial_model_tokens(
     tools = await agent.toolkit.get_tool_schemas(
         agent.state.tool_context.activated_groups,
     )
-    tool_names = tuple(
-        tool.get("function", {}).get("name") for tool in tools
-    )
+    tool_names = tuple(tool.get("function", {}).get("name") for tool in tools)
     expected_tool_names = _PHASE_TOOL_NAMES[phase]
     if tool_names != expected_tool_names:
         raise RuntimeError(

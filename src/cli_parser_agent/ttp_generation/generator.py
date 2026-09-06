@@ -26,7 +26,7 @@ from .contracts import (
     TemplateRequest,
 )
 from .progress import ProgressEmitter, ProgressObserver
-from .workflow import GenerationMode, _GenerationWorkflow
+from .workflow import GenerationMode, _ExecutionFacts, _GenerationWorkflow
 
 
 class TtpGenerator:
@@ -133,6 +133,7 @@ class TtpGenerator:
 
         request_id = str(uuid4())
         progress = ProgressEmitter(request_id=request_id, observer=observer)
+        execution_facts = _ExecutionFacts()
         base_attributes = {
             "request_id": request_id,
             "model_name": self.settings.model_name,
@@ -142,9 +143,7 @@ class TtpGenerator:
             ),
             "prompt_version": PROMPT_VERSION,
             "command_output_count": len(request.command_outputs),
-            "input_char_count": sum(
-                len(item) for item in request.command_outputs
-            ),
+            "input_char_count": sum(len(item) for item in request.command_outputs),
             "policy_total_timeout_seconds": self.policy.total_timeout_seconds,
             "policy_max_agent_rounds": self.policy.max_agent_rounds,
             "policy_max_ttp_submissions": self.policy.max_ttp_submissions,
@@ -179,6 +178,7 @@ class TtpGenerator:
                         request_id=request_id,
                         mode=mode,
                         injected_schema=injected_schema,
+                        execution_facts=execution_facts,
                     )
                 else:
                     result = await self._generate(
@@ -187,6 +187,7 @@ class TtpGenerator:
                         progress=progress,
                         mode=mode,
                         injected_schema=injected_schema,
+                        execution_facts=execution_facts,
                     )
             except asyncio.CancelledError as error:
                 if progress.enabled:
@@ -199,6 +200,7 @@ class TtpGenerator:
                 trace_metadata = (
                     {
                         **base_attributes,
+                        **execution_facts.as_dict(),
                         "termination_reason": "cancelled",
                         "status": "cancelled",
                     }
@@ -212,6 +214,7 @@ class TtpGenerator:
                     },
                     outcome="cancelled",
                     attributes={
+                        **execution_facts.as_dict(),
                         "termination_reason": "cancelled",
                         "status": "cancelled",
                         "exception_type": type(error).__name__,
@@ -233,6 +236,7 @@ class TtpGenerator:
                 trace_metadata = (
                     {
                         **base_attributes,
+                        **execution_facts.as_dict(),
                         "termination_reason": "exception",
                         "status": "failed",
                     }
@@ -246,6 +250,7 @@ class TtpGenerator:
                     },
                     outcome="exception",
                     attributes={
+                        **execution_facts.as_dict(),
                         "termination_reason": "exception",
                         "status": "failed",
                         "exception_type": type(error).__name__,
@@ -253,6 +258,13 @@ class TtpGenerator:
                     trace_metadata=trace_metadata,
                 )
                 raise
+            finally:
+                progress.custom(
+                    "cli_parser.generation.execution_facts",
+                    execution_facts.as_dict(),
+                    phase="generation",
+                    sensitive=False,
+                )
 
             if progress.enabled:
                 progress.custom(
@@ -262,18 +274,11 @@ class TtpGenerator:
                     sensitive=True,
                 )
             result_metadata = result.metadata
-            # A schema-only result has no artifact or last_attempt, so the
-            # funnel attributes are read tolerantly rather than duplicating the
-            # whole tracing skeleton per result type.
-            artifact = getattr(result, "artifact", None)
-            last_attempt = getattr(result, "last_attempt", None)
-            proposal = getattr(result, "proposal", None)
             final_attributes = {
+                **execution_facts.as_dict(),
                 "request_id": result_metadata.request_id,
                 "model_name": result_metadata.model_name,
-                "model_extra_body_configured": (
-                    self.settings.extra_body is not None
-                ),
+                "model_extra_body_configured": (self.settings.extra_body is not None),
                 "model_extra_body_sha256": model_extra_body_sha256(
                     self.settings.extra_body,
                 ),
@@ -291,23 +296,8 @@ class TtpGenerator:
                 "ttp_test_calls": result_metadata.ttp_test_calls,
                 "termination_reason": result_metadata.termination_reason or "",
                 "fault_domain": result_metadata.fault_domain or "",
-                "schema_frozen": bool(
-                    artifact is not None
-                    or proposal is not None
-                    or result_metadata.ttp_agent_rounds > 0
-                ),
-                "entered_ttp": bool(
-                    result_metadata.ttp_agent_rounds > 0
-                    or result_metadata.ttp_sampled_char_count > 0
-                ),
-                "valid_ttp_candidate": bool(
-                    artifact is not None
-                    or (
-                        last_attempt is not None
-                        and last_attempt.ttp_template is not None
-                    )
-                ),
-                "finish_called": result_metadata.termination_reason == "success",
+                "model_attempts_observed": result_metadata.model_attempts_observed,
+                "model_retries_observed": result_metadata.model_retries_observed,
                 "status": result.status,
             }
             finish_laminar_span(
@@ -326,6 +316,7 @@ class TtpGenerator:
         progress: ProgressEmitter | None = None,
         mode: GenerationMode = "full",
         injected_schema: Mapping[str, object] | None = None,
+        execution_facts: _ExecutionFacts | None = None,
     ) -> Any:
         """Delegate one validated request to its private workflow."""
 
@@ -338,15 +329,19 @@ class TtpGenerator:
             injected_schema=(
                 None if injected_schema is None else dict(injected_schema)
             ),
+            execution_facts=execution_facts,
             progress=(
                 progress
                 if progress is not None
                 else ProgressEmitter(request_id=request_id)
             ),
         )
-        if mode == "schema_only":
-            return await workflow.run_schema_only()
-        return await workflow.run()
+        try:
+            if mode == "schema_only":
+                return await workflow.run_schema_only()
+            return await workflow.run()
+        finally:
+            workflow.execution_facts.capture(workflow.session)
 
 
 __all__ = ["TtpGenerator"]

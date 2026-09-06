@@ -26,6 +26,7 @@ from cli_parser_agent.ttp_generation.agent import (
     build_ttp_task_message,
     estimate_initial_model_tokens,
 )
+from cli_parser_agent.ttp_generation.agent.model_attempts import ObservedOpenAIChatModel
 
 
 def _schema() -> dict[str, Any]:
@@ -77,6 +78,7 @@ def test_builder_constructs_openai_model_without_extra_body() -> None:
     agent = _build_test_agent("schema")
 
     assert isinstance(agent.model, OpenAIChatModel)
+    assert isinstance(agent.model, ObservedOpenAIChatModel)
     assert agent.model.extra_body is None
 
 

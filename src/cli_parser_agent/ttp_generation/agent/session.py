@@ -132,8 +132,10 @@ class GenerationSession:
     ttp_history_compacted_result_chars: int = 0
     ttp_history_compaction_skips: int = 0
     generation_finished: bool = False
+    finish_called: bool = False
     last_issues: tuple[Any, ...] = ()
     terminal_reason: str | None = None
+    model_attempts_observed: int = 0
     model_retries_observed: int = 0
     stream_enabled: bool = False
     # Streaming observations are populated from AgentScope model-call and delta

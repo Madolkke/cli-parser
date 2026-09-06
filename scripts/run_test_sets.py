@@ -6,6 +6,9 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
+import re
+import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -25,6 +28,7 @@ from cli_parser_agent import (  # noqa: E402
     TtpGenerator,
     TtpGeneratorSettings,
 )
+from cli_parser_agent.config import model_extra_body_sha256  # noqa: E402
 from cli_parser_agent.evaluation import (  # noqa: E402
     DatasetPreflightReport,
     HarnessError,
@@ -33,6 +37,8 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     independent_acceptance,
     load_dataset_registry,
     preflight_dataset_registry,
+    project_execution_facts,
+    safe_trial_facts,
     score_ttp_template_output,
     select_dataset_entries,
     wilson_interval,
@@ -43,7 +49,7 @@ from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
     TTP_SYSTEM_PROMPT,
 )
 
-RUNNER_VERSION = 3
+RUNNER_VERSION = 4
 BASELINE_VERSION = 1
 ScriptConfigurationError = _run_support.ScriptConfigurationError
 
@@ -188,9 +194,12 @@ def _configuration() -> tuple[
             "max_tokens": settings.max_tokens,
             "context_size": settings.context_size,
             "model_timeout_seconds": settings.model_timeout_seconds,
+            "model_max_retries": settings.model_max_retries,
+            "verify_tls": settings.verify_tls,
             "thinking_enable": settings.thinking_enable,
             "reasoning_effort": settings.reasoning_effort,
             "extra_body_configured": settings.extra_body is not None,
+            "extra_body_sha256": model_extra_body_sha256(settings.extra_body),
         },
         "policy": policy.model_dump(mode="json"),
         # The prompt is the most likely thing to be A/B tested, so it has to be
@@ -323,6 +332,8 @@ async def _run_ttp_trial(
     policy: Any,
     tracer: _RoundTracer | None = None,
 ) -> dict[str, Any]:
+    if tracer is None:
+        tracer = _RoundTracer(record_rows=False)
     try:
         request = TemplateRequest(
             command_outputs=[item.text for item in case.inputs],
@@ -343,12 +354,14 @@ async def _run_ttp_trial(
             {
                 "generation_result": result_payload,
                 "independent_acceptance": acceptance,
+                "execution_facts": tracer.execution_facts,
             },
             case.expected_records,
         )
         return {
             "generation_result": result_payload,
             "independent_acceptance": acceptance,
+            "execution_facts": tracer.execution_facts,
             "score": score,
             "exception_type": None,
         }
@@ -358,7 +371,11 @@ async def _run_ttp_trial(
         return {
             "generation_result": None,
             "independent_acceptance": None,
-            "score": score_ttp_template_output({}, case.expected_records),
+            "execution_facts": tracer.execution_facts,
+            "score": score_ttp_template_output(
+                {"execution_facts": tracer.execution_facts},
+                case.expected_records,
+            ),
             "exception_type": type(error).__name__,
         }
 
@@ -425,6 +442,44 @@ def _run_baseline(
     return 0
 
 
+def _safe_trial_projection(payload: Mapping[str, Any]) -> dict[str, Any]:
+    score = payload["score"]
+    result = payload.get("generation_result")
+    metadata = result.get("metadata") if isinstance(result, Mapping) else None
+    trace_id = (
+        metadata.get("laminar_trace_id") if isinstance(metadata, Mapping) else None
+    )
+    return {
+        **safe_trial_facts(payload, score["metrics"]),
+        "execution_facts": project_execution_facts(payload.get("execution_facts")),
+        "score": score,
+        "trace_id": trace_id,
+    }
+
+
+def _git_state() -> dict[str, Any]:
+    try:
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        dirty = bool(
+            subprocess.run(
+                ["git", "status", "--porcelain"],
+                cwd=PROJECT_ROOT,
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return {"revision": None, "dirty": None}
+    return {"revision": revision, "dirty": dirty}
+
+
 async def _run_ttp(
     args: argparse.Namespace,
     registry: Any,
@@ -462,12 +517,13 @@ async def _run_ttp(
         dataset_directory.mkdir()
         _run_support.write_json(dataset_directory / "preflight.json", report.as_dict())
     config_fingerprint = _fingerprint(configuration)
+    git_state = _git_state()
     semaphore = asyncio.Semaphore(args.concurrency)
 
     async def execute(case: Any, trial_index: int) -> dict[str, Any]:
         async with semaphore:
             started_at = datetime.now(UTC).isoformat()
-            tracer = _RoundTracer() if args.trace_rounds else None
+            tracer = _RoundTracer(record_rows=args.trace_rounds)
             payload = await _run_ttp_trial(case, settings, policy, tracer)
             finished_at = datetime.now(UTC).isoformat()
             document = {
@@ -476,9 +532,11 @@ async def _run_ttp(
                 "started_at": started_at,
                 "finished_at": finished_at,
                 "config_fingerprint": config_fingerprint,
+                "git": git_state,
                 "case": _case_metadata(case, args.input_scope),
                 "trial_index": trial_index,
-                **payload,
+                "trial_id": f"{run_directory.name}/{case.id}/{trial_index + 1}",
+                **_safe_trial_projection(payload),
             }
             case_directory = run_directory / "datasets" / case.id / "trials"
             case_directory.mkdir(parents=True, exist_ok=True)
@@ -486,7 +544,7 @@ async def _run_ttp(
                 case_directory / f"trial-{trial_index + 1:02d}.json",
                 document,
             )
-            if tracer is not None:
+            if args.trace_rounds:
                 trace_path = (
                     case_directory / f"trial-{trial_index + 1:02d}.rounds.jsonl"
                 )
@@ -505,6 +563,7 @@ async def _run_ttp(
             return {
                 "case_id": case.id,
                 "trial_index": trial_index,
+                "trial_id": document["trial_id"],
                 "strict_pass": metrics["candidate_pass"] == 1.0,
                 "metrics": metrics,
                 "exception_type": payload["exception_type"],
@@ -548,6 +607,7 @@ async def _run_ttp(
         "status": status,
         "registry": {"path": str(registry.path), "sha256": registry.sha256},
         "config_fingerprint": config_fingerprint,
+        "git": git_state,
         "configuration": configuration,
         "case_count": len(cases),
         "runnable_count": len(cases),
@@ -602,24 +662,74 @@ async def _run_ttp(
 
 
 class _RoundTracer:
-    """Collect one safe record per observed event for loop diagnosis.
+    """Always collect execution facts; optionally retain allowlisted event rows."""
 
-    A burned-out trial records agent_rounds=32, ttp_submissions=0 and nothing
-    else, so 32 rounds of behaviour are invisible. This keeps the sequence of
-    model calls, tool names, token growth and template digests.
+    _VALUE_FIELDS = frozenset(
+        {
+            "submission_index",
+            "template_sha256",
+            "template_chars",
+            "compacted_interactions",
+            "retained_interactions",
+            "compacted_input_chars",
+            "compacted_result_chars",
+            "remaining_seconds",
+            "retry_number",
+            "max_retries",
+            "status",
+            "phase_completed",
+            "agent_rounds",
+            "termination_reason",
+            "exception_type",
+            "valid",
+            "reason",
+            "reply_id",
+            "model_call_event_id",
+            "event",
+            "phase",
+            "round_index",
+            "attempt_index",
+            "request_attempt_index",
+            "is_retry",
+            "outcome",
+            "error_category",
+            "elapsed_seconds",
+        }
+    )
+    _EVENT_NAMES = frozenset(
+        {
+            "cli_parser.generation.execution_facts",
+            "cli_parser.generation.cancelled",
+            "cli_parser.generation.exception",
+            "cli_parser.phase.completed",
+            "cli_parser.final_validation.started",
+            "cli_parser.final_validation.completed",
+            "cli_parser.ttp.history_compacted",
+            "cli_parser.round.skipped",
+            "cli_parser.model.output_discarded",
+            "cli_parser.no_tool.retry",
+            "cli_parser.ttp.submission",
+            "cli_parser.model.attempt",
+        }
+    )
 
-    Only events the emitter marked non-sensitive are kept, and only scalar
-    facts from them -- never a template, record, or command output. Comparing
-    consecutive template digests shows whether the model is resubmitting the
-    same candidate; run_agent_tui.py remains the full-fidelity channel.
-    """
-
-    def __init__(self) -> None:
+    def __init__(self, *, record_rows: bool = True) -> None:
         self.rows: list[dict[str, Any]] = []
+        self.execution_facts: dict[str, bool] = {}
+        self.record_rows = record_rows
 
     def __call__(self, event: Any) -> None:
         metadata = getattr(event, "metadata", None) or {}
         if metadata.get("sensitive") is not False:
+            return
+        custom_name = getattr(event, "name", None)
+        value = getattr(event, "value", None)
+        if custom_name == "cli_parser.generation.execution_facts":
+            self.execution_facts = project_execution_facts(value)
+            value = self.execution_facts
+        if not self.record_rows:
+            return
+        if custom_name is not None and custom_name not in self._EVENT_NAMES:
             return
         row: dict[str, Any] = {
             "sequence": metadata.get("sequence"),
@@ -628,18 +738,28 @@ class _RoundTracer:
             "event": type(event).__name__,
         }
         for field in ("finished_reason", "input_tokens", "output_tokens"):
-            value = getattr(event, field, None)
-            if value is not None:
-                row[field] = value if isinstance(value, int) else str(value)
+            field_value = getattr(event, field, None)
+            if field_value is not None:
+                row[field] = (
+                    field_value if isinstance(field_value, int) else str(field_value)
+                )
         name = getattr(event, "tool_call_name", None) or getattr(event, "name", None)
         if name is not None:
             row["name"] = str(name)
-        value = getattr(event, "value", None)
         if isinstance(value, Mapping):
             row["value"] = {
                 key: item
                 for key, item in value.items()
-                if isinstance(item, str | int | float | bool | None)
+                if (key in self._VALUE_FIELDS or key in self.execution_facts)
+                and (
+                    item is None
+                    or isinstance(item, bool)
+                    or isinstance(item, int | float)
+                    and math.isfinite(item)
+                    or isinstance(item, str)
+                    and len(item) <= 128
+                    and re.fullmatch(r"[A-Za-z0-9_.:-]+", item) is not None
+                )
             }
         self.rows.append(row)
 

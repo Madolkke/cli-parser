@@ -169,6 +169,7 @@ class GenerationMetadata(ContractModel):
     first_ttp_passed: bool | None = None
     termination_reason: str | None = Field(default=None, max_length=128)
     fault_domain: Literal["agent", "model", "budget"] | None = None
+    model_attempts_observed: int = Field(default=0, ge=0)
     model_retries_observed: int = Field(default=0, ge=0)
     stream_enabled: bool = False
     stream_first_delta_seconds: float | None = Field(default=None, ge=0.0)

@@ -69,6 +69,10 @@ Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预�
 
 根 span、phase span 与 TOOL span 采用显式生命周期管理，使正常返回、结构化失败、异常和协作式取消都能结束并导出；Schema 失败不会创建 `ttp.phase`，强制杀进程仍不保证上传。
 
+私有模型适配器围绕 AgentScope `_call_api` 记录 `model.attempt` DEFAULT span 和安全事件，保留框架的重试循环及 SDK 零重试设置；流式调用观察到消费结束、异常或关闭，极薄的 `__call__` 包装仅负责关闭内层流。`model_calls_observed` 仍表示完成的逻辑模型调用，tokens/cost 只由原有 LLM span 统计。模型超时配置是 HTTP I/O 等待超时，不是单次请求的墙钟总上限。
+
+请求内私有执行事实记录 Schema 冻结、进入 TTP、有效候选、finish 调用/成功及终验开始/通过；通过根 Trace 和 `cli_parser.generation.execution_facts` 安全 observer 事件投影。它们不进入模型上下文或失败公共结果，取消与异常也从 workflow 的 finally 获取事实。
+
 Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。TTP 候选只要完成隔离解析，模型就会收到按输入分隔的完整结果块（内部记录数据仍受 `GenerationPolicy.max_parse_result_bytes` 的现有最高 `8 MiB` 限制）；无 records 时追加固定中文错误。内部 `submit_ttp_template` TOOL span 仍保留 accepted、issues、候选状态和最多 `32 KiB` 的有界 capture，不进入失败的公共结果；`test_ttp_template` TOOL span 可观测独立测试输入、原始解析结果和 `ttp_test_calls`，但这些数据不参与严格正确率。`finish_generation` TOOL span 只记录空输入和接受/拒绝反馈，不重复记录模板或 capture。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
 
 ### 2.5 可选 observer 与只读 TUI
@@ -271,7 +275,8 @@ GenerationMetadata
   schema_no_tool_retries: int         # 实际发起的 Schema 中文提醒重试次数
   ttp_no_tool_retries: int            # 实际发起的 TTP 中文提醒重试次数
   fault_domain: agent | model | budget | None  # 失败归因：本方代码/配置、外部模型、还是预算耗尽；成功时为 None
-  model_retries_observed: int         # 预留计数，当前尚未接入 AgentScope 透明重试，不能据此判断无重试
+  model_attempts_observed: int        # 实际进入模型适配器的尝试次数，不保证已发送 HTTP
+  model_retries_observed: int         # 同阶段同轮实际开始的第二次及后续尝试
   ttp_history_compaction_events: int  # 实际修改旧提交结果的次数
   ttp_history_compacted_interactions: int  # 被固定说明替换的旧提交结果数
   ttp_history_compacted_input_chars: int   # 恒为 0，工具调用参数保持原样

@@ -380,6 +380,11 @@ async def test_generation_result_captures_the_active_laminar_trace(
         "entered_ttp": False,
         "valid_ttp_candidate": False,
         "finish_called": False,
+        "finish_succeeded": False,
+        "final_acceptance_started": False,
+        "final_acceptance_passed": False,
+        "model_attempts_observed": 0,
+        "model_retries_observed": 0,
         "status": "failed",
     }
 
@@ -850,9 +855,7 @@ async def test_malformed_finish_after_candidate_keeps_invalid_tool_classificatio
         return AgentRunOutcome(
             exceeded_max_iters=True,
             ended_after_invalid_tool_call=True,
-            submission_tool_call_invalids=(
-                session.submission_tool_call_invalids
-            ),
+            submission_tool_call_invalids=(session.submission_tool_call_invalids),
         )
 
     _install_agent_stubs(monkeypatch, run)
@@ -861,9 +864,7 @@ async def test_malformed_finish_after_candidate_keeps_invalid_tool_classificatio
     )
 
     assert result.status == "failed"
-    assert result.metadata.termination_reason == (
-        "model_submission_tool_call_invalid"
-    )
+    assert result.metadata.termination_reason == ("model_submission_tool_call_invalid")
     assert [issue.code for issue in result.issues] == [
         "model.submission_tool_call_invalid",
     ]
@@ -1164,6 +1165,7 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
         request_id: str,
         mode: str = "full",
         injected_schema: Any = None,
+        execution_facts: Any = None,
     ) -> GenerationResult:
         del mode, injected_schema
         return GenerationResult(
@@ -1233,6 +1235,7 @@ async def test_root_trace_records_only_extra_body_hash(
         request_id: str,
         mode: str = "full",
         injected_schema: Any = None,
+        execution_facts: Any = None,
     ) -> GenerationResult:
         del mode, injected_schema
         return GenerationResult(

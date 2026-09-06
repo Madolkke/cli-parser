@@ -72,6 +72,28 @@ _DRAIN_GRACE_SECONDS = 10.0
 _DRAIN_CANCEL_ATTEMPTS = 3
 
 
+@dataclass(slots=True)
+class _ExecutionFacts:
+    """Private request facts, independent of public artifacts and model feedback."""
+
+    schema_frozen: bool = False
+    entered_ttp: bool = False
+    valid_ttp_candidate: bool = False
+    finish_called: bool = False
+    finish_succeeded: bool = False
+    final_acceptance_started: bool = False
+    final_acceptance_passed: bool = False
+
+    def capture(self, session: GenerationSession) -> None:
+        self.schema_frozen = session.schema_is_frozen
+        self.valid_ttp_candidate = session.has_validated_ttp_candidate
+        self.finish_called = session.finish_called
+        self.finish_succeeded = session.generation_finished
+
+    def as_dict(self) -> dict[str, bool]:
+        return asdict(self)
+
+
 @dataclass(frozen=True, slots=True)
 class _PhaseExecution:
     """One phase's result, including failures before its first model call."""
@@ -585,6 +607,7 @@ class _GenerationWorkflow:
         progress: ProgressEmitter,
         mode: GenerationMode = "full",
         injected_schema: dict[str, Any] | None = None,
+        execution_facts: _ExecutionFacts | None = None,
     ) -> None:
         if mode == "template_only" and injected_schema is None:
             raise ValueError("template_only mode requires an injected schema")
@@ -599,6 +622,9 @@ class _GenerationWorkflow:
         self.request = request
         self.request_id = request_id
         self.progress = progress
+        self.execution_facts = (
+            execution_facts if execution_facts is not None else _ExecutionFacts()
+        )
         self.started = time.monotonic()
         self.deadline = self.started + policy.total_timeout_seconds
         self.schema_sampled: list[SampledCommandOutput] = []
@@ -760,6 +786,7 @@ class _GenerationWorkflow:
             first_ttp_passed=self.session.first_ttp_valid,
             termination_reason=termination_reason,
             fault_domain=_classify_fault_domain(termination_reason),
+            model_attempts_observed=self.session.model_attempts_observed,
             model_retries_observed=self.session.model_retries_observed,
             stream_enabled=self.session.stream_enabled,
             stream_first_delta_seconds=self.session.stream_first_delta_seconds,
@@ -1158,6 +1185,8 @@ class _GenerationWorkflow:
         self,
         frozen_result_schema: Mapping[str, Any],
     ) -> _PhaseExecution:
+        self.execution_facts.entered_ttp = True
+
         def serialize_prompt(texts: Sequence[str]) -> str:
             return build_ttp_task_prompt(texts, frozen_result_schema)
 
@@ -1391,6 +1420,7 @@ class _GenerationWorkflow:
     async def _accept_artifact(self) -> GenerationResult:
         """Emit the final acceptance lifecycle around deterministic checks."""
 
+        self.execution_facts.final_acceptance_started = True
         if self.progress.enabled:
             self.progress.custom(
                 "cli_parser.final_validation.started",
@@ -1411,6 +1441,9 @@ class _GenerationWorkflow:
         ):
             try:
                 result = await self._accept_artifact_impl(summary)
+                self.execution_facts.final_acceptance_passed = (
+                    result.status == "success"
+                )
             except asyncio.CancelledError:
                 summary.update(
                     {

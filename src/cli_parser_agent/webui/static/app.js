@@ -74,7 +74,7 @@ const RUNTIME_FIELDS = [
   { group: "settings", name: "max_tokens", label: "最大输出 Token", type: "number", min: "1" },
   { group: "settings", name: "context_size", label: "上下文长度", type: "number", min: "1" },
   { group: "settings", name: "model_max_retries", label: "模型重试次数", type: "number", min: "0" },
-  { group: "settings", name: "model_timeout_seconds", label: "单次模型超时（秒）", type: "number", min: "0.1", step: "0.1" },
+  { group: "settings", name: "model_timeout_seconds", label: "模型 I/O 超时（秒）", type: "number", min: "0.1", step: "0.1" },
   { group: "policy", name: "total_timeout_seconds", label: "总运行超时（秒）", type: "number", min: "0.1", step: "0.1" },
   { group: "policy", name: "max_agent_rounds", label: "最大 Agent 轮次", type: "number", min: "1" },
   { group: "policy", name: "max_ttp_submissions", label: "最大 TTP 提交次数", type: "number", min: "1" },

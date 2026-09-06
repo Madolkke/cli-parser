@@ -41,9 +41,9 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 结果、Trace、历史 artifact、上游模板或模型生成答案。标准 TTP 模板是可审查的确定性基线，
 用于确认四件套自身闭环；TTP-only Agent 只按 Schema 和 expected records 评估。
 
-运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，可能包含模板、records 和模型
-输出，应按本地敏感调试数据处理。入口可以保存脱敏配置指纹和可选 Trace ID，不把 API Key
-写入 summary。完整两阶段 Schema Agent 评测不属于本入口。
+运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、配置指纹及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。完整两阶段 Schema Agent 评测不属于本入口。
+
+runner 版本 4 始终收集安全执行事实；`--trace-rounds` 仅控制逐事件明细落盘。漏斗区分有效候选、finish 调用、finish 成功及最终验收，缺少观测时省略数值指标而非填写零。候选轨迹只有可证实的时间顺序才判定有效提交发生于成功 finish 之前，否则报告未知。严格评分与遥测完整性独立，正确率 baseline 格式保持版本 1。配置指纹包含模型重试次数、TLS 校验开关和 `extra_body` 内容的 SHA-256，不包含凭据或请求扩展正文。
 
 旧的 `evals/ttp_generation/`、`target/schema_contract` 双格式、
 `run_agent_evaluation.py` 和 `run_ttp_template_evaluation.py` 不再是评测路径。没有标准

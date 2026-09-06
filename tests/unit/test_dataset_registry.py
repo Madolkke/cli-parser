@@ -73,10 +73,7 @@ def _write_dataset(
         )
         (case / "expected.json").write_text(
             json.dumps(
-                [
-                    {"value": f"Value: {values[index]}"}
-                    for index in range(input_count)
-                ],
+                [{"value": f"Value: {values[index]}"} for index in range(input_count)],
             )
             + "\n",
             encoding="utf-8",
@@ -307,8 +304,7 @@ def test_default_scope_ignores_nondefault_baseline_mismatch(tmp_path: Path) -> N
     expected_path = tmp_path / "test_sets" / "demo.case" / "expected.json"
     old_expected_hash = _sha(expected_path)
     expected_path.write_text(
-        json.dumps([{"value": "Value: alpha"}, {"value": "Value: wrong"}])
-        + "\n",
+        json.dumps([{"value": "Value: alpha"}, {"value": "Value: wrong"}]) + "\n",
         encoding="utf-8",
     )
     text = registry_path.read_text(encoding="utf-8").replace(
@@ -417,6 +413,7 @@ def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
                 "template_sha256": "ab12",
                 "template_chars": 640,
                 "records": [{"leaked": True}],
+                "command_output": "secret-scalar",
             },
         ),
     )
@@ -429,6 +426,136 @@ def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
         "template_chars": 640,
     }
     assert "secret" not in json.dumps(tracer.rows)
+
+
+def test_round_tracer_collects_execution_facts_without_recording_rows() -> None:
+    from types import SimpleNamespace
+
+    runner = _load_runner()
+    tracer = runner._RoundTracer(record_rows=False)
+    other = runner._RoundTracer(record_rows=False)
+    tracer(
+        SimpleNamespace(
+            metadata={"sensitive": False},
+            name="cli_parser.generation.execution_facts",
+            value={
+                "schema_frozen": True,
+                "finish_succeeded": False,
+                "finish_called": "true",
+                "records": "secret",
+            },
+        )
+    )
+    assert tracer.execution_facts == {"schema_frozen": True, "finish_succeeded": False}
+    assert not tracer.rows
+    assert not other.execution_facts
+    tracer(
+        SimpleNamespace(
+            metadata={"sensitive": True},
+            name="cli_parser.generation.execution_facts",
+            value={"schema_frozen": False},
+        )
+    )
+    assert tracer.execution_facts["schema_frozen"] is True
+
+
+@pytest.mark.asyncio
+async def test_runner_collects_facts_without_rows_on_schema_rejection() -> None:
+    from types import SimpleNamespace
+
+    from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings
+
+    runner = _load_runner()
+    tracer = runner._RoundTracer(record_rows=False)
+    result = await runner._run_ttp_trial(
+        SimpleNamespace(
+            inputs=(SimpleNamespace(text="Value: one"),),
+            schema={"type": "object", "properties": {}, "additionalProperties": True},
+            expected_records=({},),
+        ),
+        TtpGeneratorSettings(api_key="unused", model_name="unused"),
+        GenerationPolicy(),
+        tracer,
+    )
+    assert result["exception_type"] is None
+    assert result["generation_result"]["metadata"]["termination_reason"] == (
+        "invalid_injected_schema"
+    )
+    assert len(result["execution_facts"]) == 7
+    assert not any(result["execution_facts"].values())
+    assert result["score"]["metrics"]["entered_ttp"] == 0.0
+    assert not tracer.rows
+
+
+def test_round_tracer_keeps_attempt_diagnostics_without_exception_text() -> None:
+    from types import SimpleNamespace
+
+    tracer = _load_runner()._RoundTracer()
+    tracer(
+        SimpleNamespace(
+            metadata={"sensitive": False, "phase": "ttp"},
+            name="cli_parser.model.attempt",
+            value={
+                "event": "finished",
+                "round_index": 2,
+                "attempt_index": 2,
+                "request_attempt_index": 3,
+                "is_retry": True,
+                "outcome": "exception",
+                "error_category": "timeout",
+                "elapsed_seconds": 60.1,
+                "exception": "secret",
+                "client": "secret",
+            },
+        )
+    )
+    assert tracer.rows[0]["value"]["error_category"] == "timeout"
+    assert tracer.rows[0]["value"]["elapsed_seconds"] == 60.1
+    assert "secret" not in json.dumps(tracer.rows)
+
+
+def test_persisted_trial_projection_excludes_raw_generation_and_acceptance() -> None:
+    runner = _load_runner()
+    payload = {
+        "generation_result": {
+            "status": "failed",
+            "artifact": {"ttp_template": "secret-template", "records": ["secret"]},
+            "last_attempt": {"ttp_template": "secret-last"},
+            "metadata": {
+                "termination_reason": "model_error",
+                "fault_domain": "model",
+                "laminar_trace_id": "trace-id",
+            },
+            "issues": [
+                {"code": "model.failed", "message": "secret-error"},
+                {"code": "secret code"},
+            ],
+        },
+        "independent_acceptance": {
+            "valid": False,
+            "records": ["secret"],
+            "issue_codes": ["ttp.no_match", "secret code"],
+        },
+        "execution_facts": {
+            "finish_called": True,
+            "finish_succeeded": False,
+            "model_text": "secret",
+        },
+        "exception_type": None,
+        "score": {"metrics": {"candidate_pass": 0.0}, "inputs": []},
+    }
+    projected = runner._safe_trial_projection(payload)
+    assert projected["trace_id"] == "trace-id"
+    assert projected["issue_codes"] == ["model.failed", "ttp.no_match"]
+    assert projected["last_attempt_present"] is True
+    assert projected["execution_facts"] == {
+        "finish_called": True,
+        "finish_succeeded": False,
+    }
+    assert "generation_result" not in projected
+    assert "independent_acceptance" not in projected
+    assert "secret" not in json.dumps(projected)
+    assert payload["generation_result"]["artifact"]["ttp_template"] == "secret-template"
 
 
 def test_case_pass_counts_group_trials_by_case() -> None:
@@ -536,9 +663,14 @@ def test_config_fingerprint_covers_prompt_identity(
     baseline = runner._fingerprint(configuration)
 
     assert configuration["prompt"]["version"] == prompt_module.PROMPT_VERSION
-    assert configuration["prompt"]["ttp_system_sha256"] == hashlib.sha256(
-        prompt_module.TTP_SYSTEM_PROMPT.encode("utf-8"),
-    ).hexdigest()
+    assert runner.RUNNER_VERSION == 4
+    assert runner.BASELINE_VERSION == 1
+    assert (
+        configuration["prompt"]["ttp_system_sha256"]
+        == hashlib.sha256(
+            prompt_module.TTP_SYSTEM_PROMPT.encode("utf-8"),
+        ).hexdigest()
+    )
 
     # Bumping the version alone moves it, and so does an unbumped content edit.
     for key, value in (
@@ -548,3 +680,36 @@ def test_config_fingerprint_covers_prompt_identity(
         mutated = json.loads(json.dumps(configuration))
         mutated["prompt"][key] = value
         assert runner._fingerprint(mutated) != baseline, key
+
+
+def test_config_fingerprint_covers_retry_tls_and_extra_body(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from cli_parser_agent import TtpGeneratorSettings
+    from cli_parser_agent.config import model_extra_body_sha256
+
+    settings = TtpGeneratorSettings(
+        api_key="secret-key",
+        model_name="test-model",
+        base_url="https://example.invalid/v1",
+        model_max_retries=3,
+        verify_tls=False,
+        extra_body={"provider_setting": "secret-body"},
+    )
+    runner = _load_runner()
+    monkeypatch.setattr(runner.TtpGeneratorSettings, "from_env", lambda: settings)
+    _, _, _, configuration = runner._configuration()
+    model = configuration["model"]
+    assert model["model_max_retries"] == 3
+    assert model["verify_tls"] is False
+    assert model["extra_body_sha256"] == model_extra_body_sha256(settings.extra_body)
+    assert "secret" not in json.dumps(configuration)
+    fingerprint = runner._fingerprint(configuration)
+    for key, value in (
+        ("model_max_retries", 2),
+        ("verify_tls", True),
+        ("extra_body_sha256", ""),
+    ):
+        altered = json.loads(json.dumps(configuration))
+        altered["model"][key] = value
+        assert runner._fingerprint(altered) != fingerprint

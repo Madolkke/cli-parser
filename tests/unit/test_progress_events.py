@@ -197,6 +197,7 @@ async def test_generate_emits_request_lifecycle_and_accepts_keyword_observer(
         progress: ProgressEmitter,
         mode: str = "full",
         injected_schema: Any = None,
+        execution_facts: Any = None,
     ) -> GenerationResult:
         assert mode == "full"
         assert injected_schema is None
@@ -215,10 +216,11 @@ async def test_generate_emits_request_lifecycle_and_accepts_keyword_observer(
     lifecycle = [event for event in observed if isinstance(event, CustomEvent)]
     assert [event.name for event in lifecycle] == [
         "cli_parser.generation.started",
+        "cli_parser.generation.execution_facts",
         "cli_parser.generation.completed",
     ]
     assert lifecycle[0].value["request"]["command_outputs"] == ["value: one"]
-    assert lifecycle[1].value["result"]["status"] == "success"
+    assert lifecycle[2].value["result"]["status"] == "success"
     assert {event.metadata["request_id"] for event in lifecycle} == {
         result.metadata.request_id
     }
@@ -237,6 +239,7 @@ async def test_generate_emits_cancelled_without_exception_event(
         progress: ProgressEmitter,
         mode: str = "full",
         injected_schema: Any = None,
+        execution_facts: Any = None,
     ) -> GenerationResult:
         del request, request_id, progress, mode, injected_schema
         raise asyncio.CancelledError
@@ -252,6 +255,7 @@ async def test_generate_emits_cancelled_without_exception_event(
     assert names == [
         "cli_parser.generation.started",
         "cli_parser.generation.cancelled",
+        "cli_parser.generation.execution_facts",
     ]
 
 
@@ -268,6 +272,7 @@ async def test_generate_exception_event_records_only_the_exception_type(
         progress: ProgressEmitter,
         mode: str = "full",
         injected_schema: Any = None,
+        execution_facts: Any = None,
     ) -> GenerationResult:
         del request, request_id, progress, mode, injected_schema
         raise RuntimeError("secret exception body")
@@ -279,7 +284,7 @@ async def test_generate_exception_event_records_only_the_exception_type(
             observer=observed.append,
         )
 
-    event = observed[-1]
+    event = observed[-2]
     assert isinstance(event, CustomEvent)
     assert event.name == "cli_parser.generation.exception"
     assert event.value == {"status": "failed", "exception_type": "RuntimeError"}
@@ -521,6 +526,7 @@ async def test_workflow_emits_phase_sampling_and_final_validation(
         "cli_parser.phase.completed",
         "cli_parser.final_validation.started",
         "cli_parser.final_validation.completed",
+        "cli_parser.generation.execution_facts",
         "cli_parser.generation.completed",
     ]
     sampling = [

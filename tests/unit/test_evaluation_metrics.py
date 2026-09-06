@@ -11,6 +11,7 @@ from cli_parser_agent.evaluation import (
     project_candidate_quality,
     project_candidate_trajectory,
     project_human_reviews,
+    score_executor_output,
     score_records_by_input,
     score_ttp_template_output,
     summarize_span_metrics,
@@ -77,7 +78,9 @@ def test_score_ttp_template_output_projects_history_compaction_metrics() -> None
     assert metrics["ttp_history_compaction_skips"] == 1.0
 
 
-def test_score_ttp_template_output_defaults_history_compaction_metrics() -> None:
+def test_score_ttp_template_output_omits_unobserved_history_compaction_metrics() -> (
+    None
+):
     result = score_ttp_template_output({}, ())
 
     for name in (
@@ -87,7 +90,7 @@ def test_score_ttp_template_output_defaults_history_compaction_metrics() -> None
         "ttp_history_compacted_result_chars",
         "ttp_history_compaction_skips",
     ):
-        assert result["metrics"][name] == 0.0
+        assert name not in result["metrics"]
 
 
 def test_wilson_interval_is_bounded_and_handles_empty_samples() -> None:
@@ -186,6 +189,8 @@ def test_candidate_projection_excludes_template_and_capture_values() -> None:
         },
         {
             "name": "submit_ttp_template",
+            "start_time": 2.0,
+            "end_time": 3.0,
             "output": {
                 "accepted": True,
                 "validated_candidate_available": True,
@@ -198,7 +203,11 @@ def test_candidate_projection_excludes_template_and_capture_values() -> None:
                 },
             },
         },
-        {"name": "finish_generation", "output": {"status": "finished"}},
+        {
+            "name": "finish_generation",
+            "start_time": 4.0,
+            "output": {"generation_finished": True, "accepted": True},
+        },
     ]
 
     quality = project_candidate_quality(spans[1], expected_records=[{"name": "x"}])
@@ -216,6 +225,175 @@ def test_candidate_projection_excludes_template_and_capture_values() -> None:
     assert trajectory["accepted_count"] == 1
     assert trajectory["first_accepted_submission"] == 2
     assert trajectory["finish_after_first_accepted"] is True
+
+
+@pytest.mark.parametrize(
+    "facts",
+    [
+        {"schema_frozen": True, "entered_ttp": False, "finish_called": False},
+        {
+            "valid_ttp_candidate": False,
+            "finish_called": True,
+            "finish_succeeded": False,
+        },
+        {"valid_ttp_candidate": True, "finish_called": True, "finish_succeeded": False},
+        {
+            "finish_succeeded": True,
+            "final_acceptance_started": True,
+            "final_acceptance_passed": False,
+        },
+    ],
+)
+def test_scoring_uses_execution_facts_without_changing_correctness(facts: dict) -> None:
+    output = {
+        "generation_result": {
+            "status": "success",
+            "issues": [],
+            "artifact": {"records": [{}], "result_schema": {}},
+            "last_attempt": {"ttp_template": "untrusted"},
+            "metadata": {
+                "termination_reason": "success",
+                "model_attempts_observed": 3,
+                "model_retries_observed": 1,
+            },
+        },
+        "independent_acceptance": {"valid": True},
+    }
+    target = {"records": [{}], "schema_contract": []}
+    for score in (
+        lambda value: score_ttp_template_output(value, [{}])["metrics"],
+        lambda value: score_executor_output(value, target),
+    ):
+        original = score(output)
+        observed = score({**output, "execution_facts": {**facts, "payload": "secret"}})
+        assert "finish_called" not in original
+        assert observed["candidate_pass"] == original["candidate_pass"]
+        assert observed["model_attempts_observed"] == 3.0
+        assert observed["model_retries_observed"] == 1.0
+        assert "payload" not in observed
+        for key, value in facts.items():
+            assert observed[key] == float(value)
+
+
+def test_execution_facts_survive_missing_result_and_reject_nonbooleans() -> None:
+    output = {
+        "execution_facts": {
+            "entered_ttp": False,
+            "finish_called": 1,
+            "finish_succeeded": "true",
+        }
+    }
+    for score in (
+        score_ttp_template_output(output, [])["metrics"],
+        score_executor_output(output, {}),
+    ):
+        assert score["entered_ttp"] == 0.0
+        assert "finish_called" not in score
+        assert "finish_succeeded" not in score
+    aggregate = aggregate_trial_scores(
+        [
+            {"metrics": {"finish_called": 1.0}},
+            {"metrics": {}},
+        ]
+    )
+    assert aggregate["binary"]["finish_called"]["observations"] == 1
+
+
+def test_unobserved_resources_do_not_become_zero_measurements() -> None:
+    for result in (
+        score_ttp_template_output({}, [])["metrics"],
+        score_executor_output({}, {}),
+    ):
+        for name in (
+            "model_attempts_observed",
+            "model_retries_observed",
+            "elapsed_seconds",
+            "agent_rounds",
+            "input_tokens_total",
+            "ttp_submissions",
+        ):
+            assert name not in result
+        assert result["candidate_pass"] == 0.0
+    result = score_ttp_template_output(
+        {
+            "generation_result": {
+                "status": "failed",
+                "metadata": {
+                    "model_attempts_observed": 0,
+                    "model_retries_observed": None,
+                    "agent_rounds": float("nan"),
+                    "elapsed_seconds": float("inf"),
+                },
+            },
+            "independent_acceptance": {"valid": False},
+        },
+        [],
+    )
+    assert result["metrics"]["model_attempts_observed"] == 0.0
+    for name in ("model_retries_observed", "agent_rounds", "elapsed_seconds"):
+        assert name not in result["metrics"]
+
+
+@pytest.mark.parametrize(
+    ("accepted_end", "finish_start", "succeeded", "expected"),
+    [
+        (1.0, 2.0, True, True),
+        (3.0, 2.0, True, False),
+        (2.0, 2.0, True, False),
+        (None, 2.0, True, None),
+        (1.0, None, True, None),
+        (1.0, 2.0, None, None),
+        (1.0, 2.0, False, False),
+        ("2026-09-06T00:00:01+00:00", "2026-09-06T00:00:02+00:00", True, True),
+    ],
+)
+def test_candidate_finish_order_requires_successful_finish_and_timestamps(
+    accepted_end,
+    finish_start,
+    succeeded,
+    expected,
+) -> None:
+    trajectory = project_candidate_trajectory(
+        [
+            {
+                "name": "finish_generation",
+                "start_time": finish_start,
+                "output": {"generation_finished": succeeded, "accepted": succeeded},
+            },
+            {
+                "name": "submit_ttp_template",
+                "end_time": accepted_end,
+                "output": {"accepted": True, "ttp_submission": 1},
+            },
+        ]
+    )
+    assert trajectory["finish_called"] is True
+    assert trajectory["finish_succeeded"] is succeeded
+    assert trajectory["finish_after_first_accepted"] is expected
+    unknown = project_candidate_trajectory([])
+    assert unknown["finish_called"] is None
+    assert unknown["finish_succeeded"] is None
+    assert unknown["finish_after_first_accepted"] is None
+
+
+def test_rejected_finish_with_previous_success_is_not_successful_finish() -> None:
+    result = project_candidate_trajectory(
+        [
+            {
+                "name": "finish_generation",
+                "start_time": 2.0,
+                "output": {"generation_finished": True, "accepted": False},
+            },
+            {
+                "name": "submit_ttp_template",
+                "end_time": 1.0,
+                "output": {"accepted": True, "ttp_submission": 1},
+            },
+        ]
+    )
+    assert result["finish_called"] is True
+    assert result["finish_succeeded"] is False
+    assert result["finish_after_first_accepted"] is False
 
 
 def test_human_review_projection_is_bounded_and_merges_duplicate_labels() -> None:

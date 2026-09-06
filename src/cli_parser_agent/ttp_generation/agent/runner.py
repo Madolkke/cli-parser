@@ -568,6 +568,8 @@ async def run_generation_phase(
                 elif isinstance(event, ToolCallStartEvent):
                     session.tool_call_starts += 1
                     tool_name = event.tool_call_name
+                    if tool_name == FINISH_GENERATION_TOOL_NAME:
+                        session.finish_called = True
                     round_tool_names.add(tool_name)
                     pending_tool_calls[event.tool_call_id] = (
                         tool_name,

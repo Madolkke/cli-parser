@@ -10,6 +10,7 @@ import tomllib
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, cast
 
@@ -80,6 +81,34 @@ _REVIEW_LABELS = frozenset({"reasonable", "repairable", "unreasonable"})
 _REVIEW_PHASES = frozenset({"schema", "ttp"})
 _REVIEW_DIMENSION_RE = re.compile(r"^[a-z][a-z0-9_]{0,31}$")
 _REVIEW_VALUE_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+EXECUTION_FACT_NAMES = (
+    "schema_frozen",
+    "entered_ttp",
+    "valid_ttp_candidate",
+    "finish_called",
+    "finish_succeeded",
+    "final_acceptance_started",
+    "final_acceptance_passed",
+)
+
+
+def project_execution_facts(value: Any) -> dict[str, bool]:
+    """Keep observed booleans only; absent facts remain unknown."""
+
+    if not isinstance(value, Mapping):
+        return {}
+    return {
+        name: value[name]
+        for name in EXECUTION_FACT_NAMES
+        if isinstance(value.get(name), bool)
+    }
+
+
+def _execution_scores(output: Any) -> dict[str, float]:
+    facts = project_execution_facts(
+        output.get("execution_facts") if isinstance(output, Mapping) else None,
+    )
+    return {name: float(value) for name, value in facts.items()}
 
 
 class HarnessError(ValueError):
@@ -1497,7 +1526,7 @@ def aggregate_trial_scores(
         "record_count_match",
         "records_exact_match",
         "schema_contract_match",
-        "finish_called",
+        *EXECUTION_FACT_NAMES,
         "first_ttp_passed",
         "trace_id_consistent",
         *(binary_metrics or ()),
@@ -1553,6 +1582,7 @@ def summarize_span_metrics(spans: Sequence[Mapping[str, Any]]) -> dict[str, Any]
         "ttp.phase",
         "context.fit",
         "agent.round",
+        "model.attempt",
         "generation.deadline_cleanup",
         "final.acceptance",
         "LLM",
@@ -1790,34 +1820,8 @@ def score_ttp_template_output(
         "input_leaf_precision_macro": 0.0,
         "input_leaf_recall_macro": 0.0,
         "input_leaf_f1_macro": 0.0,
-        "finish_called": 0.0,
-        "first_ttp_passed": 0.0,
-        "elapsed_seconds": 0.0,
-        "agent_rounds": 0.0,
-        "ttp_agent_rounds": 0.0,
-        "tool_call_starts": 0.0,
-        "tool_result_errors": 0.0,
-        "ttp_submissions": 0.0,
-        "ttp_test_calls": 0.0,
-        "ttp_test_calls_refused": 0.0,
-        "ttp_no_tool_responses": 0.0,
-        "ttp_no_tool_retries": 0.0,
-        "model_retries_observed": 0.0,
-        "stream_first_delta_seconds": 0.0,
-        "stream_model_call_elapsed_seconds": 0.0,
-        "stream_chunk_count": 0.0,
-        "stream_tool_call_delta_count": 0.0,
-        "stream_usage_seen": 0.0,
-        "input_tokens_total": 0.0,
-        "output_tokens_total": 0.0,
-        "input_tokens_last": 0.0,
-        "model_calls_observed": 0.0,
-        "ttp_history_compaction_events": 0.0,
-        "ttp_history_compacted_interactions": 0.0,
-        "ttp_history_compacted_input_chars": 0.0,
-        "ttp_history_compacted_result_chars": 0.0,
-        "ttp_history_compaction_skips": 0.0,
     }
+    zero_metrics.update(_execution_scores(output))
     raw_result = (
         output.get("generation_result") if isinstance(output, Mapping) else None
     )
@@ -1852,6 +1856,8 @@ def score_ttp_template_output(
     if not isinstance(metadata, Mapping):
         metadata = {}
     metrics = dict(zero_metrics)
+    if isinstance(metadata.get("first_ttp_passed"), bool):
+        metrics["first_ttp_passed"] = float(metadata["first_ttp_passed"])
     metrics.update(
         candidate_pass=float(generation_success and acceptance_valid and records_exact),
         generation_success=float(generation_success),
@@ -1879,10 +1885,6 @@ def score_ttp_template_output(
             if input_count
             else 0.0
         ),
-        finish_called=float(
-            generation_success and metadata.get("termination_reason") == "success",
-        ),
-        first_ttp_passed=float(metadata.get("first_ttp_passed") is True),
     )
     for name in (
         "elapsed_seconds",
@@ -1896,6 +1898,7 @@ def score_ttp_template_output(
         "ttp_no_tool_responses",
         "ttp_no_tool_retries",
         "model_retries_observed",
+        "model_attempts_observed",
         "stream_first_delta_seconds",
         "stream_model_call_elapsed_seconds",
         "stream_chunk_count",
@@ -1911,8 +1914,12 @@ def score_ttp_template_output(
         "ttp_history_compacted_result_chars",
         "ttp_history_compaction_skips",
     ):
-        value = metadata.get(name, 0)
-        if isinstance(value, int | float) and not isinstance(value, bool):
+        value = metadata.get(name)
+        if (
+            isinstance(value, int | float)
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
             metrics[name] = float(value)
     return {
         "metrics": metrics,
@@ -2052,6 +2059,21 @@ def _project_schema_quality(span: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _span_timestamp(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int | float):
+        return float(value) if math.isfinite(value) else None
+    if isinstance(value, str):
+        try:
+            parsed = datetime.fromisoformat(value)
+        except ValueError:
+            return None
+        if parsed.tzinfo is not None:
+            return parsed.timestamp()
+    return None
+
+
 def project_candidate_trajectory(
     spans: Sequence[Mapping[str, Any]],
     *,
@@ -2061,14 +2083,24 @@ def project_candidate_trajectory(
 
     candidates: list[dict[str, Any]] = []
     schema_candidates: list[dict[str, Any]] = []
-    finish_called = False
+    finish_results: list[bool | None] = []
+    successful_finish_starts: list[float | None] = []
+    accepted_submission_ends: dict[int, float | None] = {}
     for ordinal, span in enumerate(spans):
         if not isinstance(span, Mapping):
             continue
         name = str(span.get("name", ""))
         payload = _candidate_payload(span)
         if name in {"finish_generation", "generation.finish_generation"}:
-            finish_called = True
+            succeeded = payload.get("generation_finished")
+            accepted = payload.get("accepted")
+            if accepted is False or succeeded is False:
+                succeeded = False
+            elif accepted is not True or succeeded is not True:
+                succeeded = None
+            finish_results.append(succeeded)
+            if succeeded:
+                successful_finish_starts.append(_span_timestamp(span.get("start_time")))
             continue
         if (
             name
@@ -2095,12 +2127,35 @@ def project_candidate_trajectory(
         if quality["submission_index"] is None:
             quality["submission_index"] = ordinal + 1
         candidates.append(quality)
+        if quality["accepted"]:
+            accepted_submission_ends[quality["submission_index"]] = _span_timestamp(
+                span.get("end_time"),
+            )
     candidates.sort(key=lambda item: int(item["submission_index"]))
     schema_candidates.sort(key=lambda item: int(item["submission_index"]))
     accepted_indices = [
         int(item["submission_index"]) for item in candidates if item["accepted"]
     ]
     first_accepted = accepted_indices[0] if accepted_indices else None
+    finish_succeeded = (
+        True
+        if any(value is True for value in finish_results)
+        else False
+        if finish_results and all(value is False for value in finish_results)
+        else None
+    )
+    finish_after_first_accepted: bool | None = None
+    first_accepted_end = accepted_submission_ends.get(first_accepted)
+    if (
+        first_accepted_end is not None
+        and successful_finish_starts
+        and all(value is not None for value in successful_finish_starts)
+    ):
+        finish_after_first_accepted = first_accepted_end < min(
+            value for value in successful_finish_starts if value is not None
+        )
+    elif finish_succeeded is False:
+        finish_after_first_accepted = False
     return {
         "schema_submission_count": len(schema_candidates),
         "schema_accepted_count": sum(item["accepted"] for item in schema_candidates),
@@ -2113,10 +2168,9 @@ def project_candidate_trajectory(
         "first_accepted_submission": first_accepted,
         "last_accepted_submission": accepted_indices[-1] if accepted_indices else None,
         "accepted_indices": accepted_indices,
-        "finish_called": finish_called,
-        "finish_after_first_accepted": bool(
-            finish_called and first_accepted is not None
-        ),
+        "finish_called": True if finish_results else None,
+        "finish_succeeded": finish_succeeded,
+        "finish_after_first_accepted": finish_after_first_accepted,
         "issue_domains": dict(
             sorted(
                 Counter(
@@ -2389,28 +2443,8 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "input_leaf_precision_macro": 0.0,
         "input_leaf_recall_macro": 0.0,
         "input_leaf_f1_macro": 0.0,
-        "finish_called": 0.0,
-        "first_ttp_passed": 0.0,
-        "elapsed_seconds": 0.0,
-        "agent_rounds": 0.0,
-        "schema_agent_rounds": 0.0,
-        "ttp_agent_rounds": 0.0,
-        "tool_call_starts": 0.0,
-        "tool_result_errors": 0.0,
-        "schema_submissions": 0.0,
-        "ttp_submissions": 0.0,
-        "ttp_test_calls": 0.0,
-        "schema_no_tool_responses": 0.0,
-        "ttp_no_tool_responses": 0.0,
-        "schema_no_tool_retries": 0.0,
-        "ttp_no_tool_retries": 0.0,
-        "model_retries_observed": 0.0,
-        "stream_first_delta_seconds": 0.0,
-        "stream_model_call_elapsed_seconds": 0.0,
-        "stream_chunk_count": 0.0,
-        "stream_tool_call_delta_count": 0.0,
-        "stream_usage_seen": 0.0,
     }
+    zero.update(_execution_scores(output))
     if not isinstance(output, Mapping) or not isinstance(target, Mapping):
         return zero
     raw_result = output.get("generation_result")
@@ -2520,6 +2554,8 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         ),
     )
     scores = dict(zero)
+    if isinstance(metadata.get("first_ttp_passed"), bool):
+        scores["first_ttp_passed"] = float(metadata["first_ttp_passed"])
     scores.update(
         candidate_pass=float(candidate_pass),
         generation_success=float(generation_success),
@@ -2552,10 +2588,6 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         input_leaf_precision_macro=input_leaf_precision_macro,
         input_leaf_recall_macro=input_leaf_recall_macro,
         input_leaf_f1_macro=input_leaf_f1_macro,
-        finish_called=float(
-            generation_success and metadata.get("termination_reason") == "success",
-        ),
-        first_ttp_passed=float(metadata.get("first_ttp_passed") is True),
     )
     for name in (
         "elapsed_seconds",
@@ -2572,14 +2604,19 @@ def score_executor_output(output: Any, target: Any) -> dict[str, float]:
         "schema_no_tool_retries",
         "ttp_no_tool_retries",
         "model_retries_observed",
+        "model_attempts_observed",
         "stream_first_delta_seconds",
         "stream_model_call_elapsed_seconds",
         "stream_chunk_count",
         "stream_tool_call_delta_count",
         "stream_usage_seen",
     ):
-        value = metadata.get(name, 0)
-        if isinstance(value, int | float) and not isinstance(value, bool):
+        value = metadata.get(name)
+        if (
+            isinstance(value, int | float)
+            and not isinstance(value, bool)
+            and math.isfinite(value)
+        ):
             scores[name] = float(value)
     return scores
 
@@ -2642,7 +2679,12 @@ def safe_trial_facts(
         return {
             "candidate_pass": False,
             "failure_category": "runner",
-            "exception_type": str(exception_type or "unknown"),
+            "exception_type": (
+                exception_type
+                if isinstance(exception_type, str)
+                and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", exception_type)
+                else "unknown"
+            ),
             "termination_reason": "exception",
             "fault_domain": None,
             "issue_codes": [],
@@ -2658,7 +2700,10 @@ def safe_trial_facts(
         [
             str(issue.get("code"))
             for issue in raw_issues
-            if isinstance(issue, Mapping) and isinstance(issue.get("code"), str)
+            if isinstance(issue, Mapping)
+            and isinstance(issue.get("code"), str)
+            and len(issue["code"]) <= 128
+            and _SAFE_ISSUE_CODE_RE.fullmatch(issue["code"]) is not None
         ]
         if isinstance(raw_issues, list)
         else []
@@ -2668,7 +2713,12 @@ def safe_trial_facts(
         acceptance.get("issue_codes", []) if isinstance(acceptance, Mapping) else []
     )
     for code in acceptance_codes:
-        if isinstance(code, str) and code not in issue_codes:
+        if (
+            isinstance(code, str)
+            and len(code) <= 128
+            and _SAFE_ISSUE_CODE_RE.fullmatch(code) is not None
+            and code not in issue_codes
+        ):
             issue_codes.append(code)
     if scores.get("candidate_pass") == 1.0:
         category = None
