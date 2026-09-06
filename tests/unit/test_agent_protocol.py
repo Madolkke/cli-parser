@@ -68,6 +68,33 @@ def _tool_text(chunk: ToolChunk) -> str:
     return block.text
 
 
+def _feedback_text(text: str) -> dict[str, Any]:
+    assert text.startswith("<validation_feedback>\n"), text
+    serialized, separator, _ = text.removeprefix("<validation_feedback>\n").partition(
+        "\n</validation_feedback>",
+    )
+    assert separator
+    assert len(serialized.encode("utf-8")) <= 8 * 1024
+    feedback = json.loads(serialized)
+    assert feedback["feedback_version"] == 1
+    assert feedback["issues_total"] == (
+        len(feedback["issues"]) + feedback["issues_omitted"]
+    )
+    assert len(feedback["issues"]) <= 24
+    assert "can_finish" not in feedback
+    assert "next_action" not in feedback
+    return cast(dict[str, Any], feedback)
+
+
+def _feedback(chunk: ToolChunk) -> dict[str, Any]:
+    return _feedback_text(_tool_text(chunk))
+
+
+def _record_text(chunk: ToolChunk) -> str:
+    _feedback(chunk)
+    return _tool_text(chunk).split("</validation_feedback>", maxsplit=1)[1].lstrip("\n")
+
+
 def _matched_records(chunk: ToolChunk) -> list[Any]:
     matches = list(
         re.finditer(
@@ -185,7 +212,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-    assert PROMPT_VERSION == "ttp-generator-v31-section-boundaries-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v32-structured-validation-feedback-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -251,8 +278,11 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     assert "独立的 `<parsed_record>` 块" in TTP_SYSTEM_PROMPT
     assert "不要把不同块拼成一个业务数组" in TTP_SYSTEM_PROMPT
     assert "input_index" in TTP_SYSTEM_PROMPT
-    assert "accepted" not in TTP_SYSTEM_PROMPT
-    assert "issues" not in TTP_SYSTEM_PROMPT
+    assert "validation_feedback" in TTP_SYSTEM_PROMPT
+    assert "accepted" in TTP_SYSTEM_PROMPT
+    assert "issues" in TTP_SYSTEM_PROMPT
+    assert "parse_succeeded" in TTP_SYSTEM_PROMPT
+    assert "retained_candidate_submission_index" in TTP_SYSTEM_PROMPT
     assert "details." not in TTP_SYSTEM_PROMPT
     assert "存在结果块不代表候选已通过内部验收" in TTP_SYSTEM_PROMPT
     assert "每次 submit_ttp_template 反馈中的" in TTP_SYSTEM_PROMPT
@@ -649,7 +679,29 @@ async def test_template_submission_requires_a_frozen_schema() -> None:
 
     result = await SubmitTtpTemplateTool(session).call("{{ value }}")
 
-    assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _feedback(result) == {
+        "feedback_version": 1,
+        "scope": "full_input_validation",
+        "accepted": False,
+        "expected_record_count": 1,
+        "returned_record_count": 0,
+        "submissions_used": 0,
+        "remaining_submissions": session.max_ttp_submissions,
+        "candidate_updated": False,
+        "retained_candidate_submission_index": None,
+        "issues": [
+            {
+                "code": "schema_not_frozen",
+                "input_index": None,
+                "path": None,
+                "keyword": None,
+                "details": {},
+            },
+        ],
+        "issues_total": 1,
+        "issues_omitted": 0,
+    }
     assert session.ttp_submissions == 0
     assert session.last_ttp_template is None
 
@@ -681,6 +733,16 @@ async def test_ttp_test_tool_is_independent_of_schema_and_candidate_state() -> N
     )
 
     assert _matched_records(result) == [[{"value": "experimental"}]]
+    assert _feedback(result) == {
+        "feedback_version": 1,
+        "scope": "parse_only",
+        "parse_succeeded": True,
+        "tests_used": 1,
+        "remaining_tests": session.max_ttp_test_calls - 1,
+        "issues": [],
+        "issues_total": 0,
+        "issues_omitted": 0,
+    }
     assert seen == [
         TtpTestCandidate(
             text="value: experimental",
@@ -708,9 +770,93 @@ async def test_ttp_test_tool_rejects_invalid_arguments_without_disclosure() -> N
         unexpected=secret,
     )
 
-    assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    feedback = _feedback(result)
+    assert feedback["scope"] == "parse_only"
+    assert feedback["parse_succeeded"] is False
+    assert feedback["tests_used"] == 1
+    assert feedback["remaining_tests"] == session.max_ttp_test_calls - 1
+    assert feedback["issues"][0]["code"] == "ttp.test_input_invalid"
     assert secret not in _tool_text(result)
     assert session.ttp_test_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_ttp_test_empty_array_is_success_without_schema_validation() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+        ttp_test_validator=lambda _: TtpParseResult(result=[], issues=[]),
+    )
+    session.frozen_schema = _schema()
+    session.validated_ttp_template = "stored: {{ value }}"
+    session.validated_ttp_submission_index = 2
+    session.records = ({"value": "stored"},)
+
+    result = await TestTtpTemplateTool(session).call(
+        text="unmatched",
+        ttp_template="value: {{ value }}",
+    )
+
+    assert _feedback(result)["parse_succeeded"] is True
+    assert _feedback(result)["issues"] == []
+    assert _matched_records(result) == [[]]
+    assert session.validated_ttp_template == "stored: {{ value }}"
+    assert session.validated_ttp_submission_index == 2
+    assert session.records == ({"value": "stored"},)
+    assert session.ttp_submissions == 0
+
+
+@pytest.mark.asyncio
+async def test_ttp_test_validator_failure_has_structural_feedback() -> None:
+    def fail(_: TtpTestCandidate) -> TtpParseResult:
+        raise ValueError("private test validator exception")
+
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+        ttp_test_validator=fail,
+    )
+    result = await TestTtpTemplateTool(session).call(
+        text="value: experiment",
+        ttp_template="value: {{ value }}",
+    )
+
+    feedback = _feedback(result)
+    assert feedback["parse_succeeded"] is False
+    assert feedback["issues"][0]["code"] == "ttp.test_validator_failed"
+    assert feedback["tests_used"] == 1
+    assert feedback["remaining_tests"] == 2
+    assert "private test validator exception" not in _tool_text(result)
+
+
+@pytest.mark.asyncio
+async def test_terminated_submit_reports_retained_candidate_without_parsing() -> None:
+    session = GenerationSession(
+        command_outputs=["value: one"],
+        schema_validator=_unused_schema_validator,
+        template_validator=_unused_template_validator,
+    )
+    session.frozen_schema = _schema()
+    session.validated_ttp_template = "value: {{ value }}"
+    session.validated_ttp_submission_index = 2
+    session.ttp_submissions = 3
+    session.records = ({"value": "one"},)
+    session.terminal_reason = "ttp_worker_unavailable"
+
+    result = await SubmitTtpTemplateTool(session).call("new: {{ value }}")
+
+    feedback = _feedback(result)
+    assert feedback["accepted"] is False
+    assert feedback["candidate_updated"] is False
+    assert feedback["retained_candidate_submission_index"] == 2
+    assert feedback["submissions_used"] == 3
+    assert feedback["remaining_submissions"] == session.max_ttp_submissions - 3
+    assert feedback["issues"][0]["code"] == "generation_already_terminated"
+    assert session.terminal_reason == "ttp_worker_unavailable"
+    assert session.ttp_submissions == 3
 
 
 @pytest.mark.asyncio
@@ -738,13 +884,28 @@ async def test_model_receives_separately_labelled_records_for_each_input() -> No
     result = await SubmitTtpTemplateTool(session).call("{{ value }}")
     text = _tool_text(result)
 
-    assert text.startswith("以下是按输入顺序分别返回的解析结果。")
+    assert _record_text(result).startswith("以下是按输入顺序分别返回的解析结果。")
+    assert text.startswith("<validation_feedback>\n")
     assert not text.startswith("[")
     assert text.count("<parsed_record ") == 2
     assert text.count("</parsed_record>") == 2
     assert '<parsed_record input_index="0" display_number="1">' in text
     assert '<parsed_record input_index="1" display_number="2">' in text
     assert _matched_records(result) == records
+    assert _feedback(result) == {
+        "feedback_version": 1,
+        "scope": "full_input_validation",
+        "accepted": True,
+        "expected_record_count": 2,
+        "returned_record_count": 2,
+        "submissions_used": 1,
+        "remaining_submissions": session.max_ttp_submissions - 1,
+        "candidate_updated": True,
+        "retained_candidate_submission_index": 1,
+        "issues": [],
+        "issues_total": 0,
+        "issues_omitted": 0,
+    }
     assert session.records == tuple(records)
 
 
@@ -766,7 +927,10 @@ async def test_invalid_template_input_is_redacted_from_tool_result_events() -> N
     events = await _tool_result_events(session, tool_call)
 
     text = _event_text(events)
-    assert text == "[]\n错误：模板未通过语法或安全检查。"
+    assert text.endswith("[]\n错误：模板未通过语法或安全检查。")
+    feedback = _feedback_text(text)
+    assert feedback["issues"][0]["code"] == "ttp.submission_invalid"
+    assert feedback["submissions_used"] == 0
     assert secret not in text
     assert "input_value" not in text
     assert session.ttp_submissions == 0
@@ -800,7 +964,8 @@ async def test_template_validator_exception_is_redacted_from_agent_events() -> N
     events = await _tool_result_events(session, tool_call)
 
     text = _event_text(events)
-    assert text == "[]\n错误：模板解析未能完成。"
+    assert text.endswith("[]\n错误：模板解析未能完成。")
+    assert _feedback_text(text)["issues"][0]["code"] == "ttp.validator_failed"
     assert secret not in text
     assert any(
         isinstance(event, ToolResultEndEvent) and event.state == ToolResultState.SUCCESS
@@ -831,7 +996,7 @@ async def test_other_failure_returns_empty_records_and_fixed_chinese_error() -> 
 
     result = await SubmitTtpTemplateTool(session).call("value: {{ value }}")
 
-    assert _tool_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(result) == "[]\n错误：模板未产生可用的匹配结果。"
     assert "private validator detail" not in _tool_text(result)
 
 
@@ -869,6 +1034,12 @@ async def test_rejected_template_returns_index_mapped_capture_without_storing_it
     result = await SubmitTtpTemplateTool(session).call("{{ value }}")
 
     assert _matched_records(result) == captured_records
+    feedback = _feedback(result)
+    assert feedback["accepted"] is False
+    assert feedback["expected_record_count"] == 2
+    assert feedback["returned_record_count"] == 2
+    assert feedback["issues"][0]["input_index"] == 1
+    assert feedback["retained_candidate_submission_index"] is None
     assert session.records == ()
     assert session.validated_ttp_template is None
     assert session.last_issues == issues
@@ -893,6 +1064,7 @@ async def test_model_receives_complete_records_larger_than_capture_limit() -> No
 
     assert len(_tool_text(result).encode("utf-8")) > 32 * 1024
     assert _matched_records(result) == records
+    assert _feedback(result)["accepted"] is True
 
 
 @pytest.mark.asyncio
@@ -1242,10 +1414,15 @@ async def test_finish_generation_locks_the_selected_candidate() -> None:
     assert _payload(await finish_tool.call())["accepted"] is True
 
     repeated_finish = _payload(await finish_tool.call())
-    rejected_submit = _tool_text(await submit_tool.call("third: {{ value }}"))
+    rejected_submit = await submit_tool.call("third: {{ value }}")
     assert repeated_finish["accepted"] is False
     assert repeated_finish["issues"][0]["code"] == "generation_already_succeeded"
-    assert rejected_submit == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(rejected_submit) == "[]\n错误：模板未产生可用的匹配结果。"
+    feedback = _feedback(rejected_submit)
+    assert feedback["issues"][0]["code"] == "generation_already_succeeded"
+    assert feedback["retained_candidate_submission_index"] == 2
+    assert feedback["candidate_updated"] is False
+    assert feedback["submissions_used"] == 2
     assert session.validated_ttp_template == "second: {{ value }}"
     assert session.records == ({"value": "candidate-2"},)
     assert session.validated_ttp_candidate_version == 2
@@ -1351,6 +1528,11 @@ async def test_rejected_revision_preserves_the_previous_valid_candidate() -> Non
     rejected = await tool.call("changed: {{ value }}")
 
     assert _matched_records(rejected) == [{}]
+    feedback = _feedback(rejected)
+    assert feedback["accepted"] is False
+    assert feedback["candidate_updated"] is False
+    assert feedback["retained_candidate_submission_index"] == 1
+    assert feedback["submissions_used"] == 2
     assert session.validated_ttp_template == "value: {{ value }}"
     assert session.records == ({"value": "one"},)
     assert session.has_validated_ttp_candidate
@@ -1374,6 +1556,11 @@ async def test_finish_generation_cannot_bypass_the_submission_limit() -> None:
     finished = await FinishGenerationTool(session).call()
 
     assert _matched_records(submitted) == [{"value": "one"}]
+    feedback = _feedback(submitted)
+    assert feedback["accepted"] is True
+    assert feedback["candidate_updated"] is True
+    assert feedback["remaining_submissions"] == 0
+    assert feedback["retained_candidate_submission_index"] == 1
     finish_payload = _payload(finished)
     assert finish_payload["accepted"] is False
     assert finish_payload["issues"][0]["code"] == "ttp_submission_limit"
@@ -1435,7 +1622,7 @@ async def test_submission_limit_does_not_overwrite_a_worker_failure() -> None:
 
     result = await SubmitTtpTemplateTool(session).call("value: {{ value }}")
 
-    assert _tool_text(result) == "[]\n错误：模板解析未能完成。"
+    assert _record_text(result) == "[]\n错误：模板解析未能完成。"
     assert session.ttp_submissions == 1
     assert session.terminal_reason == "ttp_worker_unavailable"
 
@@ -1519,9 +1706,15 @@ async def test_template_submission_budget_blocks_validator_after_limit() -> None
     second = await tool.call("second: {{ value }}")
     blocked = await tool.call("third: {{ value }}")
 
-    assert _tool_text(first) == "[]\n错误：模板未产生可用的匹配结果。"
-    assert _tool_text(second) == "[]\n错误：模板未产生可用的匹配结果。"
-    assert _tool_text(blocked) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(first) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(second) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(blocked) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _feedback(first)["remaining_submissions"] == 1
+    assert _feedback(second)["remaining_submissions"] == 0
+    feedback = _feedback(blocked)
+    assert feedback["issues"][0]["code"] == "ttp_submission_limit"
+    assert feedback["submissions_used"] == 2
+    assert feedback["remaining_submissions"] == 0
     assert seen_templates == ["first: {{ value }}", "second: {{ value }}"]
     assert session.ttp_submissions == 2
     assert session.last_ttp_template == "second: {{ value }}"
@@ -1548,7 +1741,13 @@ async def test_unchanged_template_is_rejected_without_revalidating() -> None:
     await tool.call("value: {{ value }}")
     repeated = await tool.call("value: {{ value }}")
 
-    assert _tool_text(repeated) == "[]\n错误：模板未产生可用的匹配结果。"
+    assert _record_text(repeated) == "[]\n错误：模板未产生可用的匹配结果。"
+    feedback = _feedback(repeated)
+    assert feedback["accepted"] is False
+    assert feedback["candidate_updated"] is False
+    assert feedback["submissions_used"] == 2
+    assert feedback["remaining_submissions"] == 0
+    assert feedback["issues"][0]["code"] == "ttp.unchanged_submission"
     assert session.last_issues == (
         {
             "code": "ttp.unchanged_submission",

@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v31-section-boundaries-zh-cn"
+PROMPT_VERSION = "ttp-generator-v32-structured-validation-feedback-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -79,6 +79,9 @@ submit_ttp_template，已经满意就调用 finish_generation。不要用普通�
 上限；它不读取或修改冻结 Schema、候选模板和 records。
 测试结果只是实验结果，不会成为可 finish 的候选。
 
+test_ttp_template 先返回 `<validation_feedback>` JSON，scope 为 parse_only；
+parse_succeeded 只表示实验解析成功，tests_used 和 remaining_tests 表示测试预算。
+即使实验结果是空数组，parse_succeeded 也可以为 true；它不表示符合冻结 Schema。
 test_ttp_template 返回的结果也使用独立的 parsed_record 块；块内保留这次单输入 TTP
 解析的原始 JSON 形状，包括 list、匿名组包装和多根结果。它只代表实验文本，不要把
 它和当前命令输出的 records 混为一谈。测试结果进入后续上下文后，下一次回复必须
@@ -94,12 +97,29 @@ test_ttp_template 全阶段最多只能调用 3 次，用尽后该工具只会�
 Schema 字段。只要已经形成覆盖多个冻结字段的完整模板，后续实验只能针对一个明确
 局部问题修改，并且下一次 submit_ttp_template 必须保留其余字段和完整共享结构。
 
-submit_ttp_template 的 ToolResult 直接给出当前模板对全部完整输入产生的解析结果，
+submit_ttp_template 的 ToolResult 先给出 `<validation_feedback>` JSON，scope 为
+full_input_validation。accepted 仅表示本次提交通过确定性校验，不代表字段完整、
+内容忠实或严格正确；存在结果块不代表候选已通过内部验收。
+expected_record_count 和 returned_record_count 分别是完整输入数量与本次返回的
+record 数量；submissions_used 和 remaining_submissions 表示模板提交预算。
+candidate_updated 表示本次是否更新有效候选；retained_candidate_submission_index
+是当前保留的有效候选的提交编号，没有候选时为 null。后续提交失败不会清除已有
+有效候选，不能把保留候选的状态误认为本次提交已通过。
+
+两个工具的反馈版本 feedback_version 为 1。issues 提供受控错误码 code、输入索引
+input_index、字段或模板结构路径 path、Schema keyword 及有界修正事实。先依据
+缺失必填字段、类型不匹配或静态语法错误定位问题，再修正完整共享模板。
+数组路径中的 * 表示该数组的某些元素，不标识具体元素序号；仍需检查对应完整结果。
+issues_total 和 issues_omitted 只统计工具收到的诊断，issues 为空不证明业务内容完整。
+最多显示 24 条 issue，JSON 最多 8 KiB；missing_required 最多显示 24 个字段，
+missing_required_omitted 报告省略字段数。反馈限额不截断下面的完整解析结果。
+
+ToolResult 直接给出当前模板对全部完整输入产生的解析结果，
 并分别放在独立的 `<parsed_record>` 块中。每个块带有从 0 开始的 `input_index` 和
 从 1 开始的 `display_number`，只对应同一个输入；不要把不同块拼成一个业务数组，
 也不要把块之间的结果相互合并。一个 record 内部冻结 Schema 允许的嵌套 object 和
 array 仍然是该 record
-自己的业务数据。没有可用结果块时先返回 []，随后追加一行简短的中文错误。
+自己的业务数据。没有可用结果块时，在结构化反馈后返回 []，随后追加一行简短的中文错误。
 必须自行对照冻结 Schema、原始输入和每个独立结果块判断模板是否完整、字段是否来自
 正确列、业务内容是否忠实且结构是否一致。
 需要修正时重新提交，确认匹配结果合理后才调用 finish_generation。
@@ -272,7 +292,7 @@ Routing Tables: {{ routing_table_type | WORD }}
   必须检查结果块数量是否与输入数量相等，并用每个块的 `input_index` 对照同索引原文。
   返回 [] 和中文错误表示本次没有可用匹配；存在结果块不代表候选已通过内部验收。
 - 只有最近一次提交的独立解析结果块会完整保留在上下文中。该规则只针对
-  submit_ttp_template：更早提交的结果会被替换为
+  submit_ttp_template：更早提交的结构化反馈和结果会整体被替换为
   "该次提交的匹配结果已被后续提交取代"的固定说明；这只表示它已过时，不表示那次
   解析失败或被拒绝。请始终以最近一次完整结果块为准进行复核，不要因为看到该说明
   就重新提交同一个模板，也不要试图追问历史结果。test_ttp_template 的实验结果不会
@@ -307,7 +327,9 @@ Routing Tables: {{ routing_table_type | WORD }}
   拒绝，继续修正并重新提交模板，不能用普通文本代替工具调用。
 - 只有 finish_generation 的成功工具结果才会结束本阶段；它不接受模板参数，也不能
   绕过 TTP 提交上限。复核满意时才调用 finish_generation；否则继续通过
-  submit_ttp_template 修正候选。
+  submit_ttp_template 修正候选。remaining_submissions 只反映局部提交预算，不保证
+  剩余轮次或时间足够；用完最后一次提交后，即使 accepted 为 true，也会因提交预算
+  耗尽而失败，必须在耗尽前完成复核并显式 finish。
 """
 
 

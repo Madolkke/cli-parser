@@ -26,6 +26,7 @@ from cli_parser_agent.ttp_generation.agent import (
     build_ttp_task_prompt,
 )
 from cli_parser_agent.ttp_generation.agent import runner as runner_module
+from cli_parser_agent.ttp_generation.validation import TtpParseResult
 
 _SCHEMA_FREE_TEXT_MARKER = "schema-free-text-only-7c134b"
 _SCHEMA_THINKING_MARKER = "schema-thinking-only-0ab218"
@@ -105,6 +106,27 @@ def _request_text(request: dict[str, Any]) -> str:
     return json.dumps(request, ensure_ascii=False, default=str)
 
 
+def _tool_feedback(request: dict[str, Any], call_id: str) -> dict[str, Any]:
+    messages = [
+        message
+        for message in request["messages"]
+        if message.get("role") == "tool" and message.get("tool_call_id") == call_id
+    ]
+    assert len(messages) == 1
+    content = messages[0]["content"]
+    text = (
+        content
+        if isinstance(content, str)
+        else "".join(block["text"] for block in content)
+    )
+    assert text.startswith("<validation_feedback>\n")
+    serialized, separator, _ = text.removeprefix("<validation_feedback>\n").partition(
+        "\n</validation_feedback>",
+    )
+    assert separator
+    return json.loads(serialized)
+
+
 async def test_first_ttp_wire_request_has_no_schema_phase_history(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -160,10 +182,25 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
             if len(ttp_requests) == 1:
                 return _completion(
                     tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+                    tool_arguments={"ttp_template": "missing: {{ value }}"},
+                    tool_call_id="call-ttp-rejected",
+                )
+            if len(ttp_requests) == 2:
+                return _completion(
+                    tool_name=TEST_TEMPLATE_TOOL_NAME,
+                    tool_arguments={
+                        "text": "unmatched",
+                        "ttp_template": "value: {{ value }}",
+                    },
+                    tool_call_id="call-ttp-test",
+                )
+            if len(ttp_requests) == 3:
+                return _completion(
+                    tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
                     tool_arguments={"ttp_template": "value: {{ value | ORPHRASE }}"},
                     tool_call_id="call-ttp-accepted",
                 )
-            if len(ttp_requests) == 2:
+            if len(ttp_requests) == 4:
                 return _completion(
                     tool_name=FINISH_GENERATION_TOOL_NAME,
                     tool_arguments={},
@@ -201,7 +238,21 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
             ]
         return []
 
-    def validate_template(*_: Any, **__: Any) -> SimpleNamespace:
+    def validate_template(template: str, *_: Any, **__: Any) -> SimpleNamespace:
+        if template == "missing: {{ value }}":
+            return SimpleNamespace(
+                valid=False,
+                issues=(
+                    ValidationIssue(
+                        code="schema.record_mismatch",
+                        message="Private validator message must not reach the model.",
+                        output_index=0,
+                        path="/",
+                        details={"keyword": "required", "missing_required": ["value"]},
+                    ),
+                ),
+                records=({},),
+            )
         return SimpleNamespace(
             valid=True,
             issues=(),
@@ -220,6 +271,11 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         "validate_ttp_template",
         validate_template,
     )
+    monkeypatch.setattr(
+        workflow_module,
+        "parse_ttp_template",
+        lambda *_args, **_kwargs: TtpParseResult(result=[], issues=[]),
+    )
 
     generator = TtpGenerator(
         settings=TtpGeneratorSettings(
@@ -234,7 +290,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
 
     assert result.status == "success"
     assert len(schema_requests) == 3
-    assert len(ttp_requests) == 2
+    assert len(ttp_requests) == 4
     assert schema_validation_calls == 3
 
     assert _SCHEMA_RETRY_MARKER in _request_text(schema_requests[1])
@@ -282,7 +338,40 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     ]
     assert second_ttp_request["parallel_tool_calls"] is False
     assert "tool_choice" not in second_ttp_request
-    assert "call-ttp-accepted" in _request_text(second_ttp_request)
+    assert "call-ttp-rejected" in _request_text(second_ttp_request)
+    rejected_feedback = _tool_feedback(second_ttp_request, "call-ttp-rejected")
+    assert rejected_feedback["accepted"] is False
+    assert rejected_feedback["scope"] == "full_input_validation"
+    assert rejected_feedback["returned_record_count"] == 1
+    assert rejected_feedback["retained_candidate_submission_index"] is None
+    assert rejected_feedback["issues"][0]["code"] == "schema.record_mismatch"
+    assert rejected_feedback["issues"][0]["path"] == "/"
+    assert rejected_feedback["issues"][0]["keyword"] == "required"
+    assert "Private validator message" not in _request_text(second_ttp_request)
+
+    test_feedback = _tool_feedback(ttp_requests[2], "call-ttp-test")
+    assert test_feedback["scope"] == "parse_only"
+    assert test_feedback["parse_succeeded"] is True
+    assert test_feedback["tests_used"] == 1
+    assert test_feedback["issues"] == []
+    assert "accepted" not in test_feedback
+
+    final_request = ttp_requests[3]
+    accepted_feedback = _tool_feedback(final_request, "call-ttp-accepted")
+    assert accepted_feedback["accepted"] is True
+    assert accepted_feedback["candidate_updated"] is True
+    assert accepted_feedback["retained_candidate_submission_index"] == 2
+    assert accepted_feedback["submissions_used"] == 2
+    assert accepted_feedback["issues"] == []
+    assert _tool_feedback(final_request, "call-ttp-test") == test_feedback
+    rejected_history = [
+        message
+        for message in final_request["messages"]
+        if message.get("tool_call_id") == "call-ttp-rejected"
+    ]
+    assert len(rejected_history) == 1
+    assert "该次提交的匹配结果已被后续提交取代" in _request_text(rejected_history[0])
+    assert "validation_feedback" not in _request_text(rejected_history[0])
 
     ttp_wire_text = _request_text(first_ttp_request)
     for marker in (
@@ -296,7 +385,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     for usage_number in _SCHEMA_USAGE_NUMBERS:
         assert str(usage_number) not in ttp_wire_text
 
-    second_ttp_wire_text = _request_text(second_ttp_request)
+    second_ttp_wire_text = _request_text({"requests": ttp_requests[1:]})
     for marker in (
         _SCHEMA_FREE_TEXT_MARKER,
         _SCHEMA_THINKING_MARKER,

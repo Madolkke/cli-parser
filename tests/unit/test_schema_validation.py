@@ -324,6 +324,105 @@ def test_record_validation_is_value_safe_and_reports_paths() -> None:
     assert secret not in json.dumps([issue.model_dump() for issue in issues])
 
 
+@pytest.mark.parametrize(
+    ("expected_type", "value", "actual_type"),
+    [
+        ("integer", True, "boolean"),
+        ("number", False, "boolean"),
+        ("integer", 2.5, "number"),
+        ("integer", None, "null"),
+        ("number", "token-super-secret", "string"),
+        ("string", 42, "integer"),
+        ("string", 42.0, "integer"),
+        ("string", 2.5, "number"),
+        ("string", False, "boolean"),
+        ("string", None, "null"),
+        ("string", ["token-super-secret"], "array"),
+        ("string", {"token-super-secret": "token-super-secret"}, "object"),
+        ("boolean", 0, "integer"),
+        ("boolean", 0.0, "integer"),
+        ("array", {}, "object"),
+        ("object", [], "array"),
+    ],
+)
+def test_type_mismatch_reports_only_json_schema_type_names(
+    expected_type: str,
+    value: object,
+    actual_type: str,
+) -> None:
+    field_schema: dict[str, object] = {"type": expected_type}
+    if expected_type == "array":
+        field_schema["items"] = {"type": "string"}
+    elif expected_type == "object":
+        field_schema.update(
+            properties={"name": {"type": "string"}},
+            additionalProperties=False,
+        )
+    schema = {
+        "type": "object",
+        "properties": {"value": field_schema},
+        "required": ["value"],
+        "additionalProperties": False,
+    }
+
+    issues = validate_records_against_schema([{"value": value}], schema)
+
+    assert len(issues) == 1
+    assert issues[0].path == "/value"
+    assert issues[0].details == {
+        "keyword": "type",
+        "expected_type": expected_type,
+        "actual_type": actual_type,
+    }
+    assert "token-super-secret" not in json.dumps(
+        [issue.model_dump() for issue in issues],
+    )
+
+
+@pytest.mark.parametrize(
+    ("schema_type", "value"),
+    [("integer", 1), ("integer", 1.0), ("number", 1), ("number", 1.5)],
+)
+def test_numeric_type_validation_keeps_draft_2020_12_semantics(
+    schema_type: str,
+    value: int | float,
+) -> None:
+    schema = {
+        "type": "object",
+        "properties": {"value": {"type": schema_type}},
+        "additionalProperties": False,
+    }
+
+    assert validate_records_against_schema([{"value": value}], schema) == []
+
+
+def test_type_mismatch_deduplicates_by_type_and_interleaves_inputs() -> None:
+    issues = validate_records_against_schema(
+        [
+            {
+                "hostname": "edge_1",
+                "interfaces": [
+                    {"name": "eth0", "mtu": "token-super-secret"},
+                    {"name": "eth1", "mtu": "different-secret"},
+                    {"name": "eth2", "mtu": True},
+                    {"name": "eth3", "mtu": None},
+                ],
+            },
+            {"hostname": "edge_2", "interfaces": [{"name": "eth0", "mtu": []}]},
+        ],
+        _inventory_schema(),
+    )
+
+    assert [(issue.output_index, issue.details["actual_type"]) for issue in issues] == [
+        (0, "string"),
+        (1, "array"),
+        (0, "boolean"),
+        (0, "null"),
+    ]
+    assert {issue.path for issue in issues} == {"/interfaces/*/mtu"}
+    assert all(issue.details["expected_type"] == "integer" for issue in issues)
+
+
 def test_record_validation_deduplicates_and_names_missing_fields() -> None:
     issues = validate_records_against_schema(
         [{"hostname": "edge_1", "interfaces": [{}]}],

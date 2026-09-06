@@ -32,6 +32,10 @@ flowchart TD
     TTOOL --> TVALIDATE["安全检查 + spawn 全文解析<br/>Schema / 映射校验"]
     XTOOL --> XVALIDATE["安全检查 + spawn 单输入 parse-only 解析"]
     TVALIDATE --> DIAGNOSTIC["内部诊断<br/>accepted + issues + 有界 capture"]
+    TVALIDATE --> FEEDBACK["模型可见 validation_feedback<br/>受控校验事实 + 当前预算与候选状态"]
+    XVALIDATE --> XFEEDBACK["模型可见 validation_feedback<br/>parse-only 事实 + 原始解析结果"]
+    FEEDBACK --> TAGENT
+    XFEEDBACK --> TAGENT
     TVALIDATE -->|有 records| MATCH["模型可见独立解析结果块"]
     TVALIDATE -->|无 records| EMPTY["[] + 固定中文错误"]
     MATCH --> TAGENT
@@ -129,13 +133,13 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v25-test-ttp-template-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v32-structured-validation-feedback-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
 TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言白名单和参数 AST 检查，再在独立 `spawn` 进程中对所有完整输入执行解析。校验器要求每份输入恰好产生一个根 `dict`，并逐个使用冻结 Schema 验证 record；不再额外拒绝空字符串、空根对象或空容器。
 
-模型也可以调用 `test_ttp_template` 探索一份独立的非空文本和模板。它复用相同的白名单、spawn 隔离、超时和结果大小保护，但只返回单输入的原始 `parser.result(structure="list")` 形状，不执行 Schema 校验、根 object 要求或匿名根解包，也不保存候选；成功结果以一个 `parsed_record` 块返回，失败时返回 `[]` 和固定中文错误。测试结果历史全部保留，模型必须等待该 ToolResult 进入上下文后再继续提交或 finish。
+模型也可以调用 `test_ttp_template` 探索一份独立的非空文本和模板。它复用相同的白名单、spawn 隔离、超时和结果大小保护，但只返回单输入的原始 `parser.result(structure="list")` 形状，不执行 Schema 校验、根 object 要求或匿名根解包，也不保存候选。ToolResult 先返回 `scope=parse_only` 的结构化校验反馈；成功结果以一个 `parsed_record` 块返回，空数组也可以是成功解析结果；没有结果时追加 `[]` 和固定中文错误。测试结果历史全部保留，模型必须等待该 ToolResult 进入上下文后再继续提交或 finish。
 
 判定根数量前有一步解包。TTP 会为未命名的顶层组多包一层 list：`<group>` 无 name 时，该输入的结果是 `[{...}]` 而不是 `{...}`。而当冻结 Schema 的根层同时含标量字段和 array 时，未命名最外层 group 是唯一正确写法——给它加 name 会把所有根层标量都嵌进那个名字底下。校验器因此先解包单元素外壳：外层 list 恰好一个元素且该元素是 `dict` 时解一层，其余形状原样交给根数量检查。真正的多根（同级两个命名组、或重复的未命名根组）会产出多元素 list，仍以 `ttp.multiple_root_objects` 被拒。模型可见 ToolResult 将按输入索引分别放入独立的 `<parsed_record>` 块；每个块同时带有 0-based `input_index` 和 1-based `display_number`，没有 records 时追加固定中文错误。模板通过这些检查时只保存为最新有效候选，不会结束 Agent。
 
@@ -145,13 +149,30 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 [{}, {"interfaces": []}]
 ```
 
-完整结果块中的记录数据受 `GenerationPolicy.max_parse_result_bytes` 约束，默认最高 `8 MiB`；超限沿用结构化模型失败路径。只有最近一次提交的结果块完整保留在模型上下文中：新的 `submit_ttp_template` 结果进入上下文后，更早的同名 ToolResult 正文会被替换为固定中文说明。被替换的只是已被后续提交取代的旧反馈，源 `<command_outputs_json>` 与当次完整结果块都不受影响；该说明不含 records、accepted、issues、预算或候选状态。`test_ttp_template` 的实验结果不适用这条提交历史折叠规则，全部保留。这样可以阻断上下文无界增长（实测 input tokens 曾从 `3871` 增至 `92202`），同时保持"模型看到当次完整结果块"的复核契约。内部 capture 仍有固定 `32 KiB` 上限，超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 与 issues 只保留在 Laminar、observer/TUI 和评测诊断链中，不会写入失败的公共结果，也不会回传 Schema Agent。
+完整结果块中的记录数据受 `GenerationPolicy.max_parse_result_bytes` 约束，默认最高 `8 MiB`；超限沿用结构化模型失败路径。结构化反馈的 `8 KiB` 上限不截断这些结果块。只有最近一次提交的反馈和结果块完整保留在模型上下文中：新的 `submit_ttp_template` 结果进入上下文后，更早的同名 ToolResult 正文会整体替换为固定说明“该次提交的匹配结果已被后续提交取代”。被替换的只是已被后续提交取代的旧反馈，源 `<command_outputs_json>` 与当次完整结果块都不受影响；该说明不含 records、accepted、issues、预算或候选状态。`test_ttp_template` 的实验反馈和结果不适用这条提交历史折叠规则，全部保留。这样可以阻断上下文无界增长（实测 input tokens 曾从 `3871` 增至 `92202`），同时保持"模型看到当次完整结果块"的复核契约。内部 capture 仍有固定 `32 KiB` 上限，超限时转换为容器大小、JSON Pointer 标量和 head/tail preview。capture 只保留在 Laminar、observer/TUI 和评测诊断链中，不会写入失败的公共结果；模型只接收当前校验 issues 的受控投影，不复制完整诊断或读取 Trace，任何 TTP 反馈都不会回传 Schema Agent。
 
-模型必须复核当前输入的记录数量、异常空数组/空对象、表头或分隔线误捕获以及字段是否为细粒度值。若不满意，它继续提交模板；后续无效提交不清除先前有效候选，新的有效提交会替换旧候选。若满意，它调用无参数的 `finish_generation`。没有有效候选时 finish 返回结构化拒绝，只有存在有效候选且 finish 成功时 TTP 阶段才结束。
+模型先根据受控 issues 修正确定性错误，再复核当前输入的记录数量、异常空数组/空对象、表头或分隔线误捕获以及字段是否为细粒度值。`accepted=true` 不证明内容完整或忠实。若不满意，它继续提交完整模板；后续无效提交不清除先前有效候选，新的有效提交会替换旧候选。最新反馈的 `retained_candidate_submission_index` 从 session 读取，明确保留的是哪次提交，不能把它误认为本次提交通过。若满意，它调用无参数的 `finish_generation`。没有有效候选时 finish 返回结构化拒绝，只有存在有效候选且 finish 成功时 TTP 阶段才结束。
 
 每个模型回复最多调用一个工具，且必须在三个 TTP 工具中恰好选择一个；模型必须等提交或测试 ToolResult 进入后续上下文后再继续提交或 finish。首版通过 `parallel_tool_calls=False` 和提示协议维持这个顺序，不额外记录候选产生轮次或实现同轮调用拦截。
 
 默认最多提交 `9` 次模板。达到有效 `max_ttp_submissions` 上限的候选仍会执行校验并向模型返回 records，但随后请求无条件以 `ttp_submission_limit` 失败；内部 capture/issues 仍进入诊断通道。默认上限为 `9`，因此默认最晚只能在第 `8` 次提交后调用 finish。轮次、时间或零工具预算在 finish 前耗尽时，即使 session 已保留有效候选也不会自动接受。
+
+#### 模型可见的结构化校验反馈
+
+模板提交和独立测试在所有工具实现内的返回分支上，都先输出 `<validation_feedback>` JSON 块，再输出原有完整解析结果或 `[]` 与固定中文错误。参数拒绝、重复提交、预算耗尽、静态检查失败和 worker 异常遵守同一格式；AgentScope 在调用工具实现前拒绝的 malformed call 不经过该构造器。公共 API、工具入参、Schema 提交和 finish 的结构化反馈格式不变。
+
+| 工具 | 字段 | 语义 |
+| --- | --- | --- |
+| 共用 | `feedback_version=1`、`scope`、`issues`、`issues_total`、`issues_omitted` | 版本、校验范围、受控问题及反馈省略数量；计数只针对工具收到的诊断，不声称穷尽所有错误 |
+| `submit_ttp_template` | `scope=full_input_validation`、`accepted`、`expected_record_count`、`returned_record_count` | 本次完整输入与冻结 Schema 校验是否通过，以及预期与返回的 record 数量 |
+| `submit_ttp_template` | `submissions_used`、`remaining_submissions`、`candidate_updated`、`retained_candidate_submission_index` | 提交计数、本次是否更新有效候选及当前保留候选的提交编号；没有候选时编号为 `null` |
+| `test_ttp_template` | `scope=parse_only`、`parse_succeeded`、`tests_used`、`remaining_tests` | 仅说明独立实验解析是否成功及测试预算，不提供候选验收状态 |
+
+提交编号从 1 开始。状态直接读取当前 session，本次拒绝不会抹掉已保留候选的编号。反馈不提供 `can_finish` 或 `next_action`：剩余局部预算不能保证总轮次和时间足够；最后一次允许提交即使 `accepted=true`，请求仍因提交预算耗尽而失败。
+
+Agent 层的私有构造器与诊断 payload 分别生成模型消息。每条 issue 固定包含 `code`、`input_index`、`path`、`keyword` 和 `details`，按错误码与 keyword 白名单投影；不可用的输入索引、路径和 keyword 为 `null`，未知详情省略。路径中的数组索引保留为 `*`，例如 `/neighbors/*/med`，不提供具体数组元素定位。Schema 详情只包含缺失必填字段、额外属性数量、预期与实际类型；类型事实在 Schema 校验现场生成，遵循 JSON Schema 语义，区分布尔与数字并包含 `null`。模板诊断只投影受控异常类别、现有修正动作枚举和行列位置；模板路径只保留受控结构位置。
+
+构造器不复制任意 `message`、`details`、异常正文、解析值或额外属性名称。字段名和 Schema 路径须来自冻结 Schema，字典形式的诊断执行相同校验；未知错误码映射为 `validation.unknown_issue`，未知异常类别映射为 `OtherError`。单个反馈 JSON 最多 `24` 条 issue、`8 KiB UTF-8`；required 详情的 `missing_required` 最多 `24` 个字段，并以 `missing_required_omitted` 记录省略字段数。按照上游跨输入交错顺序先保留顶层状态与计数，再加入完整 issue；不截断序列化后的 JSON，也不把该限额用于 records。
 
 ### 6. Agent 外最终验收
 
@@ -159,7 +180,7 @@ TTP 模型调用 `submit_ttp_template`。每个候选先经过 TTP/XML 子语言
 
 失败结果保留结构化 issues 和可选的未验证 `last_attempt`，但不携带 partial records 或 capture。公共字段与 metadata 不变量见 [首版架构](architecture.md#4-公共契约)。
 
-`GenerationMetadata.ttp_test_calls` 记录进入 `test_ttp_template` 实现后的调用次数，包括参数边界拒绝和 parse-only 失败；AgentScope 在工具实现前拒绝的 malformed call 不计入该字段。它不计入 `ttp_submissions`，也不新增独立调用上限或终止原因。`propose_schema` 未进入 TTP 阶段时该字段恒为 `0`。
+`GenerationMetadata.ttp_test_calls` 记录测试预算内进入 `test_ttp_template` 实现后的调用次数，包括参数边界拒绝和 parse-only 失败；AgentScope 在工具实现前拒绝的 malformed call 不计入该字段。默认测试上限为 `3`，耗尽后的调用不再解析，单独增加 `ttp_test_calls_refused` 并返回预算拒绝反馈，不计入 `ttp_test_calls` 或 `ttp_submissions`，也不终止整个请求。模型反馈的 `tests_used` 与 `remaining_tests` 从这些当前 session 状态生成。`propose_schema` 未进入 TTP 阶段时测试计数恒为 `0`。
 
 ## Laminar Trace
 
@@ -177,7 +198,7 @@ ttp.generate
     └── finish_generation [TOOL]
 ```
 
-重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，提交、测试与完成工具使用手动 TOOL span；TTP capture 位于 `submit_ttp_template` 输出中，`test_ttp_template` 的独立解析结果和调用次数只用于诊断，`finish_generation` 只记录空输入和接受/拒绝反馈。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
+重试会在所属 phase 下增加 LLM 或 TOOL span。Schema 阶段失败时不会创建 `ttp.phase`。`openai.chat` 由 OpenAI instrumentation 记录，提交、测试与完成工具使用手动 TOOL span；TTP capture 位于 `submit_ttp_template` 诊断输出中，`test_ttp_template` 的独立解析结果和调用次数也进入诊断。模型反馈在工具内从当前确定性事实独立构造，不读取这些 span。`finish_generation` 只记录空输入和接受/拒绝反馈。存在上游 Agent span 时，`ttp.generate` 继承该上下文而不是另起 Trace。
 
 Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observability.py`](../src/cli_parser_agent/observability.py)，精确的采集范围和生命周期规则见 [首版架构](architecture.md#24-可选-laminar-调试-trace)。
 

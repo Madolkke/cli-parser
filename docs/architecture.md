@@ -41,9 +41,9 @@ AgentScope 的 `Agent.reply_stream(...)` 是异步事件接口，但 `Msg` 和 E
 5. 如果一轮模型调用正常完成但没有工具调用，runner 不解析其 assistant 文本，只追加固定中文提醒并在当前阶段重试。提醒不引用或摘要模型回复；两个阶段分别受独立重试上限约束。
 6. 只有存在有效候选且 `finish_generation` 调用成功，TTP reply 才以成功结束；无候选的 finish 返回结构化拒绝并允许继续。任一轮次、零工具重试、模板提交或总时长预算耗尽时，即使已经保留有效候选也返回失败。runner 使用 AgentScope 支持的中断清理路径结束 reply，移除清理阶段新增的消息和 usage。
 
-模型可见的 `submit_ttp_template` 和 `test_ttp_template` ToolResult 均只包含按输入独立分隔的 `<parsed_record>` 块；测试结果块固定使用 `input_index="0"`，并保留 TTP 原始单输入结果的 object、array、匿名组外壳或多根形状。每块同时提供 0-based `input_index` 和 1-based `display_number`，一个 record 内部的嵌套数组仍保持原样。无结果时追加固定中文错误，不暴露 accepted、issues、候选状态、预算或下一步提示。内部 ToolResult 诊断 payload 仍保留 `validated_candidate_available`、issues 和有界 capture，供 Laminar、observer/TUI 与评测使用。`finish_generation` 不接收参数、不重复解析候选且不计入模板提交数；无候选时返回 `generation.finish_without_valid_candidate`。
+模型可见的 `submit_ttp_template` 和 `test_ttp_template` ToolResult 先包含 `<validation_feedback>` JSON，再包含按输入独立分隔的完整 `<parsed_record>` 块。前者的 `scope=full_input_validation` 提供本次 `accepted`、记录数、提交预算及当前保留候选的提交编号；后者的 `scope=parse_only` 只提供实验解析是否成功与测试预算，不代表通过 Schema 或保存候选。两者都提供按白名单投影的有界 issues，不复制任意诊断 message/details；每次最多 24 条 issue、8 KiB UTF-8，且不截断完整 records。精确字段及省略规则见 [工具反馈协议](agent-architecture-and-runtime.md#模型可见的结构化校验反馈)。测试结果块固定使用 `input_index="0"`，并保留 TTP 原始单输入结果的 object、array、匿名组外壳或多根形状。每块同时提供 0-based `input_index` 和 1-based `display_number`，一个 record 内部的嵌套数组仍保持原样。无结果时仍返回反馈，再追加 `[]` 与固定中文错误。内部 ToolResult 诊断 payload 独立保留 `validated_candidate_available`、原有 issues 和有界 capture，供 Laminar、observer/TUI 与评测使用；模型反馈直接来自当前执行，不读取这些观察通道。`finish_generation` 不接收参数、不重复解析候选且不计入模板提交数；无候选时返回 `generation.finish_without_valid_candidate`。
 
-TTP runner 只折叠更早 `submit_ttp_template` 的 ToolResult 正文，替换为固定中文“该次提交的匹配结果已被后续提交取代”。最近一次提交的结果、全部测试结果、工具调用参数与 Thinking 保持原样；占位正文不含 accepted、issues、候选状态或预算。仅在工具调用和结果完整配对时更新上下文，重复调用不会重复计数，配对异常时跳过折叠。折叠事件、结果数量、结果字符数和跳过次数作为纯数值 metadata/observer 事件与评测指标提供；工具参数折叠字符数恒为 0。
+TTP runner 只折叠更早 `submit_ttp_template` 的 ToolResult 正文，将结构化反馈和结果一起替换为固定中文“该次提交的匹配结果已被后续提交取代”。最近一次提交的反馈与结果、全部测试结果、工具调用参数与 Thinking 保持原样；占位正文不含 accepted、issues、候选状态或预算。最新反馈读取 session 中的保留候选编号，因此本次拒绝后仍能区分当前失败和先前有效候选。仅在工具调用和结果完整配对时更新上下文，重复调用不会重复计数，配对异常时跳过折叠。折叠事件、结果数量、结果字符数和跳过次数作为纯数值 metadata/observer 事件与评测指标提供；工具参数折叠字符数恒为 0。
 
 两个阶段共享同一 deadline、总模型轮次和 TTP 提交预算。Schema 用尽全部轮次后即使恰好被接受，也不会启动 TTP Agent；TTP 失败不会回流 Schema 阶段、解冻 Schema 或重建 Schema Agent。这种协议既不依赖自由文本 JSON 提取，也从结构上消除了跨阶段对话污染。
 
@@ -59,13 +59,13 @@ TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v31-section-boundaries-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v32-structured-validation-feedback-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
 `LMNR_PROJECT_API_KEY` 非空时，`TtpGenerator` 自动初始化 Laminar，并且只启用 OpenAI instrumentation；`LMNR_BASE_URL` 可选用于自托管实例，自托管 HTTP/gRPC 端口分别通过 `LMNR_HTTP_PORT` / `LMNR_GRPC_PORT` 显式传给 SDK。端口必须是 `1..65535` 的 ASCII 十进制整数。未配置 Key 时 tracing 完全禁用，初始化错误作为配置错误直接传播，已由调用方初始化的 Laminar 不会被覆盖。启用 `CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 时，Laminar exporter 强制使用 HTTP OTLP；自托管 Laminar 必须相应使用 `http://` URL，SDK 的 gRPC transport 没有安全的“跳过证书校验”选项。
 
-独立调用 `generate` 时，`ttp.generate` 创建 Trace 根；若调用方已有上游 Agent span，则 `ttp.generate` 继承当前上下文并加入同一 Trace，不覆盖上游 Trace metadata。Schema 运行位于 `schema.phase` 子 span；只有完成受控交接并实际进入 TTP 阶段时才创建 `ttp.phase`。各阶段的 OpenAI 兼容请求、提交/测试 TOOL span 与 `finish_generation` TOOL span 继承对应 phase 上下文。由本生成器创建的 Trace 记录请求 ID、模型、prompt 版本、输入数量、分阶段采样量、分阶段轮次、提交次数、测试调用次数、终止原因和状态；`GenerationMetadata.laminar_trace_id` 允许调用方定位同一次运行。Trace 只是只读调试记录，不参与 `GenerationSession` 交接，也不会回灌模型上下文；`ttp_test_calls` 只作为诊断计数。
+独立调用 `generate` 时，`ttp.generate` 创建 Trace 根；若调用方已有上游 Agent span，则 `ttp.generate` 继承当前上下文并加入同一 Trace，不覆盖上游 Trace metadata。Schema 运行位于 `schema.phase` 子 span；只有完成受控交接并实际进入 TTP 阶段时才创建 `ttp.phase`。各阶段的 OpenAI 兼容请求、提交/测试 TOOL span 与 `finish_generation` TOOL span 继承对应 phase 上下文。由本生成器创建的 Trace 记录请求 ID、模型、prompt 版本、输入数量、分阶段采样量、分阶段轮次、提交次数、测试调用次数、终止原因和状态；`GenerationMetadata.laminar_trace_id` 允许调用方定位同一次运行。Trace 只是只读调试记录，不参与 `GenerationSession` 交接，也不会回灌模型上下文；模型反馈的测试预算直接读取 session，不读取 Trace 中的 `ttp_test_calls`。
 
 根 span、phase span 与 TOOL span 采用显式生命周期管理，使正常返回、结构化失败、异常和协作式取消都能结束并导出；Schema 失败不会创建 `ttp.phase`，强制杀进程仍不保证上传。
 
@@ -73,7 +73,7 @@ Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预�
 
 请求内私有执行事实记录 Schema 冻结、进入 TTP、有效候选、finish 调用/成功及终验开始/通过；通过根 Trace 和 `cli_parser.generation.execution_facts` 安全 observer 事件投影。它们不进入模型上下文或失败公共结果，取消与异常也从 workflow 的 finally 获取事实。
 
-Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。TTP 候选只要完成隔离解析，模型就会收到按输入分隔的完整结果块（内部记录数据仍受 `GenerationPolicy.max_parse_result_bytes` 的现有最高 `8 MiB` 限制）；无 records 时追加固定中文错误。内部 `submit_ttp_template` TOOL span 仍保留 accepted、issues、候选状态和最多 `32 KiB` 的有界 capture，不进入失败的公共结果；`test_ttp_template` TOOL span 可观测独立测试输入、原始解析结果和 `ttp_test_calls`，但这些数据不参与严格正确率。`finish_generation` TOOL span 只记录空输入和接受/拒绝反馈，不重复记录模板或 capture。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
+Laminar 是显式启用的完整调试通道，可以采集命令输出、模型回复、Thinking、evidence、模板、解析结果和验证反馈。模板提交和独立测试始终给模型返回有界结构化校验反馈；TTP 候选只要产生 records，模型还会收到按输入分隔的完整结果块（内部记录数据仍受 `GenerationPolicy.max_parse_result_bytes` 的现有最高 `8 MiB` 限制），即使候选被拒绝也如此；无 records 时追加 `[]` 与固定中文错误。内部 `submit_ttp_template` TOOL span 仍独立保留 accepted、原有 issues、候选状态和最多 `32 KiB` 的有界 capture；capture 不进入失败的公共结果。`test_ttp_template` TOOL span 可观测独立测试输入、原始解析结果和 `ttp_test_calls`，但这些数据不参与严格正确率。模型消息只投影当前校验产生的受控事实，不从 Trace 读取或复制完整诊断。`finish_generation` TOOL span 只记录空输入和接受/拒绝反馈，不重复记录模板或 capture。模型与 Laminar API Key 始终排除；普通日志、异常和公共 issues 仍遵守脱敏约束。首版不引入 `lmnr-cli`、Debugger session 或 replay。
 
 ### 2.5 可选 observer 与只读 TUI
 
@@ -311,7 +311,8 @@ GenerationRequest
     │      ├─ test_ttp_template 对独立文本执行 parse-only 解析，不改变候选或 Schema
     │      ├─ 零工具回复触发本阶段有界固定中文提醒
     │      ├─ 提交工具对所有全文解析并向模型返回 records
-    │      ├─ 内部诊断保留 issues/capture；有效候选被保留，后续无效提交不清除它
+    │      ├─ 模型收到有界校验反馈和完整 records；内部诊断独立保留 issues/capture
+    │      ├─ 有效候选被保留，后续无效提交不清除它；最新反馈提供保留候选的提交编号
     │      ├─ 模型复核 records 后选择继续提交或 finish
     │      └─ 只有有效候选上的 finish 才成功结束阶段
     │
@@ -358,6 +359,6 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 
 ### TTP 提示的章节与正文边界
 
-v31 明确保留真实 XML 结构标签，仅转义匹配正文的字面字符；同字段的不同章节用独立 group 和唯一标题的 `ignore(pattern)` 起点，不使用独立 `_start_`。示例代码块按输入实际行首书写，测试原样提取且不清除缩进。完整候选优先直接提交，局部实验只用于明确疑问；模型仅根据逐输入匹配结果、冻结 Schema 和原文复核后调用 finish，不依赖隐藏的候选诊断。测试工具反馈只描述独立实验文本，提交反馈才对应全部完整输入。
+v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文的字面字符；同字段的不同章节用独立 group 和唯一标题的 `ignore(pattern)` 起点，不使用独立 `_start_`。示例代码块按输入实际行首书写，测试原样提取且不清除缩进。完整候选优先直接提交，局部实验只用于明确疑问；模型先根据结构化校验事实定位错误，再对照逐输入匹配结果、冻结 Schema 和原文复核后调用 finish。`accepted=true` 只表示本次确定性校验通过，不证明业务内容完整或忠实；保留候选编号也不表示本次提交通过。测试工具反馈只描述独立实验文本，提交反馈才对应全部完整输入。
 
 章节标题只限定分组起点；字段完整的配方不能直接外推到可选尾行，须检查当前章节缺失而后续章节有同标签时的跨章节补捕。当前 TTP 的 `_end_` 会丢弃结束行捕获，因此提示不建议把它直接附到最后必填字段；确定性测试记录此边界，不增加安全语法。

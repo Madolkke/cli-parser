@@ -29,6 +29,7 @@ from ..validation import (
     build_parse_capture,
     parse_ttp_template,
 )
+from .feedback import submission_feedback, test_feedback
 from .session import (
     GenerationPhase,
     GenerationSession,
@@ -347,6 +348,7 @@ def _format_ttp_records_for_model(records: Sequence[Any]) -> str:
 
 
 def _ttp_result_chunk(
+    session: GenerationSession,
     *,
     accepted: bool,
     issues: Sequence[Any] = (),
@@ -363,6 +365,14 @@ def _ttp_result_chunk(
     model_text = _format_ttp_records_for_model(records)
     if not records:
         model_text = f"{model_text}\n{_brief_ttp_error(issues)}"
+    feedback = submission_feedback(
+        session,
+        accepted=accepted,
+        candidate_updated=details.get("candidate_updated") is True,
+        returned_record_count=len(records),
+        issues=issues,
+    )
+    model_text = f"{feedback}\n{model_text}"
     return _TracedToolResult(
         chunk=ToolChunk(
             content=[TextBlock(text=model_text)],
@@ -374,6 +384,7 @@ def _ttp_result_chunk(
 
 
 def _ttp_test_result_chunk(
+    session: GenerationSession,
     *,
     result: Any = None,
     has_result: bool = False,
@@ -392,6 +403,12 @@ def _ttp_test_result_chunk(
         model_text = _format_ttp_records_for_model((result,))
     else:
         model_text = f"[]\n{_brief_ttp_error(issues)}"
+    feedback = test_feedback(
+        session,
+        parse_succeeded=has_result and not issues,
+        issues=issues,
+    )
+    model_text = f"{feedback}\n{model_text}"
     return _TracedToolResult(
         chunk=ToolChunk(
             content=[TextBlock(text=model_text)],
@@ -585,6 +602,8 @@ class TestTtpTemplateTool(_SubmissionToolBase):
     description = (
         "使用一份独立文本测试 TTP 模板的解析行为。该工具只返回实验结果，"
         "不会校验冻结 Schema，也不会保存或替换生成候选。"
+        "validation_feedback 提供 parse_only 校验事实和测试预算，"
+        "parsed_record 保留原始解析形状。"
     )
     input_schema = TtpTemplateTestInput.model_json_schema()
 
@@ -601,6 +620,7 @@ class TestTtpTemplateTool(_SubmissionToolBase):
             # submission_tool_call_invalid path in the runner.
             self.session.ttp_test_calls_refused += 1
             return _ttp_test_result_chunk(
+                self.session,
                 issues=(
                     {
                         "code": "ttp.test_call_limit",
@@ -652,6 +672,7 @@ class TestTtpTemplateTool(_SubmissionToolBase):
                 },
             )
             return _ttp_test_result_chunk(
+                self.session,
                 issues=issues,
                 ttp_test_calls=self.session.ttp_test_calls,
             )
@@ -678,6 +699,7 @@ class TestTtpTemplateTool(_SubmissionToolBase):
             raise
         except Exception:
             return _ttp_test_result_chunk(
+                self.session,
                 issues=(
                     {
                         "code": "ttp.test_validator_failed",
@@ -690,10 +712,12 @@ class TestTtpTemplateTool(_SubmissionToolBase):
 
         if outcome.issues:
             return _ttp_test_result_chunk(
+                self.session,
                 issues=outcome.issues,
                 ttp_test_calls=self.session.ttp_test_calls,
             )
         return _ttp_test_result_chunk(
+            self.session,
             result=deepcopy(outcome.result),
             has_result=True,
             ttp_test_calls=self.session.ttp_test_calls,
@@ -817,6 +841,8 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
     description = (
         "只提交完整的共享 TTP 模板。系统会使用每份完整命令输出和已冻结的 "
         "JSON Schema 对它进行验证，并直接返回按输入索引排列的 TTP 匹配结果。"
+        "validation_feedback 提供本次验收、错误位置、提交预算和保留候选编号；"
+        "accepted 只表示确定性验收通过，仍须复核完整结果并显式 finish。"
     )
     input_schema = TemplateSubmissionInput.model_json_schema()
 
@@ -832,6 +858,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
     async def _call(self, ttp_template: str) -> _TracedToolResult:
         if not self.session.schema_is_frozen:
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -845,6 +872,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             )
         if self.session.succeeded:
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -863,6 +891,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             issues = (_already_terminated_issue(),)
             self.session.last_issues = issues
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -873,6 +902,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         if self.session.ttp_submissions >= self.session.max_ttp_submissions:
             self.session.terminal_reason = "ttp_submission_limit"
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=(
@@ -894,6 +924,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             self.session.last_issues = issues
             candidate_available = self.session.has_validated_ttp_candidate
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -935,6 +966,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             if self.session.ttp_submissions >= self.session.max_ttp_submissions:
                 self.session.terminal_reason = "ttp_submission_limit"
             return _ttp_result_chunk(
+                self.session,
                 accepted=False,
                 capture=_unavailable_capture(),
                 issues=issues,
@@ -1044,6 +1076,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         candidate_available = self.session.has_validated_ttp_candidate
 
         return _ttp_result_chunk(
+            self.session,
             accepted=accepted,
             capture=capture,
             issues=issues,

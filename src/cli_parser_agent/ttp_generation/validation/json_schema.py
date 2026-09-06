@@ -110,6 +110,22 @@ def _schema_instance_pointer(parts: Sequence[str | int]) -> str:
     return _pointer(tuple("*" if isinstance(part, int) else part for part in parts))
 
 
+def _json_schema_type(value: Any) -> str | None:
+    # Integer precedes number because Draft 2020-12 also treats 1.0 as an integer.
+    for schema_type in (
+        "null",
+        "boolean",
+        "integer",
+        "number",
+        "string",
+        "array",
+        "object",
+    ):
+        if Draft202012Validator.TYPE_CHECKER.is_type(value, schema_type):
+            return schema_type
+    return None
+
+
 def _json_size(schema: Mapping[str, Any]) -> int | None:
     try:
         encoded = json.dumps(
@@ -455,6 +471,13 @@ def validate_records_against_schema(
             path = _schema_instance_pointer(tuple(error.absolute_path))
             keyword = str(error.validator)
             details: dict[str, Any] = {"keyword": keyword}
+            if keyword == "type":
+                expected_type = error.validator_value
+                if isinstance(expected_type, str) and expected_type in _ALLOWED_TYPES:
+                    details["expected_type"] = expected_type
+                actual_type = _json_schema_type(error.instance)
+                if actual_type is not None:
+                    details["actual_type"] = actual_type
             if (
                 keyword == "required"
                 and isinstance(error.instance, Mapping)

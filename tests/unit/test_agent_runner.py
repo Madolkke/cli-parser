@@ -67,6 +67,15 @@ def _parse_record_blocks(text: str) -> list[Any]:
     return [json.loads(record) for record in matches]
 
 
+def _validation_feedback(text: str) -> dict[str, Any]:
+    assert text.startswith("<validation_feedback>\n")
+    serialized, separator, _ = text.removeprefix("<validation_feedback>\n").partition(
+        "\n</validation_feedback>",
+    )
+    assert separator
+    return json.loads(serialized)
+
+
 def _schema_call(call_id: str = "schema") -> ChatResponse:
     return _response(
         ToolCallBlock(
@@ -479,6 +488,12 @@ async def test_test_call_budget_refuses_without_counting_or_erroring() -> None:
     assert len(refusals) == 1
     assert refusals[0].state is not ToolResultState.ERROR
     assert "调用次数已用尽" in refusals[0].output[0].text
+    feedback = _validation_feedback(refusals[0].output[0].text)
+    assert feedback["scope"] == "parse_only"
+    assert feedback["parse_succeeded"] is False
+    assert feedback["tests_used"] == 1
+    assert feedback["remaining_tests"] == 0
+    assert feedback["issues"][0]["code"] == "ttp.test_call_limit"
 
 
 async def test_zero_test_call_budget_withholds_the_tool_entirely() -> None:
@@ -529,15 +544,22 @@ async def test_ttp_test_tool_is_non_terminal_and_preserves_result_context() -> N
     assert _parse_record_blocks(test_results[0].output[0].text) == [
         [{"value": "experimental"}],
     ]
+    feedback = _validation_feedback(test_results[0].output[0].text)
+    assert feedback["scope"] == "parse_only"
+    assert feedback["parse_succeeded"] is True
+    assert feedback["tests_used"] == 1
 
 
 async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     rejected_template = "rejected: {{ value }}"
     corrected_template = "value: {{ value }}"
     issue = {
-        "code": "ttp.test_rejected",
+        "code": "schema.record_mismatch",
         "stage": "template",
         "message": "Use the captured value to correct the template.",
+        "path": "/",
+        "output_index": 0,
+        "details": {"keyword": "required", "missing_required": ["value"]},
     }
     captured_record = {"value": "captured-one"}
     submitted_templates: list[str] = []
@@ -588,7 +610,13 @@ async def test_rejected_ttp_feedback_remains_in_same_phase_context() -> None:
     assert _parse_record_blocks(tool_results[0].output[0].text) == [
         captured_record,
     ]
-    assert "accepted" not in tool_results[0].output[0].text
+    feedback = _validation_feedback(tool_results[0].output[0].text)
+    assert feedback["accepted"] is False
+    assert feedback["returned_record_count"] == 1
+    assert feedback["issues"][0]["code"] == "schema.record_mismatch"
+    assert feedback["issues"][0]["path"] == "/"
+    assert feedback["issues"][0]["input_index"] == 0
+    assert feedback["issues"][0]["keyword"] == "required"
     assert issue["message"] not in tool_results[0].output[0].text
 
     assert outcome.phase_completed
@@ -674,14 +702,16 @@ async def test_ttp_history_compacts_only_stale_submission_results() -> None:
     ]
     assert result_texts[:2] == ["该次提交的匹配结果已被后续提交取代"] * 2
     assert _parse_record_blocks(result_texts[2]) == [{"value": "one"}]
+    latest_feedback = _validation_feedback(result_texts[2])
+    assert latest_feedback["accepted"] is True
+    assert latest_feedback["remaining_submissions"] == 6
+    assert latest_feedback["retained_candidate_submission_index"] == 3
     for forbidden in (
         "first-attempt",
         "second-attempt",
-        "accepted",
         "wrong_0",
         "wrong_1",
         "secret feedback",
-        "remaining_submissions",
         "validated_candidate_available",
         "next_action",
     ):
@@ -767,6 +797,11 @@ async def test_ttp_history_preserves_tests_and_latest_valid_candidate() -> None:
     for call_id in ("original", "accepted"):
         assert results_by_id[call_id] == "该次提交的匹配结果已被后续提交取代"
     assert _parse_record_blocks(results_by_id["failed"]) == [{"value": "bad"}]
+    latest_feedback = _validation_feedback(results_by_id["failed"])
+    assert latest_feedback["accepted"] is False
+    assert latest_feedback["candidate_updated"] is False
+    assert latest_feedback["retained_candidate_submission_index"] == 2
+    assert latest_feedback["submissions_used"] == 3
     for call_id in (
         "test-before-correction",
         "test-before-failure",
@@ -779,12 +814,14 @@ async def test_ttp_history_preserves_tests_and_latest_valid_candidate() -> None:
         assert _parse_record_blocks(results_by_id[call_id]) == [
             [{"value": "experimental"}],
         ]
+        feedback = _validation_feedback(results_by_id[call_id])
+        assert feedback["scope"] == "parse_only"
+        assert feedback["parse_succeeded"] is True
+        assert "retained_candidate_submission_index" not in feedback
     for forbidden in (
         "overcaptured",
         "secret feedback",
         "wrong_candidate",
-        "accepted",
-        "candidate_updated",
         "retained_candidate_version",
         "validation_summary",
     ):
