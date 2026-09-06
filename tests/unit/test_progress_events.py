@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 from copy import deepcopy
 from types import SimpleNamespace
@@ -644,13 +643,7 @@ async def test_ttp_history_compaction_event_is_bounded() -> None:
     assert "record" not in serialized
 
 
-async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
-    """The digest is what distinguishes a stuck loop from real iteration.
-
-    A burned-out trial records agent_rounds=32 with no other detail, so
-    comparing consecutive digests is the only way to tell whether the model
-    kept resubmitting the same candidate. The template body must never appear.
-    """
+async def test_ttp_submission_event_carries_only_counts() -> None:
     template = "value: {{ value }}"
     model = _ScriptedModel(
         [
@@ -681,7 +674,9 @@ async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
     )
     session.frozen_schema = _schema()
     observed: list[Any] = []
-    progress = ProgressEmitter(request_id="digest-request", observer=observed.append)
+    progress = ProgressEmitter(
+        request_id="submission-request", observer=observed.append
+    )
     agent = Agent(
         name="ttp_generator",
         system_prompt="ttp system prompt",
@@ -711,13 +706,6 @@ async def test_ttp_submission_event_carries_a_digest_not_the_template() -> None:
     ]
     assert len(submissions) == 1
     value = submissions[0].value
-    assert value["submission_index"] == 1
-    assert value["template_chars"] == len(template)
-    assert (
-        value["template_sha256"]
-        == hashlib.sha256(
-            template.encode("utf-8"),
-        ).hexdigest()
-    )
+    assert value == {"submission_index": 1, "template_chars": len(template)}
     assert submissions[0].metadata["sensitive"] is False
     assert template not in json.dumps(value)

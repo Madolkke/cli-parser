@@ -1,0 +1,10 @@
+<group>
+{{ ignore("Power[ \t]+Fan[ \t]+Inline") }}
+<group name="power_supplies*">
+{{ supply | re("PS[0-9]+") }} {{ model_number }} {{ power_type }} {{ power_rating }} {{ status }} {{ fan_sensor }} {{ inline_status }}
+<group name="power_inputs*" method="table">
+{{ supply | re("PS[0-9]+-[0-9]+") }} {{ voltage | re("[0-9]*V?") }} {{ status }}
+</group>
+</group>
+*** {{ warning | re("[^*\r\n]+") }}***
+</group>

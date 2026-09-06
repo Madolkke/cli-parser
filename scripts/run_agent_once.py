@@ -122,7 +122,7 @@ async def _run() -> int:
     _write_json(
         result_path,
         {
-            "script_version": 1,
+            "script_version": 2,
             "started_at": started_at,
             "finished_at": finished_at,
             "model": {

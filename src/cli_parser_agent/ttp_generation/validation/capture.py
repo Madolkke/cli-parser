@@ -166,10 +166,7 @@ def build_parse_capture(records: Sequence[Any]) -> ParseCapture:
 
     collected = [_collect_preview(record) for record in record_list]
     max_items = max(
-        (
-            max(len(containers), len(scalars))
-            for containers, scalars in collected
-        ),
+        (max(len(containers), len(scalars)) for containers, scalars in collected),
         default=0,
     )
     item_limit = min(max_items, _MAX_PREVIEW_ITEMS_PER_KIND)

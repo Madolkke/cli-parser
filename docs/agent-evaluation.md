@@ -3,10 +3,10 @@
 评测输入统一为 `evals/test_sets/` 下的四件套测试集。每个测试集固定包含
 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`；输入按 `001.txt` 到
 `005.txt` 排列，所有输入共享同一个标准 Schema、模板和 expected records。根
-唯一注册表 `evals/datasets.toml` 负责索引、标签和 SHA-256；目录实际状态决定数据集是 inputs-only、template 还是 complete。
+唯一注册表 `evals/datasets.toml` 负责索引、标签和文件路径；目录实际状态决定数据集是 inputs-only、template 还是 complete。
 
 加载器和确定性校验位于 `src/cli_parser_agent/evaluation.py`，统一入口是
-`scripts/run_test_sets.py`。加载器严格检查 UTF-8/BOM、重复 JSON 键、路径越界、哈希、
+`scripts/run_test_sets.py`。加载器严格检查 UTF-8/BOM、重复 JSON 键、路径越界、
 输入数量、Schema 受限子集、expected records 与模板基线。标准模板必须在隔离 TTP 解析后
 默认范围内对 TOML 中显式指定的单份 `default_input` 产生与同索引
 `expected.json` record 完全一致的 records。`--input-scope full` 才验证全部输入。
@@ -41,9 +41,9 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 结果、Trace、历史 artifact、上游模板或模型生成答案。标准 TTP 模板是可审查的确定性基线，
 用于确认四件套自身闭环；TTP-only Agent 只按 Schema 和 expected records 评估。
 
-运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、配置指纹及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。完整两阶段 Schema Agent 评测不属于本入口。
+运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、脱敏配置及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。完整两阶段 Schema Agent 评测不属于本入口。
 
-runner 版本 4 始终收集安全执行事实；`--trace-rounds` 仅控制逐事件明细落盘。漏斗区分有效候选、finish 调用、finish 成功及最终验收，缺少观测时省略数值指标而非填写零。候选轨迹只有可证实的时间顺序才判定有效提交发生于成功 finish 之前，否则报告未知。严格评分与遥测完整性独立，正确率 baseline 格式保持版本 1。配置指纹包含模型重试次数、TLS 校验开关和 `extra_body` 内容的 SHA-256，不包含凭据或请求扩展正文。
+runner 版本 5 始终收集安全执行事实；`--trace-rounds` 仅控制逐事件明细落盘。漏斗区分有效候选、finish 调用、finish 成功及最终验收，缺少观测时省略数值指标而非填写零。候选轨迹只有可证实的时间顺序才判定有效提交发生于成功 finish 之前，否则报告未知。严格评分与遥测完整性独立，正确率 baseline 格式保持版本 1。配置记录模型重试次数、TLS 校验开关和 `extra_body` 是否配置，不包含凭据或请求扩展正文。
 
 旧的 `evals/ttp_generation/`、`target/schema_contract` 双格式、
 `run_agent_evaluation.py` 和 `run_ttp_template_evaluation.py` 不再是评测路径。没有标准
@@ -55,3 +55,36 @@ template 阶段同样会作为 pending 或 smoke 结果单独报告。标签可�
 `--tag` 过滤，未指定过滤条件时运行 TOML 注册表中的全部数据集。
 
 逐事件明细只接受固定事件类型与项目事件名；工具名限于四个注册工具，未知值统一为 `unknown_tool`，完成原因限定为框架枚举。这个本地投影不会改变 Agent 决策或工具行为。
+
+## 运行信息与兼容
+
+注册表版本为 `2`，每个文件条目只有 `{ file = "..." }`。加载器仅支持该版本并继续
+拒绝未知字段；旧版注册表需将版本改为 `2` 并删除文件条目中的 `sha256`。修改资产内容
+后可直接重新运行 preflight 和 baseline，无需维护内容摘要。文件路径或默认输入变化时
+仍需更新注册表。`.gitattributes` 保留 LF 规则，文本加载器继续将 CRLF 归一化为 LF。
+
+| 信息 | 保存和用途 |
+| --- | --- |
+| 数据集与输入选择 | case 路径、输入路径、原始索引、input scope 和标签用于说明测试范围 |
+| 生效配置 | 运行 summary 保存脱敏模型参数、GenerationPolicy 和 `prompt.version`；扩展参数只记录是否配置 |
+| 运行来源 | Git revision、dirty 状态、运行时间和唯一 trial ID 用于定位一次运行 |
+| 执行与正确性 | 执行事实、计数、数值评分、安全 issue code 与 Trace ID 分别说明流程、结果和遥测 |
+| 模板修正 | 安全 submission 事件保留提交序号与模板字符数；仅凭这两个值不能判定模板正文相同 |
+
+新报告使用 `runner_version=5`，不计算或写入资产、注册表、提示词、模板或配置摘要。
+三个单次/TUI 开发脚本使用 `script_version=2`，输入元信息保留路径和字节数。
+WebUI 继续保存完整的本地配置并向页面提供现有脱敏视图，持久配置版本保持 `1`。
+
+正确率 baseline 的 `baseline_version` 保持 `1`。`--write-baseline` 导出数值记录，
+`--baseline` 按 case ID、成功数、trial 数及容忍值比较；离线 `--mode baseline` 则验证
+标准模板与 expected 的一致性。两者不应混淆。严格正确率仍只由独立验收和 records
+深度全等决定，模板写法或文件排版相同与否不作为评分依据。
+
+旧报告和历史 baseline 保持原样，读取时允许已有摘要字段；配置比较忽略旧的
+`model.extra_body_sha256`、`prompt.schema_system_sha256` 和 `prompt.ttp_system_sha256`，
+继续展示真实参数、预算与提示版本差异。比较工具不会自动验证两次输入范围或资产内容
+一致，分析时应核对选用的 case、输入范围与预期配置差异。
+
+历史 WebUI 运行仍可打开和重执行，页面不再展示配置指纹。此前 `.artifacts/` 中的
+launcher、审计脚本及报告作为历史材料保留；后续测试使用标准入口。Git 原生提交 ID
+和 `uv.lock` 依赖包校验仍保留，不参与 case 或 trial 评分。

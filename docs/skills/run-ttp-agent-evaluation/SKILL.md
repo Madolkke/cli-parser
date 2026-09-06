@@ -26,7 +26,7 @@ Read `AGENTS.md`, `docs/agent-evaluation.md`, and [references/run-and-analyze.md
 - Treat a one-trial result as diagnostic evidence, not a reliability claim. Use repeated trials for rates or configuration comparisons, and state the sample count.
 - Keep high-budget diagnostics isolated from default acceptance runs. The documented diagnostic profile is `7200s / 32 rounds / 24 submissions / 120s model timeout`.
 - `strict_pass` derives only from deterministic `candidate_pass`. A missing Trace, delayed telemetry, or Trace-ID mismatch must be reported as telemetry incompleteness, never folded into strict correctness.
-- Do not use the golden-authoring Skill, alter golden data, invoke replay/debugger, or feed Trace findings back into the running Agent. Human review labels are optional and only written via the runner's explicit `review` command after the run.
+- Do not alter golden data, invoke replay/debugger, or feed Trace findings back into the running Agent. Human review labels are optional and only written via the runner's explicit `review` command after the run.
 - Local artifacts must stay sanitized. Do not copy records, captures, raw inputs, templates, model text, Thinking, credentials, or exception bodies out of Laminar.
 
 ## Analysis Priorities

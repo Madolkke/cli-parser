@@ -162,7 +162,7 @@ Results are written under `.artifacts/ttp-phase-once/`.
 For repeatable TTP evaluation, every case is an independent test set under
 `evals/test_sets/<dataset-name>/`. A completed case contains `inputs/001.txt`
 through `005.txt`, `schema.json`, `template.ttp`, and `expected.json`. The sole
-registry is `evals/datasets.toml`; it indexes metadata and SHA-256 values while
+registry is `evals/datasets.toml`; it indexes metadata and file paths while
 the directory contents determine whether a case is inputs-only, template, or
 complete. The standard template is an offline executable baseline; the Agent
 is scored only against the standard Schema and expected records. Normal runs
@@ -183,8 +183,9 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 full two-stage Schema Agent; Schema quality is checked by the canonical Schema
 and its deterministic preflight. See [四件套评测](docs/ttp-template-evaluation.md).
 
-当前 `evals/test_sets/` 测试数据已清空，等待重新导入经过人工核对的标准四件套。
-重新提供数据后，必须先完成 preflight 和 baseline；complete 数据集即可通过
+当前登记 11 个数据集、38 份输入；10 个完整四件套覆盖 34 份输入，包括
+4 个 Easy、4 个 Medium 和 2 个 Hard case。Huawei 的 4 份输入保留为模板 smoke。
+新增或修订资产后，必须先完成 preflight 和 baseline；complete 数据集即可通过
 `--dataset`、`--dataset-id` 或 `--tag` 进入 Agent 评分。
 
 ## Local WebUI

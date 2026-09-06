@@ -132,37 +132,57 @@ def test_project_agent_event_exposes_stream_blocks_without_context_snapshots() -
     events = [
         ThinkingBlockStartEvent(reply_id="r", block_id="think", metadata=metadata),
         ThinkingBlockDeltaEvent(
-            reply_id="r", block_id="think", delta="检查", metadata=metadata,
+            reply_id="r",
+            block_id="think",
+            delta="检查",
+            metadata=metadata,
         ),
         ThinkingBlockEndEvent(reply_id="r", block_id="think", metadata=metadata),
         TextBlockStartEvent(reply_id="r", block_id="text", metadata=metadata),
         TextBlockDeltaEvent(
-            reply_id="r", block_id="text", delta="提交", metadata=metadata,
+            reply_id="r",
+            block_id="text",
+            delta="提交",
+            metadata=metadata,
         ),
         TextBlockEndEvent(reply_id="r", block_id="text", metadata=metadata),
         ToolCallStartEvent(
-            reply_id="r", tool_call_id="call",
-            tool_call_name="submit_ttp_template", metadata=metadata,
+            reply_id="r",
+            tool_call_id="call",
+            tool_call_name="submit_ttp_template",
+            metadata=metadata,
         ),
         ToolCallDeltaEvent(
-            reply_id="r", tool_call_id="call", delta='{"x":1}', metadata=metadata,
+            reply_id="r",
+            tool_call_id="call",
+            delta='{"x":1}',
+            metadata=metadata,
         ),
         ToolCallEndEvent(reply_id="r", tool_call_id="call", metadata=metadata),
         ToolResultStartEvent(
-            reply_id="r", tool_call_id="call",
-            tool_call_name="submit_ttp_template", metadata=metadata,
+            reply_id="r",
+            tool_call_id="call",
+            tool_call_name="submit_ttp_template",
+            metadata=metadata,
         ),
         ToolResultTextDeltaEvent(
-            reply_id="r", tool_call_id="call",
-            delta='{"accepted":true}', metadata=metadata,
+            reply_id="r",
+            tool_call_id="call",
+            delta='{"accepted":true}',
+            metadata=metadata,
         ),
         ToolResultEndEvent(
-            reply_id="r", tool_call_id="call",
-            state=ToolResultState.SUCCESS, metadata=metadata,
+            reply_id="r",
+            tool_call_id="call",
+            state=ToolResultState.SUCCESS,
+            metadata=metadata,
         ),
         ModelCallStartEvent(reply_id="r", model_name="test", metadata=metadata),
         ModelCallEndEvent(
-            reply_id="r", input_tokens=1, output_tokens=2, metadata=metadata,
+            reply_id="r",
+            input_tokens=1,
+            output_tokens=2,
+            metadata=metadata,
         ),
     ]
 
@@ -170,13 +190,20 @@ def test_project_agent_event_exposes_stream_blocks_without_context_snapshots() -
     projected = [event for event in projected if event is not None]
 
     assert [event["type"] for event in projected] == [
-        "agent.thinking_started", "agent.thinking_delta",
-        "agent.thinking_completed", "agent.text_started", "agent.text_delta",
-        "agent.text_completed", "agent.tool_call_started",
-        "agent.tool_call_delta", "agent.tool_call_completed",
-        "agent.tool_result_started", "agent.tool_result_delta",
+        "agent.thinking_started",
+        "agent.thinking_delta",
+        "agent.thinking_completed",
+        "agent.text_started",
+        "agent.text_delta",
+        "agent.text_completed",
+        "agent.tool_call_started",
+        "agent.tool_call_delta",
+        "agent.tool_call_completed",
+        "agent.tool_result_started",
+        "agent.tool_result_delta",
         "agent.tool_result_completed",
-        "agent.model_call_started", "agent.model_call_completed",
+        "agent.model_call_started",
+        "agent.model_call_completed",
     ]
     assert projected[1]["detail"]["text"] == "检查"
     assert projected[7]["detail"]["text"] == '{"x":1}'

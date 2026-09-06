@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "power_supplies": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "supply": { "type": "string" },
+          "model_number": { "type": "string" },
+          "power_type": { "type": "string" },
+          "power_rating": { "type": "string" },
+          "status": { "type": "string" },
+          "fan_sensor": { "type": "string" },
+          "inline_status": { "type": "string" },
+          "power_inputs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "supply": { "type": "string" },
+                "voltage": { "type": "string" },
+                "status": { "type": "string" }
+              },
+              "required": ["supply", "voltage", "status"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "supply",
+          "model_number",
+          "power_type",
+          "power_rating",
+          "status",
+          "fan_sensor",
+          "inline_status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "warning": { "type": "string" }
+  },
+  "required": ["power_supplies"],
+  "additionalProperties": false
+}

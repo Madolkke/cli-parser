@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import math
 import os
 import ssl
@@ -64,21 +62,6 @@ def _validate_extra_body_value(value: Any, *, path: str = "extra_body") -> None:
             _validate_extra_body_value(item, path=f"{path}.{key}")
         return
     raise ValueError(f"{path} must contain only JSON-compatible values")
-
-
-def model_extra_body_sha256(extra_body: Mapping[str, JsonValue] | None) -> str:
-    """Return a stable, content-free fingerprint for a model extra body."""
-
-    if extra_body is None:
-        return ""
-    encoded = json.dumps(
-        extra_body,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def tls_verification_enabled(environ: Mapping[str, str] | None = None) -> bool:
@@ -203,14 +186,17 @@ class TtpGeneratorSettings(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     parallel_tool_calls: bool = False
     thinking_enable: bool | None = None
-    reasoning_effort: Literal[
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-    ] | None = None
+    reasoning_effort: (
+        Literal[
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+        ]
+        | None
+    ) = None
     extra_body: dict[str, JsonValue] | None = None
     max_tokens: int = Field(default=8_192, ge=1)
     context_size: int = Field(default=128_000, ge=1)

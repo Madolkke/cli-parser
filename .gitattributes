@@ -2,9 +2,8 @@ testdata/real_command_outputs/**/*.raw text eol=lf -whitespace
 testdata/real_command_outputs/**/*.txt text eol=lf -whitespace
 testdata/real_command_outputs/**/*.json text eol=lf
 
-# Eval corpus bytes are pinned by SHA-256 in evals/datasets.toml, which hashes
-# raw bytes. Without eol=lf, core.autocrlf rewrites line endings on checkout and
-# every digest breaks on the next platform. Keep these canonical LF.
+# Keep eval corpus text and the registry on LF across platforms so parser
+# inputs and reviewed files use consistent line endings.
 evals/datasets.toml text eol=lf
 evals/test_sets/**/*.txt text eol=lf -whitespace
 evals/test_sets/**/*.json text eol=lf

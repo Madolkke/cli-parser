@@ -187,7 +187,7 @@ Trace 是调试视图，不是跨阶段数据总线。实现位于 [`observabili
 
 系统化评测把结果分成四组：records/Schema 严格正确性，Schema 冻结、TTP 进入、首个有效候选、finish 和最终验收的流程漏斗，`agent.round`/`context.fit`/`generation.deadline_cleanup`/`final.acceptance`/LLM/TOOL 的时延与 tokens/cost，以及按 case、suite、输入形状分层的重复 trial 可靠性。严格通过是最终门槛；叶子值和 Schema 的 precision/recall/F1、逐输入差异和 issue-code 只用于定位缺陷。评测报告同时提供按 case 的 macro 结果和按输入的 micro 结果，不能用多输入 case 的数量掩盖单输入失败。
 
-需要完整修正链时，评测入口可以在独立进程中使用高预算配置：总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交、单次模型超时 `120` 秒，并保持并发 `1`、不自动重试。高预算只用于开发诊断，不改变公共 API 或默认 `GenerationPolicy`；每次运行必须把有效模型、推理设置、预算和安全限制绑定到配置指纹，并保留对应 Trace。
+需要完整修正链时，评测入口可以在独立进程中使用高预算配置：总时长 `7200` 秒、`32` 个 Agent 轮次、`24` 次 TTP 提交、单次模型超时 `120` 秒，并保持并发 `1`、不自动重试。高预算只用于开发诊断，不改变公共 API 或默认 `GenerationPolicy`；每次运行必须记录有效模型、推理设置、预算和安全限制的脱敏配置，并保留对应 Trace。
 
 HumanEvaluator 是评测入口的开发期人工补充：它可以在 Laminar 只读 Trace 中检查该 run 产生的全部 Schema/TTP 候选、capture 复核和最终候选，并按解析边界、字段粒度、可选字段、同一输入内实体一致性、过拟合和可维护性打标签。评审写入时显式区分 `phase=schema|ttp`，本地按阶段和 submission index 聚合覆盖率。HumanEvaluator 不属于 `TtpGenerator.generate()`、产品部署或普通 pytest，不修改 Agent 状态、不触发重试、不向模型回灌内容；本地摘要只保存有界标签、issue-code、Trace ID 和数值指标。
 
@@ -205,7 +205,7 @@ uv run --env-file .env python scripts/run_webui.py
 
 SSE 帧统一使用默认 `message` 事件，客户端按 JSON 正文中的 `type` 分发；详情接口加载历史事件后可用 `after_sequence` 避免重复，浏览器自动重连继续使用 `Last-Event-ID`。同一 block 或 tool call 的连续 delta 在服务端按 50ms 或 4096 字符合并，再分配 sequence、写入 `events.jsonl` 并广播。合并不会丢失正常流量的文本内容，但不承诺保留供应商逐 token 边界。
 
-WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具或 finish 协议。每个新建任务和 Schema 重执行都可以在启动前覆盖标准模型设置与 `GenerationPolicy`，服务端按启动时 `.env` 基线合并并重新校验；`extra_body` 仍只来自环境，`parallel_tool_calls` 固定为 `false`，运行中不动态修改。实际配置写入运行目录的 `config.json`，详情只显示脱敏视图和指纹。按本地单用户的显式选择，该文件可以包含明文 API Key；Key 不进入 `meta.json`、SSE、普通日志或事件投影。事件投影不序列化完整 AgentScope 对象，不发送 system prompt 或完整上下文快照；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
+WebUI 的 HTTP 层和 `RunManager` 只依赖 `GenerationService` 服务协议；`agent_service.py` 是唯一接触 `TtpGenerator`、AgentScope 事件和主流程 Schema 校验的适配器。WebUI 通过该适配器调用公共 API，不改变提示词、阶段、工具或 finish 协议。每个新建任务和 Schema 重执行都可以在启动前覆盖标准模型设置与 `GenerationPolicy`，服务端按启动时 `.env` 基线合并并重新校验；`extra_body` 仍只来自环境，`parallel_tool_calls` 固定为 `false`，运行中不动态修改。实际配置写入运行目录的 `config.json`，详情只显示脱敏视图。按本地单用户的显式选择，该文件可以包含明文 API Key；Key 不进入 `meta.json`、SSE、普通日志或事件投影。事件投影不序列化完整 AgentScope 对象，不发送 system prompt 或完整上下文快照；本地 `events.jsonl` 保存经限额和凭据过滤后的模型/工具调试事件。它是单用户本地工具，没有鉴权与并发隔离，不是部署形态。
 
 ## 只读 Textual TUI
 

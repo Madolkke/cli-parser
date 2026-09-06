@@ -27,6 +27,13 @@ BOOTSTRAP_RESAMPLES = 10_000
 # Config keys whose difference is almost always the point of the comparison.
 # Anything else differing is reported as a confound.
 EXPECTED_KNOBS = ("prompt",)
+LEGACY_CONFIG_HASH_FIELDS = frozenset(
+    {
+        "model.extra_body_sha256",
+        "prompt.schema_system_sha256",
+        "prompt.ttp_system_sha256",
+    }
+)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -100,6 +107,8 @@ def config_differences(
     intended: list[tuple[str, Any, Any]] = []
     confounds: list[tuple[str, Any, Any]] = []
     for key in sorted(set(flat_before) | set(flat_after)):
+        if key in LEGACY_CONFIG_HASH_FIELDS:
+            continue
         old = flat_before.get(key)
         new = flat_after.get(key)
         if old == new:

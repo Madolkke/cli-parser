@@ -1,0 +1,117 @@
+[
+  {
+    "power_supplies": [
+      {
+        "supply": "PS1",
+        "model_number": "PWR-C45-4200ACV",
+        "power_type": "AC",
+        "power_rating": "4200W",
+        "status": "good",
+        "fan_sensor": "good",
+        "inline_status": "good",
+        "power_inputs": [
+          {
+            "supply": "PS1-1",
+            "voltage": "220V",
+            "status": "good"
+          },
+          {
+            "supply": "PS1-2",
+            "voltage": "220V",
+            "status": "good"
+          }
+        ]
+      },
+      {
+        "supply": "PS2",
+        "model_number": "PWR-C45-4200ACV",
+        "power_type": "AC",
+        "power_rating": "4200W",
+        "status": "err-disable",
+        "fan_sensor": "good",
+        "inline_status": "good",
+        "power_inputs": [
+          {
+            "supply": "PS2-1",
+            "voltage": "",
+            "status": "off"
+          },
+          {
+            "supply": "PS2-2",
+            "voltage": "220V",
+            "status": "good"
+          }
+        ]
+      }
+    ],
+    "warning": "Power Supplies of different type have been detected"
+  },
+  {
+    "power_supplies": [
+      {
+        "supply": "PS1",
+        "model_number": "PWR-C45-4200ACV",
+        "power_type": "AC",
+        "power_rating": "4200W",
+        "status": "good",
+        "fan_sensor": "good",
+        "inline_status": "good",
+        "power_inputs": [
+          {
+            "supply": "PS1-1",
+            "voltage": "220V",
+            "status": "good"
+          },
+          {
+            "supply": "PS1-2",
+            "voltage": "220V",
+            "status": "good"
+          }
+        ]
+      },
+      {
+        "supply": "PS2",
+        "model_number": "PWR-C45-4200ACV",
+        "power_type": "AC",
+        "power_rating": "4200W",
+        "status": "good",
+        "fan_sensor": "good",
+        "inline_status": "good",
+        "power_inputs": [
+          {
+            "supply": "PS2-1",
+            "voltage": "220V",
+            "status": "good"
+          },
+          {
+            "supply": "PS2-2",
+            "voltage": "220V",
+            "status": "good"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "power_supplies": [
+      {
+        "supply": "PS1",
+        "model_number": "PWR-C4KX-750AC-R",
+        "power_type": "AC",
+        "power_rating": "750W",
+        "status": "good",
+        "fan_sensor": "good",
+        "inline_status": "n.a."
+      },
+      {
+        "supply": "PS2",
+        "model_number": "PWR-C4KX-750AC-R",
+        "power_type": "AC",
+        "power_rating": "750W",
+        "status": "good",
+        "fan_sensor": "good",
+        "inline_status": "n.a."
+      }
+    ]
+  }
+]

@@ -90,9 +90,7 @@ def test_oversized_capture_returns_bounded_structured_head_tail_previews() -> No
     assert scalar_paths[48] == "/interfaces/1992/name~1alias~0"
 
     truncated = next(
-        item
-        for item in first["scalars"]
-        if item["path"] == "/interfaces/0/description"
+        item for item in first["scalars"] if item["path"] == "/interfaces/0/description"
     )
     assert truncated["value_truncated"] is True
     assert len(truncated["value"]) == MAX_SCALAR_VALUE_CHARS

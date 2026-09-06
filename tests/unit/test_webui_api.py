@@ -77,8 +77,9 @@ async def test_progress_queue_merges_deltas_within_window_without_loss() -> None
 
 
 @pytest.mark.asyncio
-async def test_progress_queue_flushes_before_structure_and_splits_size_boundary(
-) -> None:
+async def test_progress_queue_flushes_before_structure_and_splits_size_boundary() -> (
+    None
+):
     queue = _ProgressQueue(
         coalesce_window_seconds=0,
         max_delta_chars=4,
@@ -273,6 +274,66 @@ def test_runtime_config_can_be_overridden_and_is_redacted_from_api(
     assert config["policy"]["max_agent_rounds"] == 24
     assert "run-secret" not in json.dumps(payload)
     assert payload["config"]["settings"]["api_key_configured"] is True
+    assert "configuration_fingerprint" not in payload["config"]
+    assert "runtime_configuration_fingerprint" not in payload["meta"]
+
+
+def test_historical_diagnostics_remain_readable_without_rewriting_files(
+    tmp_path: Path,
+) -> None:
+    generator = FakeGenerator()
+    with _client(tmp_path, generator) as client:
+        store = client.app.state.store
+        run_id = store.create(
+            mode="propose",
+            command_outputs=["value: one"],
+            title="historical run",
+            config={
+                "version": 1,
+                "source": "env_baseline",
+                "settings": {"api_key": "historical-secret", "model_name": "old-model"},
+                "policy": {"max_agent_rounds": 13},
+            },
+        )
+        store.write_schema(run_id, CLOSED_SCHEMA)
+        store.update_meta(
+            run_id,
+            status="success",
+            runtime_configuration_fingerprint="historical-fingerprint",
+        )
+        historical_event = {
+            "type": "cli_parser.ttp.submission",
+            "sequence": 1,
+            "detail": {"submission_index": 1, "template_sha256": "historical-digest"},
+        }
+        store.append_event(run_id, historical_event)
+        store.append_event(run_id, {"type": "run.finished", "sequence": 2})
+        directory = store.run_directory(run_id)
+        original = {path.name: path.read_bytes() for path in directory.iterdir()}
+
+        detail = client.get(f"/api/runs/{run_id}").json()
+        listing = client.get("/api/runs").json()["runs"]
+        received = []
+        with client.stream("GET", f"/api/runs/{run_id}/events") as stream:
+            for line in stream.iter_lines():
+                if line.startswith("data:"):
+                    received.append(json.loads(line[len("data:") :]))
+        rerun = client.post(f"/api/runs/{run_id}/rerun")
+        assert rerun.status_code == 201
+        child = _wait_for_status(client, rerun.json()["run_id"])
+
+    assert detail["config"]["version"] == 1
+    assert detail["config"]["settings"]["api_key_configured"] is True
+    assert "historical-secret" not in json.dumps(detail)
+    assert "configuration_fingerprint" not in detail["config"]
+    assert "runtime_configuration_fingerprint" not in detail["meta"]
+    assert "runtime_configuration_fingerprint" not in listing[0]
+    assert detail["events"][0] == received[0] == historical_event
+    assert child["meta"]["source_run_id"] == run_id
+    assert "runtime_configuration_fingerprint" not in child["meta"]
+    assert "configuration_fingerprint" not in child["config"]
+    assert generator.received_schema == CLOSED_SCHEMA
+    assert {path.name: path.read_bytes() for path in directory.iterdir()} == original
 
 
 def test_runtime_config_rejects_parallel_tool_calls_before_creating_run(
@@ -642,10 +703,13 @@ def test_only_one_run_may_be_active(tmp_path: Path) -> None:
         _wait_for_status(client, run_id)
 
         # The slot is free again once the run finishes.
-        assert client.post(
-            "/api/runs",
-            json={"command_outputs": ["third"]},
-        ).status_code == 201
+        assert (
+            client.post(
+                "/api/runs",
+                json={"command_outputs": ["third"]},
+            ).status_code
+            == 201
+        )
 
 
 def test_running_run_cannot_be_deleted(tmp_path: Path) -> None:

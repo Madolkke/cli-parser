@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "neighbors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "local_interface": {
+            "type": "string"
+          },
+          "chassis_id": {
+            "type": "string"
+          },
+          "port_id": {
+            "type": "string"
+          },
+          "port_description": {
+            "type": "string"
+          },
+          "system_name": {
+            "type": "string"
+          },
+          "system_description": {
+            "type": "string"
+          },
+          "time_remaining_seconds": {
+            "type": "string"
+          },
+          "system_capabilities": {
+            "type": "string"
+          },
+          "enabled_capabilities": {
+            "type": "string"
+          },
+          "auto_negotiation": {
+            "type": "string"
+          },
+          "media_attachment_unit_type": {
+            "type": "string"
+          },
+          "vlan_id": {
+            "type": "string"
+          },
+          "peer_source_mac": {
+            "type": "string"
+          },
+          "management_addresses": {
+            "type": "object",
+            "properties": {
+              "ipv4": {
+                "type": "string"
+              },
+              "ipv6": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "physical_media": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "capability": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "capability"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          "med": {
+            "type": "object",
+            "properties": {
+              "hardware_revision": {
+                "type": "string"
+              },
+              "firmware_revision": {
+                "type": "string"
+              },
+              "software_revision": {
+                "type": "string"
+              },
+              "serial_number": {
+                "type": "string"
+              },
+              "manufacturer": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "asset_id": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "string"
+              },
+              "device_type": {
+                "type": "string"
+              },
+              "location": {
+                "type": "string"
+              },
+              "network_policies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "application": {
+                      "type": "string"
+                    },
+                    "vlan": {
+                      "type": "string"
+                    },
+                    "tagging": {
+                      "type": "string"
+                    },
+                    "layer_2_priority": {
+                      "type": "string"
+                    },
+                    "dscp": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "application",
+                    "vlan",
+                    "tagging",
+                    "layer_2_priority",
+                    "dscp"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "power_device": {
+                "type": "object",
+                "properties": {
+                  "power_source": {
+                    "type": "string"
+                  },
+                  "power_priority": {
+                    "type": "string"
+                  },
+                  "wattage": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "power_source",
+                  "power_priority",
+                  "wattage"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "hardware_revision",
+              "firmware_revision",
+              "software_revision",
+              "serial_number",
+              "manufacturer",
+              "model",
+              "capabilities",
+              "device_type",
+              "location",
+              "network_policies",
+              "power_device"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "chassis_id",
+          "port_id",
+          "port_description",
+          "system_name",
+          "system_description",
+          "time_remaining_seconds",
+          "system_capabilities",
+          "enabled_capabilities",
+          "auto_negotiation",
+          "media_attachment_unit_type",
+          "management_addresses",
+          "physical_media"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "total_entries_displayed": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "neighbors"
+  ],
+  "additionalProperties": false
+}

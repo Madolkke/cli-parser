@@ -214,10 +214,13 @@ def test_schema_may_omit_draft_declaration_without_normalization() -> None:
     del schema["$schema"]
 
     assert validate_result_schema(schema) == []
-    assert validate_records_against_schema(
-        [{"hostname": "edge_1", "interfaces": [{"name": "eth0", "mtu": 1500}]}],
-        schema,
-    ) == []
+    assert (
+        validate_records_against_schema(
+            [{"hostname": "edge_1", "interfaces": [{"name": "eth0", "mtu": 1500}]}],
+            schema,
+        )
+        == []
+    )
     assert "$schema" not in schema
 
 

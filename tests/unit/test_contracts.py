@@ -340,21 +340,15 @@ def test_settings_reject_invalid_reasoning_effort(value: str) -> None:
         )
 
 
-def test_settings_accepts_json_extra_body_and_stable_hash() -> None:
-    from cli_parser_agent.config import model_extra_body_sha256
-
-    first = {"thinking": {"budget": 512, "enabled": True}, "modes": ["a", None]}
-    second = {"modes": ["a", None], "thinking": {"enabled": True, "budget": 512}}
+def test_settings_accepts_json_extra_body() -> None:
+    extra_body = {"thinking": {"budget": 512, "enabled": True}, "modes": ["a", None]}
     settings = TtpGeneratorSettings(
         api_key="secret",
         model_name="test-model",
-        extra_body=first,
+        extra_body=extra_body,
     )
 
-    assert settings.extra_body == first
-    assert model_extra_body_sha256(first) == model_extra_body_sha256(second)
-    assert model_extra_body_sha256(first) != model_extra_body_sha256({})
-    assert model_extra_body_sha256(None) == ""
+    assert settings.extra_body == extra_body
 
 
 @pytest.mark.parametrize(
@@ -470,7 +464,6 @@ def test_generation_policy_from_env_reads_all_policy_overrides() -> None:
 
     with pytest.raises(ValidationError):
         GenerationPolicy.from_env({"CLI_PARSER_MAX_AGENT_ITERS": "not-an-int"})
-
 
 
 @pytest.mark.parametrize(

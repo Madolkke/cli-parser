@@ -363,7 +363,6 @@ async def test_generation_result_captures_the_active_laminar_trace(
         "request_id": result.metadata.request_id,
         "model_name": "test-model",
         "model_extra_body_configured": False,
-        "model_extra_body_sha256": "",
         "prompt_version": result.metadata.prompt_version,
         "command_output_count": 1,
         "schema_sampled_char_count": len("value: one"),
@@ -1211,8 +1210,10 @@ async def test_successful_generation_finishes_the_root_span_with_full_result(
     assert finishes[0]["trace_metadata"]["status"] == "success"
 
 
-async def test_root_trace_records_only_extra_body_hash(
+@pytest.mark.parametrize("mode", ["full", "schema_only", "template_only"])
+async def test_root_trace_records_only_extra_body_presence(
     monkeypatch: pytest.MonkeyPatch,
+    mode: str,
 ) -> None:
     private_value = "provider-private-configuration"
     generator = TtpGenerator(
@@ -1223,6 +1224,7 @@ async def test_root_trace_records_only_extra_body_hash(
         ),
     )
     starts: list[dict[str, Any]] = []
+    finishes: list[dict[str, Any]] = []
 
     @contextmanager
     def start(name: str, **kwargs: Any) -> Any:
@@ -1256,15 +1258,38 @@ async def test_root_trace_records_only_extra_body_hash(
         )
 
     monkeypatch.setattr(generator_module, "start_laminar_span", start)
-    monkeypatch.setattr(generator_module, "finish_laminar_span", lambda **_: None)
+    monkeypatch.setattr(
+        generator_module,
+        "finish_laminar_span",
+        lambda **kwargs: finishes.append(kwargs),
+    )
     monkeypatch.setattr(generator, "_generate", fail)
 
-    await generator.generate(GenerationRequest(command_outputs=["value: one"]))
+    request = GenerationRequest(command_outputs=["value: one"])
+    if mode == "schema_only":
+        await generator.propose_schema(request)
+    elif mode == "template_only":
+        await generator.generate_from_schema(
+            TemplateRequest(
+                command_outputs=request.command_outputs,
+                result_schema=_result_schema(),
+            ),
+        )
+    else:
+        await generator.generate(request)
 
     attributes = starts[0]["attributes"]
     assert attributes["model_extra_body_configured"] is True
-    assert len(attributes["model_extra_body_sha256"]) == 64
-    assert private_value not in str(attributes)
+    assert attributes["generation_mode"] == mode
+    for payload in (
+        attributes,
+        finishes[0]["attributes"],
+        finishes[0]["trace_metadata"],
+    ):
+        assert payload["model_extra_body_configured"] is True
+        assert "model_extra_body_sha256" not in payload
+        assert private_value not in str(payload)
+        assert "secret" not in str(payload)
 
 
 @pytest.mark.parametrize(
@@ -1318,6 +1343,7 @@ async def test_generate_closes_trace_before_propagating_base_exceptions(
         "exception_type": type(error).__name__,
     }
     assert "private" not in str(finishes[0])
+    assert "model_extra_body_sha256" not in finishes[0]["trace_metadata"]
 
 
 async def test_schema_only_mode_freezes_a_proposal_without_running_ttp(

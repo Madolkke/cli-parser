@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import hashlib
 import json
 import math
 import re
@@ -29,7 +28,6 @@ from cli_parser_agent import (  # noqa: E402
     TtpGenerator,
     TtpGeneratorSettings,
 )
-from cli_parser_agent.config import model_extra_body_sha256  # noqa: E402
 from cli_parser_agent.evaluation import (  # noqa: E402
     DatasetPreflightReport,
     HarnessError,
@@ -46,11 +44,9 @@ from cli_parser_agent.evaluation import (  # noqa: E402
 )
 from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
     PROMPT_VERSION,
-    SCHEMA_SYSTEM_PROMPT,
-    TTP_SYSTEM_PROMPT,
 )
 
-RUNNER_VERSION = 4
+RUNNER_VERSION = 5
 BASELINE_VERSION = 1
 ScriptConfigurationError = _run_support.ScriptConfigurationError
 
@@ -153,21 +149,6 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _fingerprint(value: Any) -> str:
-    encoded = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-def _text_digest(value: str) -> str:
-    return hashlib.sha256(value.encode("utf-8")).hexdigest()
-
-
 def _configuration() -> tuple[
     TtpGeneratorSettings,
     GenerationPolicy,
@@ -200,19 +181,9 @@ def _configuration() -> tuple[
             "thinking_enable": settings.thinking_enable,
             "reasoning_effort": settings.reasoning_effort,
             "extra_body_configured": settings.extra_body is not None,
-            "extra_body_sha256": model_extra_body_sha256(settings.extra_body),
         },
         "policy": policy.model_dump(mode="json"),
-        # The prompt is the most likely thing to be A/B tested, so it has to be
-        # part of the fingerprint or two runs of different prompts compare as
-        # identical configurations. Carry both: the version string keeps diffs
-        # readable, and the content hashes catch an edit that forgot to bump it
-        # (AGENTS.md and PROMPT_VERSION have already drifted apart once).
-        "prompt": {
-            "version": PROMPT_VERSION,
-            "schema_system_sha256": _text_digest(SCHEMA_SYSTEM_PROMPT),
-            "ttp_system_sha256": _text_digest(TTP_SYSTEM_PROMPT),
-        },
+        "prompt": {"version": PROMPT_VERSION},
     }
     return settings, policy, artifact_root, configuration
 
@@ -244,22 +215,6 @@ def _case_metadata(case: Any, input_scope: str) -> dict[str, Any]:
                 strict=True,
             )
         ],
-        "files": {
-            "schema": {"sha256": case.file_sha256["schema"]},
-            "template": {"sha256": case.file_sha256["template"]},
-            "expected": {"sha256": case.file_sha256["expected"]},
-            "inputs": [
-                {
-                    "name": f"{original_index + 1:03d}.txt",
-                    "sha256": item.sha256,
-                }
-                for original_index, item in zip(
-                    original_input_indices,
-                    case.inputs,
-                    strict=True,
-                )
-            ],
-        },
     }
 
 
@@ -426,7 +381,7 @@ def _run_baseline(
         "mode": "baseline",
         "input_scope": input_scope,
         "selected_inputs": _selection_metadata(reports),
-        "registry": {"path": str(registry.path), "sha256": registry.sha256},
+        "registry": {"path": str(registry.path)},
         **counts,
         "runnable_count": template_total + complete_total,
         "template_smoke_pass_rate": (
@@ -499,7 +454,7 @@ async def _run_ttp(
             "mode": "ttp-only",
             "input_scope": args.input_scope,
             "selected_inputs": _selection_metadata(reports),
-            "registry": {"path": str(registry.path), "sha256": registry.sha256},
+            "registry": {"path": str(registry.path)},
             **counts,
             "runnable_count": 0,
             "case_count": 0,
@@ -517,7 +472,6 @@ async def _run_ttp(
         dataset_directory = run_directory / "datasets" / report.dataset.name
         dataset_directory.mkdir()
         _run_support.write_json(dataset_directory / "preflight.json", report.as_dict())
-    config_fingerprint = _fingerprint(configuration)
     git_state = _git_state()
     semaphore = asyncio.Semaphore(args.concurrency)
 
@@ -532,7 +486,6 @@ async def _run_ttp(
                 "mode": "ttp-only",
                 "started_at": started_at,
                 "finished_at": finished_at,
-                "config_fingerprint": config_fingerprint,
                 "git": git_state,
                 "case": _case_metadata(case, args.input_scope),
                 "trial_index": trial_index,
@@ -606,8 +559,7 @@ async def _run_ttp(
         "input_scope": args.input_scope,
         "selected_inputs": _selection_metadata(reports),
         "status": status,
-        "registry": {"path": str(registry.path), "sha256": registry.sha256},
-        "config_fingerprint": config_fingerprint,
+        "registry": {"path": str(registry.path)},
         "git": git_state,
         "configuration": configuration,
         "case_count": len(cases),
@@ -696,7 +648,6 @@ class _RoundTracer:
     _VALUE_FIELDS = frozenset(
         {
             "submission_index",
-            "template_sha256",
             "template_chars",
             "compacted_interactions",
             "retained_interactions",
@@ -917,8 +868,6 @@ def _baseline_document(summary: Mapping[str, Any]) -> dict[str, Any]:
         "baseline_version": BASELINE_VERSION,
         "captured_at": summary["captured_at"],
         "runner_version": summary["runner_version"],
-        "registry_sha256": summary["registry"]["sha256"],
-        "config_fingerprint": summary["config_fingerprint"],
         "configuration": summary["configuration"],
         "input_scope": summary["input_scope"],
         "trial_count": summary["trial_count"],
@@ -1006,7 +955,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "mode": "preflight",
                 "input_scope": args.input_scope,
                 "selected_inputs": _selection_metadata(reports),
-                "registry": {"path": str(registry.path), "sha256": registry.sha256},
+                "registry": {"path": str(registry.path)},
                 **counts,
                 "runnable_count": sum(
                     report.status == "passed" and report.dataset.stage != "inputs-only"

@@ -13,7 +13,7 @@
 `inputs/` 保存同一命令的 `1-5` 份 UTF-8 回显，`schema.json` 是共享的受限
 Draft 2020-12 Schema，`template.ttp` 是项目维护的确定性基线模板，`expected.json`
 是按输入顺序排列的 records 数组。根 `evals/datasets.toml` 只保存 ID、命令、平台、标签和
-四类文件的 SHA-256，不承载业务内容。可选 `default_input` 指向 `inputs/` 中已登记的一份
+四类文件的路径，不承载业务内容。可选 `default_input` 指向 `inputs/` 中已登记的一份
 回显，用于默认单输入测评。
 
 ## 命令

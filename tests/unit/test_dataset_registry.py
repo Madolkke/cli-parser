@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import hashlib
 import importlib.util
 import json
-import re
 from pathlib import Path
 from types import ModuleType
 
@@ -16,10 +14,6 @@ from cli_parser_agent.evaluation import (
     select_dataset_entries,
 )
 from cli_parser_agent.ttp_generation.agent import prompt as prompt_module
-
-
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _load_runner() -> ModuleType:
@@ -80,7 +74,7 @@ def _write_dataset(
             newline="\n",
         )
     lines = [
-        "version = 1",
+        "version = 2",
         "",
         "[[dataset]]",
         "id = 1",
@@ -92,30 +86,18 @@ def _write_dataset(
         "inputs = [",
     ]
     lines.extend(
-        "  { file = 'inputs/"
-        + f"{index + 1:03d}.txt"
-        + "', sha256 = '"
-        + _sha(inputs / f"{index + 1:03d}.txt")
-        + "' },"
-        for index in range(input_count)
+        f"  {{ file = 'inputs/{index + 1:03d}.txt' }}," for index in range(input_count)
     )
     lines.append("]")
     if default_input is not None:
         lines.append(f'default_input = "{default_input}"')
     if template or complete:
-        template_hash = _sha(case / "template.ttp")
-        lines.append(
-            "template = { file = 'template.ttp', sha256 = '" + template_hash + "' }",
-        )
+        lines.append("template = { file = 'template.ttp' }")
     if complete:
-        schema_hash = _sha(case / "schema.json")
-        expected_hash = _sha(case / "expected.json")
         lines.extend(
             [
-                "schema = { file = 'schema.json', sha256 = '" + schema_hash + "' }",
-                "expected = { file = 'expected.json', sha256 = '"
-                + expected_hash
-                + "' }",
+                "schema = { file = 'schema.json' }",
+                "expected = { file = 'expected.json' }",
             ],
         )
     registry = root / "datasets.toml"
@@ -145,9 +127,42 @@ def test_registry_detects_directory_stage(
         _write_dataset(tmp_path, template=template, complete=complete),
     )
 
+    assert registry.version == 2
     assert registry.datasets[0].stage == stage
     reports = preflight_dataset_registry(registry)
     assert reports[0].status == ("pending" if stage == "inputs-only" else "passed")
+
+
+def test_registry_rejects_version_one(tmp_path: Path) -> None:
+    registry_path = _write_dataset(tmp_path)
+    registry_path.write_text(
+        registry_path.read_text(encoding="utf-8").replace("version = 2", "version = 1"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(HarnessError, match="version must be 2"):
+        load_dataset_registry(registry_path)
+
+
+@pytest.mark.parametrize(
+    "file_name",
+    ["inputs/001.txt", "template.ttp", "schema.json", "expected.json"],
+)
+def test_version_two_rejects_legacy_sha256_fields(
+    tmp_path: Path,
+    file_name: str,
+) -> None:
+    registry_path = _write_dataset(tmp_path, complete=True)
+    registry_path.write_text(
+        registry_path.read_text(encoding="utf-8").replace(
+            f"file = '{file_name}'",
+            f"file = '{file_name}', sha256 = '{'0' * 64}'",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(HarnessError, match="unsupported keys: sha256"):
+        load_dataset_registry(registry_path)
 
 
 def test_registry_selects_by_name_id_and_tag(tmp_path: Path) -> None:
@@ -227,10 +242,10 @@ def test_default_scope_selects_only_the_registered_input(tmp_path: Path) -> None
     ]
 
 
-def test_crlf_inputs_are_normalized_after_the_digest_is_verified(
+def test_crlf_inputs_are_normalized_before_parsing(
     tmp_path: Path,
 ) -> None:
-    """CRLF must survive hashing but never reach the parser.
+    """CRLF must never reach the parser.
 
     TTP anchors rows with (?=\\n|\\r\\n) so CRLF still matches, but a greedy
     capture swallows the trailing CR while goldens hold CR-free values, which
@@ -239,17 +254,6 @@ def test_crlf_inputs_are_normalized_after_the_digest_is_verified(
     registry_path = _write_dataset(tmp_path, template=True, complete=True)
     source = tmp_path / "test_sets" / "demo.case" / "inputs" / "001.txt"
     source.write_bytes(b"Value: alpha\r\n")
-    # Re-pin the digest to the CRLF bytes now on disk, so this exercises
-    # normalization rather than a hash mismatch.
-    registry_path.write_text(
-        re.sub(
-            r"(inputs/001\.txt', sha256 = ')[0-9a-f]{64}",
-            lambda match: match.group(1) + _sha(source),
-            registry_path.read_text(encoding="utf-8"),
-        ),
-        encoding="utf-8",
-        newline="\n",
-    )
 
     report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
 
@@ -302,16 +306,10 @@ def test_default_scope_ignores_nondefault_baseline_mismatch(tmp_path: Path) -> N
         default_input="inputs/001.txt",
     )
     expected_path = tmp_path / "test_sets" / "demo.case" / "expected.json"
-    old_expected_hash = _sha(expected_path)
     expected_path.write_text(
         json.dumps([{"value": "Value: alpha"}, {"value": "Value: wrong"}]) + "\n",
         encoding="utf-8",
     )
-    text = registry_path.read_text(encoding="utf-8").replace(
-        old_expected_hash,
-        _sha(expected_path),
-    )
-    registry_path.write_text(text, encoding="utf-8")
     registry = load_dataset_registry(registry_path)
 
     assert preflight_dataset_registry(registry)[0].status == "passed"
@@ -320,7 +318,7 @@ def test_default_scope_ignores_nondefault_baseline_mismatch(tmp_path: Path) -> N
     assert "baseline mismatch" in full_report.errors[0]
 
 
-def test_all_input_hashes_are_checked_for_default_scope(tmp_path: Path) -> None:
+def test_input_changes_do_not_require_registry_updates(tmp_path: Path) -> None:
     registry_path = _write_dataset(
         tmp_path,
         template=True,
@@ -332,8 +330,85 @@ def test_all_input_hashes_are_checked_for_default_scope(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    with pytest.raises(HarnessError, match="SHA-256"):
+    registry = load_dataset_registry(registry_path)
+
+    assert registry.datasets[0].input_texts[1].text == "Value: changed\n"
+    assert preflight_dataset_registry(registry)[0].status == "passed"
+    assert (
+        preflight_dataset_registry(registry, input_scope="full")[0].status == "passed"
+    )
+
+
+def test_complete_asset_changes_do_not_require_registry_updates(tmp_path: Path) -> None:
+    registry_path = _write_dataset(tmp_path, complete=True)
+    registry_bytes = registry_path.read_bytes()
+    case = tmp_path / "test_sets" / "demo.case"
+    (case / "inputs" / "001.txt").write_text("Name: beta\n", encoding="utf-8")
+    (case / "template.ttp").write_text("Name: {{ name }}\n", encoding="utf-8")
+    schema_path = case / "schema.json"
+    schema_path.write_text(
+        schema_path.read_text(encoding="utf-8").replace('"value"', '"name"'),
+        encoding="utf-8",
+    )
+    (case / "expected.json").write_text('[{"name": "beta"}]\n', encoding="utf-8")
+
+    report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
+
+    assert registry_path.read_bytes() == registry_bytes
+    assert report.status == "passed", report.errors
+    assert report.case is not None
+    assert report.case.expected_records == ({"name": "beta"},)
+
+
+@pytest.mark.parametrize(
+    ("payload", "error"),
+    [
+        (b"\xef\xbb\xbfValue: beta\n", "BOM"),
+        (b"\xff\n", "UTF-8"),
+        (b" \t\n", "whitespace"),
+        (b"", "emptiness"),
+        (b"x" * (1024 * 1024 + 1), "size"),
+    ],
+    ids=["bom", "invalid-utf8", "whitespace", "empty", "oversized"],
+)
+def test_input_format_is_checked_after_asset_changes(
+    tmp_path: Path,
+    payload: bytes,
+    error: str,
+) -> None:
+    registry_path = _write_dataset(tmp_path, input_count=2)
+    source = tmp_path / "test_sets" / "demo.case" / "inputs" / "002.txt"
+    source.write_bytes(payload)
+
+    with pytest.raises(HarnessError, match=error):
         load_dataset_registry(registry_path)
+
+
+@pytest.mark.parametrize(
+    ("file_name", "payload", "error"),
+    [
+        ("schema.json", '{"type": "string"}', "not supported"),
+        ("expected.json", '[{"value": 1}]', "violates schema"),
+        ("expected.json", '[{"value": "wrong"}]', "baseline mismatch"),
+        ("expected.json", '[{"value": "a", "value": "b"}]', "duplicate"),
+    ],
+)
+def test_invalid_assets_are_rejected_without_hash_checks(
+    tmp_path: Path,
+    file_name: str,
+    payload: str,
+    error: str,
+) -> None:
+    registry_path = _write_dataset(tmp_path, complete=True)
+    (tmp_path / "test_sets" / "demo.case" / file_name).write_text(
+        payload,
+        encoding="utf-8",
+    )
+
+    report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
+
+    assert report.status == "failed"
+    assert error in report.errors[0]
 
 
 def test_runner_defaults_to_registered_default_input_scope() -> None:
@@ -402,6 +477,7 @@ def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
             name="cli_parser.ttp.submission",
             value={
                 "template_sha256": "ab12",
+                "submission_index": 2,
                 "template_chars": 640,
                 "records": [{"leaked": True}],
                 "command_output": "secret-scalar",
@@ -413,7 +489,7 @@ def test_round_tracer_keeps_only_non_sensitive_scalar_facts() -> None:
     assert tracer.rows[0]["input_tokens"] == 41233
     assert tracer.rows[0]["output_tokens"] == 812
     assert tracer.rows[1]["value"] == {
-        "template_sha256": "ab12",
+        "submission_index": 2,
         "template_chars": 640,
     }
     assert "secret" not in json.dumps(tracer.rows)
@@ -636,48 +712,27 @@ def test_input_exact_match_micro_pools_inputs_rather_than_averaging_trials() -> 
     assert empty["rate"] == 0.0
 
 
-def test_config_fingerprint_covers_prompt_identity(
+def test_configuration_preserves_prompt_version_and_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A prompt-only change must not fingerprint as the same configuration.
-
-    Editing the system prompt is the most likely A/B, and before this the
-    fingerprint hashed only model settings and policy, so two runs of different
-    prompts were indistinguishable in summary.json.
-    """
     monkeypatch.setenv("OPENAI_API_KEY", "test-key")
     monkeypatch.setenv("OPENAI_MODEL", "test-model")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://example.invalid/v1")
     runner = _load_runner()
 
-    _, _, _, configuration = runner._configuration()
-    baseline = runner._fingerprint(configuration)
+    _, policy, _, configuration = runner._configuration()
 
-    assert configuration["prompt"]["version"] == prompt_module.PROMPT_VERSION
-    assert runner.RUNNER_VERSION == 4
+    assert configuration["prompt"] == {"version": prompt_module.PROMPT_VERSION}
+    assert configuration["policy"] == policy.model_dump(mode="json")
+    assert runner.RUNNER_VERSION == 5
     assert runner.BASELINE_VERSION == 1
-    assert (
-        configuration["prompt"]["ttp_system_sha256"]
-        == hashlib.sha256(
-            prompt_module.TTP_SYSTEM_PROMPT.encode("utf-8"),
-        ).hexdigest()
-    )
-
-    # Bumping the version alone moves it, and so does an unbumped content edit.
-    for key, value in (
-        ("version", "some-other-version"),
-        ("ttp_system_sha256", "0" * 64),
-    ):
-        mutated = json.loads(json.dumps(configuration))
-        mutated["prompt"][key] = value
-        assert runner._fingerprint(mutated) != baseline, key
+    assert "test-key" not in json.dumps(configuration)
 
 
-def test_config_fingerprint_covers_retry_tls_and_extra_body(
+def test_configuration_preserves_retry_tls_and_redacts_extra_body(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from cli_parser_agent import TtpGeneratorSettings
-    from cli_parser_agent.config import model_extra_body_sha256
 
     settings = TtpGeneratorSettings(
         api_key="secret-key",
@@ -693,17 +748,118 @@ def test_config_fingerprint_covers_retry_tls_and_extra_body(
     model = configuration["model"]
     assert model["model_max_retries"] == 3
     assert model["verify_tls"] is False
-    assert model["extra_body_sha256"] == model_extra_body_sha256(settings.extra_body)
+    assert model["extra_body_configured"] is True
+    assert "extra_body" not in model
+    assert "extra_body_sha256" not in model
     assert "secret" not in json.dumps(configuration)
-    fingerprint = runner._fingerprint(configuration)
-    for key, value in (
-        ("model_max_retries", 2),
-        ("verify_tls", True),
-        ("extra_body_sha256", ""),
-    ):
-        altered = json.loads(json.dumps(configuration))
-        altered["model"][key] = value
-        assert runner._fingerprint(altered) != fingerprint
+
+
+def test_baseline_export_preserves_scores_and_reads_historical_fields(
+    tmp_path: Path,
+) -> None:
+    runner = _load_runner()
+    counts = _counts(example=(2, 3))
+    summary = {
+        "captured_at": "2026-09-06T00:00:00Z",
+        "runner_version": 5,
+        "configuration": {"prompt": {"version": "test-version"}},
+        "input_scope": "full",
+        "trial_count": 3,
+        "case_pass_counts": counts,
+        "strict_pass_count": 2,
+        "input_exact_match_micro": {"successes": 2, "observations": 3},
+    }
+    document = runner._baseline_document(summary)
+    assert document == {
+        "baseline_version": 1,
+        "captured_at": summary["captured_at"],
+        "runner_version": 5,
+        "configuration": summary["configuration"],
+        "input_scope": "full",
+        "trial_count": 3,
+        "cases": counts,
+        "overall": {
+            "candidate_pass": {"successes": 2, "observations": 3},
+            "input_exact_match_micro": summary["input_exact_match_micro"],
+        },
+    }
+    historical = {
+        **document,
+        "runner_version": 4,
+        "registry_sha256": "old-registry",
+        "config_fingerprint": "old-config",
+    }
+    for name, payload in (("new", document), ("old", historical)):
+        path = tmp_path / f"{name}.json"
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        original = path.read_bytes()
+        loaded = runner._read_baseline(path)
+        assert not runner._compare_to_baseline(loaded, counts, 0)["regressed_cases"]
+        assert path.read_bytes() == original
+
+
+@pytest.mark.asyncio
+async def test_runner_writes_safe_trials_without_content_digests(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+
+    from cli_parser_agent import TtpGeneratorSettings
+
+    registry = load_dataset_registry(
+        _write_dataset(tmp_path, template=True, complete=True),
+    )
+    report = preflight_dataset_registry(registry)[0]
+    assert report.case is not None
+    # Exercise the real public API's pre-model rejection and persisted reports.
+    case = replace(
+        report.case,
+        schema={"type": "object", "properties": {}, "additionalProperties": True},
+    )
+    report = replace(report, case=case)
+    runner = _load_runner()
+    settings = TtpGeneratorSettings(
+        api_key="private-key",
+        model_name="unused-model",
+        extra_body={"provider_setting": "private-body"},
+    )
+    monkeypatch.setattr(runner.TtpGeneratorSettings, "from_env", lambda: settings)
+    output = tmp_path / "runs"
+    monkeypatch.setenv("CLI_PARSER_TEST_SET_ARTIFACT_ROOT", str(output))
+    baseline = tmp_path / "baseline.json"
+    args = runner._build_parser().parse_args(
+        [
+            "run",
+            "--registry",
+            str(registry.path),
+            "--mode",
+            "ttp-only",
+            "--write-baseline",
+            str(baseline),
+        ],
+    )
+    assert await runner._run_ttp(args, registry, (report,)) == 0
+    summary_path = next(output.glob("*/summary.json"))
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["runner_version"] == 5
+    assert summary["registry"] == {"path": str(registry.path)}
+    assert summary["configuration"]["model"]["extra_body_configured"] is True
+    assert summary["case_pass_counts"] == _counts(**{case.id: (0, 1)})
+    trial_path = next(output.glob("*/datasets/*/trials/trial-01.json"))
+    trial = json.loads(trial_path.read_text(encoding="utf-8"))
+    assert trial["termination_reason"] == "invalid_injected_schema"
+    assert trial["execution_facts"]["entered_ttp"] is False
+    assert trial["case"]["selected_inputs"] == [
+        {"input_index": 0, "display_number": 1, "path": case.inputs[0].path},
+    ]
+    assert "files" not in trial["case"]
+    assert "configuration" not in trial
+
+    for path in [*output.rglob("*.json"), baseline]:
+        text = path.read_text(encoding="utf-8")
+        assert not any(value in text for value in ("sha256", "fingerprint", "private-"))
+    assert runner._read_baseline(baseline)["cases"] == summary["case_pass_counts"]
 
 
 def test_round_tracer_redacts_unknown_tool_names_and_reason_values() -> None:

@@ -49,7 +49,7 @@ TTP runner 只折叠更早 `submit_ttp_template` 的 ToolResult 正文，替换�
 
 ### 2.3 模型与预算
 
-首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。程序化构造还可设置 `TtpGeneratorSettings.extra_body`，以一份冻结快照统一作用于该生成器创建的 Schema/TTP Agent；该字段不从环境读取，允许依照 OpenAI Client 语义覆盖标准请求字段，因此属于低层供应商兼容入口。它只接受不含凭据型键的 JSON 对象；项目 Trace metadata 和评测指纹只保留配置事实与稳定 SHA-256，显式 Laminar 自动模型追踪仍可能包含实际请求体。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
+首版使用 AgentScope 2.0.* 的 OpenAI 兼容模型，必需环境变量为 `OPENAI_API_KEY` 和 `OPENAI_MODEL`，`OPENAI_BASE_URL` 可选。默认模型参数为 `stream=False`、`temperature=0`、`parallel_tool_calls=False`、`max_tokens=8192`、`context_size=128000`。推理控制可通过 `TtpGeneratorSettings.thinking_enable` / `reasoning_effort` 或环境变量 `CLI_PARSER_MODEL_THINKING_ENABLE` / `CLI_PARSER_MODEL_REASONING_EFFORT` 设置，强度值为 `none`、`minimal`、`low`、`medium`、`high` 或 `xhigh`。开关未设置时省略推理参数；显式设为 `false` 时发送 OpenAI 的 `reasoning_effort=none`。程序化构造还可设置 `TtpGeneratorSettings.extra_body`，以一份冻结快照统一作用于该生成器创建的 Schema/TTP Agent；该字段不从环境读取，允许依照 OpenAI Client 语义覆盖标准请求字段，因此属于低层供应商兼容入口。它只接受不含凭据型键的 JSON 对象；项目 Trace metadata 和评测摘要只保留是否配置，显式 Laminar 自动模型追踪仍可能包含实际请求体。`CLI_PARSER_INSECURE_SKIP_TLS_VERIFY` 缺省时严格校验证书；仅将其设为 `1`、`true`、`yes` 或 `on` 时，OpenAI 兼容 HTTP 客户端才禁用证书校验，用于受信任内网的临时兼容，不得作为生产默认配置。
 
 TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_template`、`test_ttp_template` 和 `finish_generation` 中恰好选择一个；提交或测试 ToolResult 出现在后续模型上下文后才能继续提交或调用 `finish_generation`。为保持实现简单，首版不增加候选轮次标识或同轮工具调用拦截；该顺序依赖 OpenAI 兼容供应商遵守 `parallel_tool_calls=False`。
 
@@ -101,7 +101,7 @@ WebUI 还支持运行级参数覆盖。`POST /api/runs`、`/rerun` 和兼容的
 `/generate` 接收 WebUI 自有的 `parameters.settings` 与 `parameters.policy`，服务端将明确
 提供的字段合并到启动时从 `.env` 读取的基线后重新执行现有 Pydantic 校验。模型配置中的
 `extra_body` 仍只能来自环境，`parallel_tool_calls` 固定为 `false`；参数不支持运行中修改。
-每个运行把最终生效配置写入 Git 忽略的 `config.json`，详情接口只返回脱敏投影和配置指纹。
+每个运行把最终生效配置写入 Git 忽略的 `config.json`，详情接口只返回脱敏投影。
 按照本地单用户的显式选择，运行快照可以包含明文 API Key；它不进入 `meta.json`、SSE、普通
 日志或 WebUI 事件。`GET /api/runtime-config` 提供不含 Key 的启动基线给编辑器。
 
@@ -123,7 +123,7 @@ TUI 把完整 UTF-8 事件转录写到 `.artifacts/agent-tui/<UTC-run-id>/events
 │   ├── architecture.md
 │   ├── live-corpus-test-plan.md
 │   └── skills/
-│       └── generate-cli-parser-eval-cases/
+│       └── run-ttp-agent-evaluation/
 │           ├── SKILL.md
 │           ├── agents/openai.yaml
 │           └── references/
@@ -336,7 +336,7 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - pytest 中的稳定测试不隐式访问网络或模型；标准测试集由四件套 loader 做离线闭环，独立 runner 只在显式 `ttp-only` 模式下访问模型。
 - Agent 集成测试只使用真实 OpenAI 兼容模型，不创建 Fake/Mock LLM。它们以 `live` marker、凭据和显式开关隔离，覆盖“有效模板 → capture 复核 → finish → 终验”的成功闭环、共享轮次预算和结构化失败；修正测试由 validator 确定性拒绝首个有效 Schema 和 TTP，并要求所属阶段模型根据工具反馈重提，避免把随机失败当作断言前提。事件级单元测试覆盖两个阶段的模型/AgentState/Toolkit 身份隔离、Schema 安全暂停、TTP 首轮上下文洁净、测试工具非终止行为、候选保留、无候选 finish 拒绝、达到有效模板提交上限后的严格失败、零工具提醒、分阶段重试及 metadata 计数。
 - Laminar 单测覆盖无 Key、可选 Base URL、自托管端口、幂等初始化、独立/继承 Trace、success/failed/exception/cancelled 生命周期、提交/测试与 finish TOOL span、trace ID 契约和短进程 flush；未启用时原有行为保持不变。
-- 四件套评测单测覆盖 TOML 注册表严格解析、路径逃逸与 SHA-256、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线闭合、records/数组/类型的严格比较和逐输入诊断。系统化评测报告 case/input 严格通过率、records precision-recall-F1、TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按标签、平台和输入形状的 macro/micro 结果。
+- 四件套评测单测覆盖 TOML 注册表严格解析、路径逃逸、UTF-8/BOM、1-5 输入边界、Schema/expected/template 基线闭合、records/数组/类型的严格比较和逐输入诊断。系统化评测报告 case/input 严格通过率、records precision-recall-F1、TTP 候选漏斗、终止/故障域分布、逐阶段与逐轮时延、tokens/cost、重复 trial 可靠性，以及按标签、平台和输入形状的 macro/micro 结果。
 - observer 单测覆盖原始/项目事件顺序、request ID 与 sequence、并发请求隔离、上下文快照的阶段隔离、零工具回复的 discarded 标记、内部/外部取消区分、Key 排除和回调异常隔离。Textual `run_test()` 覆盖上下选择、Thinking 自动/手动折叠、详情滚动、自动跟随、完成后 Enter 退出以及 JSONL 的无损顺序。
 - 普通测试离线运行确定性模块；首版验收仍需至少执行一次真实模型端到端闭环。
 

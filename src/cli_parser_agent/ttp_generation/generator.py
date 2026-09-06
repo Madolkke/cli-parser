@@ -11,7 +11,6 @@ from uuid import uuid4
 from ..config import (
     GenerationPolicy,
     TtpGeneratorSettings,
-    model_extra_body_sha256,
 )
 from ..observability import (
     finish_laminar_span,
@@ -138,9 +137,6 @@ class TtpGenerator:
             "request_id": request_id,
             "model_name": self.settings.model_name,
             "model_extra_body_configured": self.settings.extra_body is not None,
-            "model_extra_body_sha256": model_extra_body_sha256(
-                self.settings.extra_body,
-            ),
             "prompt_version": PROMPT_VERSION,
             "command_output_count": len(request.command_outputs),
             "input_char_count": sum(len(item) for item in request.command_outputs),
@@ -279,9 +275,6 @@ class TtpGenerator:
                 "request_id": result_metadata.request_id,
                 "model_name": result_metadata.model_name,
                 "model_extra_body_configured": (self.settings.extra_body is not None),
-                "model_extra_body_sha256": model_extra_body_sha256(
-                    self.settings.extra_body,
-                ),
                 "prompt_version": result_metadata.prompt_version,
                 "command_output_count": result_metadata.command_output_count,
                 "schema_sampled_char_count": (

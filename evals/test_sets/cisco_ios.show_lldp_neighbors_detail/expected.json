@@ -1,0 +1,429 @@
+[
+  {
+    "neighbors": [
+      {
+        "chassis_id": "a000.f00e.300d",
+        "port_id": "Eth1/6",
+        "port_description": "PO2631-10Gx2-R261R5",
+        "system_name": "USSC-CAMPUS-CORE-GW2",
+        "system_description": "Cisco NX-OS(tm) n7700, Software (n7700-s2-dk9), Version 6.2(10), RELEASE SOFTWARE Copyright (c) 2002-2013 by Cisco Systems, Inc. Compiled 10/9/2014 12:00:00",
+        "time_remaining_seconds": "110",
+        "system_capabilities": "B,R",
+        "enabled_capabilities": "B,R",
+        "management_addresses": {
+          "ipv4": "11.11.11.11"
+        },
+        "auto_negotiation": "not supported",
+        "physical_media": {
+          "status": "not advertised"
+        },
+        "media_attachment_unit_type": "not advertised",
+        "vlan_id": "1"
+      },
+      {
+        "chassis_id": "2222.0642.7333",
+        "port_id": "Eth1/6",
+        "port_description": "PO2631-10Gx2-R261R5",
+        "system_name": "USSC-CAMPUS-CORE-GW1.acme123.com",
+        "system_description": "Cisco NX-OS(tm) n7700, Software (n7700-s2-dk9), Version 6.2(10), RELEASE SOFTWARE Copyright (c) 2002-2013 by Cisco Systems, Inc. Compiled 10/9/2014 12:00:00",
+        "time_remaining_seconds": "118",
+        "system_capabilities": "B,R",
+        "enabled_capabilities": "B,R",
+        "management_addresses": {
+          "ipv4": "33.33.33.3"
+        },
+        "auto_negotiation": "not supported",
+        "physical_media": {
+          "status": "not advertised"
+        },
+        "media_attachment_unit_type": "not advertised",
+        "vlan_id": "1"
+      },
+      {
+        "chassis_id": "0015.2222.c330",
+        "port_id": "Gi2/0/24",
+        "port_description": "GigabitEthernet2/0/24",
+        "system_name": "DMZ-SW1",
+        "system_description": "Cisco IOS Software, C3750 Software (C3750-IPSERVICESK9-M), Version 12.2(53)SE2, RELEASE SOFTWARE (fc3)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2010 by Cisco Systems, Inc.\nCompiled Wed 21-Apr-10 04:49 by prod_rel_team",
+        "time_remaining_seconds": "109",
+        "system_capabilities": "B,R",
+        "enabled_capabilities": "B",
+        "management_addresses": {
+          "ipv4": "55.55.55.55"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "1000baseT(FD)"
+            },
+            {
+              "capability": "100base-TX(FD)"
+            },
+            {
+              "capability": "100base-TX(HD)"
+            },
+            {
+              "capability": "10base-T(FD)"
+            },
+            {
+              "capability": "10base-T(HD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "30",
+        "vlan_id": "- not advertised"
+      },
+      {
+        "chassis_id": "0022.1111.2222",
+        "port_id": "g2",
+        "port_description": "not advertised",
+        "system_name": "not advertised",
+        "system_description": "not advertised",
+        "time_remaining_seconds": "91",
+        "system_capabilities": "not advertised",
+        "enabled_capabilities": "not advertised",
+        "management_addresses": {
+          "status": "not advertised"
+        },
+        "auto_negotiation": "not supported",
+        "physical_media": {
+          "status": "not advertised"
+        },
+        "media_attachment_unit_type": "not advertised"
+      }
+    ]
+  },
+  {
+    "neighbors": [
+      {
+        "local_interface": "Gi0/1/7",
+        "chassis_id": "10.10.0.1",
+        "port_id": "C8F9F9D61BC2:P1",
+        "port_description": "SW PORT",
+        "system_name": "SEPC8F9F9D61BC2",
+        "system_description": "Cisco IP Phone 7962G,V12, SCCP42.9-3-1ES27S",
+        "time_remaining_seconds": "127",
+        "system_capabilities": "B,T",
+        "enabled_capabilities": "B,T",
+        "management_addresses": {
+          "ipv4": "10.10.0.1"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "1000baseT(HD)"
+            },
+            {
+              "capability": "1000baseX(FD)"
+            },
+            {
+              "capability": "Symm, Asym Pause(FD)"
+            },
+            {
+              "capability": "Symm Pause(FD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "16",
+        "vlan_id": "- not advertised",
+        "med": {
+          "hardware_revision": "12",
+          "firmware_revision": "tnp62.8-3-1-21a.bin",
+          "software_revision": "SCCP42.9-3-1ES27S",
+          "serial_number": "FCH1610A5S5",
+          "manufacturer": "Cisco Systems, Inc.",
+          "model": "CP-7962G",
+          "capabilities": "NP, PD, IN",
+          "device_type": "Endpoint Class III",
+          "network_policies": [
+            {
+              "application": "Voice",
+              "vlan": "10",
+              "tagging": "tagged",
+              "layer_2_priority": "5",
+              "dscp": "46"
+            },
+            {
+              "application": "Voice Signal",
+              "vlan": "10",
+              "tagging": "tagged",
+              "layer_2_priority": "4",
+              "dscp": "32"
+            }
+          ],
+          "power_device": {
+            "power_source": "Unknown",
+            "power_priority": "Unknown",
+            "wattage": "6.3"
+          },
+          "location": "not advertised"
+        }
+      }
+    ]
+  },
+  {
+    "neighbors": [
+      {
+        "local_interface": "Gi2/0/13",
+        "chassis_id": "172.16.4.125",
+        "port_id": "000b.ea00.16e0",
+        "port_description": "WAN PORT",
+        "system_name": "ZULTYS IP Phone",
+        "system_description": "ZULTYS IP Phone",
+        "time_remaining_seconds": "64",
+        "system_capabilities": "T",
+        "enabled_capabilities": "T",
+        "management_addresses": {
+          "status": "not advertised"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "1000baseT(FD)"
+            },
+            {
+              "capability": "100base-TX(FD)"
+            },
+            {
+              "capability": "100base-TX(HD)"
+            },
+            {
+              "capability": "10base-T(FD)"
+            },
+            {
+              "capability": "10base-T(HD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "30",
+        "vlan_id": "- not advertised",
+        "med": {
+          "hardware_revision": "47.0.0.80.0.0.0",
+          "firmware_revision": "47.80.132.1",
+          "software_revision": "47.80.132.1",
+          "serial_number": "000bea0016e0",
+          "manufacturer": "ZULTYS",
+          "model": "ZIP 33G",
+          "capabilities": "NP, PD, IN",
+          "device_type": "Endpoint Class III",
+          "network_policies": [
+            {
+              "application": "Voice",
+              "vlan": "174",
+              "tagging": "tagged",
+              "layer_2_priority": "5",
+              "dscp": "46"
+            }
+          ],
+          "power_device": {
+            "power_source": "PSE",
+            "power_priority": "High",
+            "wattage": "4.0"
+          },
+          "location": "not advertised"
+        }
+      },
+      {
+        "local_interface": "Te1/1/1",
+        "chassis_id": "2c33.1100.a6c0",
+        "port_id": "Te1/2/13",
+        "port_description": "asw22",
+        "system_name": "dsw01",
+        "system_description": "Cisco IOS Software, s6t64 Software (s6t64-ADVENTERPRISEK9-M), Version 15.4(1)SY3, RELEASE SOFTWARE (fc4)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2017 by Cisco Systems, Inc.\nCompiled Fri 27-Oct-17 23:06 by prod_rel_team",
+        "time_remaining_seconds": "110",
+        "system_capabilities": "B,R",
+        "enabled_capabilities": "B,R",
+        "management_addresses": {
+          "ipv4": "172.16.0.10"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "Other/unknown"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "not advertised",
+        "vlan_id": "1"
+      }
+    ],
+    "total_entries_displayed": "2"
+  },
+  {
+    "neighbors": [
+      {
+        "local_interface": "Gi1/0/22",
+        "chassis_id": "::",
+        "port_id": "aabbccddeeff:P1",
+        "port_description": "SW PORT",
+        "system_name": "SEPaabbccddeeff.phones.company.domain",
+        "system_description": "Cisco IP Phone 6901,SCCP6901.9-3-1-SR2-2",
+        "time_remaining_seconds": "44",
+        "system_capabilities": "T",
+        "enabled_capabilities": "T",
+        "management_addresses": {
+          "ipv4": "10.20.30.40",
+          "ipv6": "::"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "100base-TX(FD)"
+            },
+            {
+              "capability": "100base-TX(HD)"
+            },
+            {
+              "capability": "10base-T(FD)"
+            },
+            {
+              "capability": "10base-T(HD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "16",
+        "vlan_id": "999",
+        "peer_source_mac": "aabb.ccdd.eeff",
+        "med": {
+          "hardware_revision": "1.0",
+          "firmware_revision": "6901.0-0-0-01-05",
+          "software_revision": "SCCP6901.9-3-1-SR2-2",
+          "serial_number": "FCH12345GVM",
+          "manufacturer": "Cisco Systems, Inc.",
+          "model": "CP-6901",
+          "capabilities": "NP, PD, IN",
+          "device_type": "Endpoint Class III",
+          "network_policies": [
+            {
+              "application": "Voice",
+              "vlan": "data",
+              "tagging": "untagged",
+              "layer_2_priority": "5",
+              "dscp": "46"
+            },
+            {
+              "application": "Voice Signal",
+              "vlan": "data",
+              "tagging": "untagged",
+              "layer_2_priority": "3",
+              "dscp": "46"
+            }
+          ],
+          "power_device": {
+            "power_source": "Unknown",
+            "power_priority": "Unknown",
+            "wattage": "2.6"
+          },
+          "location": "not advertised"
+        }
+      }
+    ]
+  },
+  {
+    "neighbors": [
+      {
+        "local_interface": "Gi1/1/2",
+        "chassis_id": "2416.abcd.abcd",
+        "port_id": "Gi1/0/16",
+        "port_description": "GigabitEthernet1/0/16",
+        "system_name": "sdalab-bldg1-as01.devices.example.com",
+        "system_description": "Cisco IOS Software [Bengaluru], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.6.5, RELEASE SOFTWARE (fc2)\nTechnical Support: http://www.cisco.com/techsupport\nCopyright (c) 1986-2023 by Cisco Systems, Inc.\nCompiled Wed 25-Jan-23 16:15 by mcpre",
+        "time_remaining_seconds": "107",
+        "system_capabilities": "B,R",
+        "enabled_capabilities": "B,R",
+        "management_addresses": {
+          "ipv4": "172.16.1.1"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "1000baseT(FD)"
+            },
+            {
+              "capability": "100base-TX(FD)"
+            },
+            {
+              "capability": "100base-TX(HD)"
+            },
+            {
+              "capability": "10base-T(FD)"
+            },
+            {
+              "capability": "10base-T(HD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "30",
+        "vlan_id": "1",
+        "peer_source_mac": "2416.abcd.ab12"
+      },
+      {
+        "local_interface": "Gi1/0/1",
+        "chassis_id": "10.65.1.11",
+        "port_id": "0060.abbc.abbc",
+        "port_description": "LAN Port",
+        "system_name": "NEC IP Phone",
+        "system_description": "DT700 Series",
+        "time_remaining_seconds": "119",
+        "system_capabilities": "B,T",
+        "enabled_capabilities": "B,T",
+        "management_addresses": {
+          "status": "not advertised"
+        },
+        "auto_negotiation": "supported, enabled",
+        "physical_media": {
+          "capabilities": [
+            {
+              "capability": "100base-TX(FD)"
+            },
+            {
+              "capability": "100base-TX(HD)"
+            },
+            {
+              "capability": "10base-T(FD)"
+            },
+            {
+              "capability": "10base-T(HD)"
+            }
+          ]
+        },
+        "media_attachment_unit_type": "16",
+        "vlan_id": "- not advertised",
+        "peer_source_mac": "0060.abbc.adde",
+        "med": {
+          "hardware_revision": "9.1.3.3",
+          "firmware_revision": "5.0.9.0",
+          "software_revision": "-",
+          "serial_number": "-",
+          "manufacturer": "NEC",
+          "model": "DT730",
+          "asset_id": "-",
+          "capabilities": "NP, PD, IN",
+          "device_type": "Endpoint Class III",
+          "network_policies": [
+            {
+              "application": "Voice",
+              "vlan": "2046",
+              "tagging": "tagged",
+              "layer_2_priority": "5",
+              "dscp": "46"
+            }
+          ],
+          "power_device": {
+            "power_source": "Unknown",
+            "power_priority": "Unknown",
+            "wattage": "6.3"
+          },
+          "location": "not advertised"
+        }
+      }
+    ],
+    "total_entries_displayed": "2"
+  }
+]

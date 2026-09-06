@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import re
@@ -25,7 +24,7 @@ from cli_parser_agent.ttp_generation.validation import (
 TEST_SET_MAX_INPUTS = 5
 TEST_SET_TEMPLATE_MAX_BYTES = 64 * 1024
 SEMANTIC_PILOT_SUITE = "semantic-pilot"
-DATASET_REGISTRY_VERSION = 1
+DATASET_REGISTRY_VERSION = 2
 MAX_INPUT_BYTES = 1024 * 1024
 SUPPORTED_NODE_TYPES = frozenset(
     {"object", "array", "string", "integer", "number", "boolean"},
@@ -33,27 +32,7 @@ SUPPORTED_NODE_TYPES = frozenset(
 
 _ID_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$")
 _TAG_RE = re.compile(r"^[a-z][a-z0-9]*(?:[-_][a-z0-9]+)*$")
-_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _FIELD_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-_ANSI_RE = re.compile(r"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1b\\))")
-_PAGER_RE = re.compile(
-    r"(?:--+\s*(?:more|\(\s*more\s*\))\s*--+|\bpress\s+(?:any\s+key|"
-    r"enter|space)\s+to\s+continue\b)",
-    re.IGNORECASE,
-)
-_CREDENTIAL_PATTERNS = (
-    re.compile(r"-----BEGIN (?:OPENSSH |RSA |EC |DSA )?PRIVATE KEY-----"),
-    re.compile(r"\bAuthorization\s*:\s*(?:Basic|Bearer)\s+\S+", re.IGNORECASE),
-    re.compile(
-        r"\b(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token)\s*[:=]\s*\S+",
-        re.IGNORECASE,
-    ),
-    re.compile(r"\b(?:password|passwd|pre-shared-key)\s*[:=]\s*\S+", re.I),
-    re.compile(r"^\s*(?:enable\s+)?secret\s+\S+", re.I | re.MULTILINE),
-    re.compile(r"^\s*snmp-server\s+community\s+\S+", re.I | re.MULTILINE),
-    re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\bhttps?://[^\s/:]+:[^\s/@]+@", re.IGNORECASE),
-)
 
 JsonObject = dict[str, Any]
 NodeType = Literal["object", "array", "string", "integer", "number", "boolean"]
@@ -118,7 +97,6 @@ class HarnessError(ValueError):
 @dataclass(frozen=True, slots=True)
 class EvaluationInput:
     path: str
-    sha256: str
     absolute_path: Path
     text: str
 
@@ -147,7 +125,6 @@ class TestSetCase:
     schema: JsonObject
     template: str
     expected_records: tuple[JsonObject, ...]
-    file_sha256: Mapping[str, Any]
     original_input_indices: tuple[int, ...] = ()
 
 
@@ -156,7 +133,6 @@ class DatasetFileSpec:
     """A file declared by the TOML dataset registry."""
 
     file: str
-    sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +166,6 @@ class DatasetRegistry:
 
     version: int
     path: Path
-    sha256: str
     datasets: tuple[DatasetRegistryEntry, ...]
 
 
@@ -335,61 +310,6 @@ def _safe_repo_path(root: Path, value: Any, label: str) -> tuple[str, Path]:
     return text, candidate
 
 
-def _sha256(payload: bytes) -> str:
-    return hashlib.sha256(payload).hexdigest()
-
-
-def _validate_sha256(value: Any, label: str) -> str:
-    text = _require_string(value, label)
-    if not _SHA256_RE.fullmatch(text):
-        raise HarnessError(f"{label} must be a lowercase SHA-256")
-    return text
-
-
-def _read_input(path: Path, expected_sha256: str, command: str, label: str) -> str:
-    if not path.is_file():
-        raise HarnessError(f"{label} does not identify a file")
-    try:
-        payload = path.read_bytes()
-    except OSError as error:
-        raise HarnessError(f"{label} could not be read") from error
-    if _sha256(payload) != expected_sha256:
-        raise HarnessError(f"{label} SHA-256 does not match")
-    if not payload or len(payload) > MAX_INPUT_BYTES:
-        raise HarnessError(f"{label} must contain 1 to {MAX_INPUT_BYTES} bytes")
-    if payload.startswith(b"\xef\xbb\xbf"):
-        raise HarnessError(f"{label} must not contain a UTF-8 BOM")
-    try:
-        text = payload.decode("utf-8", errors="strict")
-    except UnicodeDecodeError as error:
-        raise HarnessError(f"{label} is not strict UTF-8") from error
-    issues: list[str] = []
-    if not text.strip():
-        issues.append("empty content")
-    if "\r" in text:
-        issues.append("CR newlines")
-    if "\x00" in text:
-        issues.append("NUL characters")
-    if any(ord(char) < 32 and char not in {"\t", "\n"} for char in text):
-        issues.append("C0 control characters")
-    if _ANSI_RE.search(text) or "\x1b" in text:
-        issues.append("ANSI terminal escapes")
-    if _PAGER_RE.search(text):
-        issues.append("terminal pager markers")
-    normalized_command = " ".join(command.split()).casefold()
-    if any(
-        " ".join(line.strip().split()).casefold() == normalized_command
-        for line in text.splitlines()
-        if line.strip()
-    ):
-        issues.append("command echo")
-    if any(pattern.search(text) for pattern in _CREDENTIAL_PATTERNS):
-        issues.append("credential pattern")
-    if issues:
-        raise HarnessError(f"{label} failed preflight: {', '.join(issues)}")
-    return text
-
-
 def _parent_path(path: str) -> str | None:
     if path == "/":
         return None
@@ -417,7 +337,6 @@ def _json_type(value: Any) -> NodeType:
 
 def _load_test_set_text(
     path: Path,
-    expected_sha256: str,
     label: str,
     *,
     max_bytes: int,
@@ -429,8 +348,6 @@ def _load_test_set_text(
         payload = path.read_bytes()
     except OSError as error:
         raise HarnessError(f"{label} could not be read") from error
-    if _sha256(payload) != expected_sha256:
-        raise HarnessError(f"{label} SHA-256 does not match")
     if len(payload) > max_bytes or (require_nonempty and not payload):
         raise HarnessError(f"{label} exceeds its size or emptiness limit")
     if payload.startswith(b"\xef\xbb\xbf"):
@@ -441,7 +358,6 @@ def _load_test_set_text(
         raise HarnessError(f"{label} is not strict UTF-8") from error
     if require_nonempty and not text.strip():
         raise HarnessError(f"{label} must not contain only whitespace")
-    # Normalize after the digest so integrity still covers the bytes on disk.
     # TTP anchors rows with (?=\n|\r\n) so CRLF still matches, but a greedy
     # capture swallows the trailing CR while goldens hold CR-free values, which
     # scores correct templates as failures. .gitattributes keeps the corpus LF;
@@ -451,7 +367,6 @@ def _load_test_set_text(
 
 def _load_test_set_json(
     path: Path,
-    expected_sha256: str,
     label: str,
     *,
     max_bytes: int,
@@ -462,8 +377,6 @@ def _load_test_set_json(
         payload = path.read_bytes()
     except OSError as error:
         raise HarnessError(f"{label} could not be read") from error
-    if _sha256(payload) != expected_sha256:
-        raise HarnessError(f"{label} SHA-256 does not match")
     if len(payload) > max_bytes:
         raise HarnessError(f"{label} exceeds its size limit")
     if payload.startswith(b"\xef\xbb\xbf"):
@@ -481,162 +394,12 @@ def _load_test_set_json(
     return value, payload
 
 
-def _load_test_set_files(
-    root: Path,
-    case_path: Path,
-    raw_files: Mapping[str, Any],
-    label: str,
-) -> tuple[
-    tuple[EvaluationInput, ...],
-    JsonObject,
-    str,
-    tuple[JsonObject, ...],
-    dict[str, Any],
-]:
-    _require_exact_keys(
-        raw_files,
-        {"schema", "template", "expected", "inputs"},
-        f"{label}.files",
-    )
-
-    def file_hash(key: str) -> str:
-        raw_file = raw_files[key]
-        if not isinstance(raw_file, Mapping):
-            raise HarnessError(f"{label}.files.{key} must be an object")
-        _require_exact_keys(raw_file, {"sha256"}, f"{label}.files.{key}")
-        return _validate_sha256(raw_file["sha256"], f"{label}.files.{key}.sha256")
-
-    schema_sha256 = file_hash("schema")
-    schema, _ = _load_test_set_json(
-        case_path / "schema.json",
-        schema_sha256,
-        f"{label}.schema.json",
-        max_bytes=256 * 1024,
-    )
-    if not isinstance(schema, dict):
-        raise HarnessError(f"{label}.schema.json must contain an object")
-    if validate_result_schema(schema):
-        raise HarnessError(f"{label}.schema.json is not a supported result schema")
-
-    raw_inputs = raw_files["inputs"]
-    if (
-        not isinstance(raw_inputs, list)
-        or not 1 <= len(raw_inputs) <= TEST_SET_MAX_INPUTS
-    ):
-        raise HarnessError(
-            f"{label}.files.inputs must contain 1 to {TEST_SET_MAX_INPUTS} items",
-        )
-    inputs: list[EvaluationInput] = []
-    expected_names = {f"{index:03d}.txt" for index in range(1, len(raw_inputs) + 1)}
-    actual_names: set[str] = set()
-    input_hashes: list[str] = []
-    for index, raw_input in enumerate(raw_inputs, start=1):
-        input_label = f"{label}.files.inputs[{index - 1}]"
-        if not isinstance(raw_input, Mapping):
-            raise HarnessError(f"{input_label} must be an object")
-        _require_exact_keys(raw_input, {"name", "sha256"}, input_label)
-        name = _require_string(raw_input["name"], f"{input_label}.name")
-        if not re.fullmatch(r"[0-9]{3}\.txt", name) or name != f"{index:03d}.txt":
-            raise HarnessError(f"{input_label}.name must be {index:03d}.txt")
-        if name in actual_names:
-            raise HarnessError(f"{label}.files.inputs contains duplicate names")
-        actual_names.add(name)
-        input_sha256 = _validate_sha256(raw_input["sha256"], f"{input_label}.sha256")
-        input_hashes.append(input_sha256)
-        input_path = case_path / "inputs" / name
-        inputs.append(
-            EvaluationInput(
-                path=f"{case_path.name}/inputs/{name}",
-                sha256=input_sha256,
-                absolute_path=input_path,
-                text=_load_test_set_text(
-                    input_path,
-                    input_sha256,
-                    f"{input_label}.file",
-                    max_bytes=MAX_INPUT_BYTES,
-                ),
-            ),
-        )
-    if actual_names != expected_names:
-        raise HarnessError(f"{label}.files.inputs names are not contiguous")
-    actual_input_files = {
-        item.name for item in (case_path / "inputs").iterdir() if item.is_file()
-    }
-    if actual_input_files != expected_names:
-        raise HarnessError(f"{label}.inputs contains unexpected files")
-
-    template_sha256 = file_hash("template")
-    template = _load_test_set_text(
-        case_path / "template.ttp",
-        template_sha256,
-        f"{label}.template.ttp",
-        max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
-    )
-
-    expected_sha256 = file_hash("expected")
-    expected, _ = _load_test_set_json(
-        case_path / "expected.json",
-        expected_sha256,
-        f"{label}.expected.json",
-        max_bytes=8 * 1024 * 1024,
-    )
-    if not isinstance(expected, list) or len(expected) != len(inputs):
-        raise HarnessError(f"{label}.expected.json must match the input count")
-    if any(not isinstance(record, dict) for record in expected):
-        raise HarnessError(f"{label}.expected.json must contain only object records")
-    if validate_records_against_schema(expected, schema):
-        raise HarnessError(f"{label}.expected.json records do not satisfy schema")
-
-    baseline = validate_ttp_template(
-        template,
-        [item.text for item in inputs],
-        schema,
-        timeout_seconds=20.0,
-        max_result_bytes=8 * 1024 * 1024,
-    )
-    if baseline.issues or baseline.records != expected:
-        raise HarnessError(
-            f"{label} standard template does not reproduce expected records",
-        )
-    return (
-        tuple(inputs),
-        schema,
-        template,
-        tuple(expected),
-        {
-            "schema": schema_sha256,
-            "template": template_sha256,
-            "expected": expected_sha256,
-            "inputs": tuple(input_hashes),
-        },
-    )
-
-
 def _dataset_file_spec(value: Any, label: str) -> DatasetFileSpec:
     if not isinstance(value, Mapping):
         raise HarnessError(f"{label} must be an object")
-    _require_exact_keys(value, {"file", "sha256"}, label)
+    _require_exact_keys(value, {"file"}, label)
     file_name = _require_string(value["file"], f"{label}.file")
-    sha256 = _validate_sha256(value["sha256"], f"{label}.sha256")
-    return DatasetFileSpec(file=file_name, sha256=sha256)
-
-
-def _verify_dataset_file(
-    path: Path,
-    spec: DatasetFileSpec,
-    label: str,
-) -> bool:
-    """Verify a declared file when present, returning false for pending files."""
-
-    if not path.is_file():
-        return False
-    try:
-        payload = path.read_bytes()
-    except OSError as error:
-        raise HarnessError(f"{label} could not be read") from error
-    if _sha256(payload) != spec.sha256:
-        raise HarnessError(f"{label} SHA-256 does not match")
-    return True
+    return DatasetFileSpec(file=file_name)
 
 
 def _dataset_path_spec(
@@ -669,14 +432,12 @@ def _dataset_inputs(
             continue
         text = _load_test_set_text(
             path,
-            spec.sha256,
             label,
             max_bytes=MAX_INPUT_BYTES,
         )
         inputs.append(
             EvaluationInput(
                 path=f"test_sets/{entry.name}/inputs/{index:03d}.txt",
-                sha256=spec.sha256,
                 absolute_path=path,
                 text=text,
             ),
@@ -897,21 +658,6 @@ def load_dataset_registry(registry_path: Path) -> DatasetRegistry:
                 )
             if spec is not None:
                 _dataset_path_spec(dataset_path, spec, filename, f"{label}.{field}")
-                _verify_dataset_file(dataset_path / filename, spec, f"{label}.{field}")
-        for input_index, spec in enumerate(input_specs, start=1):
-            _verify_dataset_file(
-                dataset_path / spec.file,
-                spec,
-                f"{label}.inputs[{input_index - 1}]",
-            )
-        for filename in sorted(actual_input_names):
-            if filename in expected_input_names:
-                expected_spec_for_input = input_specs[int(filename[:3]) - 1]
-                _verify_dataset_file(
-                    inputs_dir / filename,
-                    expected_spec_for_input,
-                    f"{label}.inputs/{filename}",
-                )
 
         schema_present = (dataset_path / "schema.json").is_file()
         expected_present = (dataset_path / "expected.json").is_file()
@@ -971,7 +717,6 @@ def load_dataset_registry(registry_path: Path) -> DatasetRegistry:
         if template_spec is not None and (dataset_path / "template.ttp").is_file():
             template_text = _load_test_set_text(
                 dataset_path / "template.ttp",
-                template_spec.sha256,
                 f"{label}.template.ttp",
                 max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
             )
@@ -1006,7 +751,6 @@ def load_dataset_registry(registry_path: Path) -> DatasetRegistry:
     return DatasetRegistry(
         version=DATASET_REGISTRY_VERSION,
         path=path,
-        sha256=_sha256(payload),
         datasets=tuple(entries),
     )
 
@@ -1022,7 +766,6 @@ def _load_dataset_complete_case(
     inputs, original_input_indices = _scoped_dataset_inputs(entry, input_scope)
     schema, _ = _load_test_set_json(
         entry.absolute_path / "schema.json",
-        entry.schema.sha256,
         f"dataset {entry.name}.schema.json",
         max_bytes=256 * 1024,
     )
@@ -1030,13 +773,11 @@ def _load_dataset_complete_case(
         raise HarnessError(f"dataset {entry.name}.schema.json is not supported")
     template = _load_test_set_text(
         entry.absolute_path / "template.ttp",
-        entry.template.sha256,
         f"dataset {entry.name}.template.ttp",
         max_bytes=TEST_SET_TEMPLATE_MAX_BYTES,
     )
     expected, _ = _load_test_set_json(
         entry.absolute_path / "expected.json",
-        entry.expected.sha256,
         f"dataset {entry.name}.expected.json",
         max_bytes=8 * 1024 * 1024,
     )
@@ -1064,14 +805,6 @@ def _load_dataset_complete_case(
         schema=schema,
         template=template,
         expected_records=selected_expected,
-        file_sha256={
-            "schema": entry.schema.sha256,
-            "template": entry.template.sha256,
-            "expected": entry.expected.sha256,
-            "inputs": tuple(
-                entry.inputs[index].sha256 for index in original_input_indices
-            ),
-        },
         original_input_indices=original_input_indices,
     )
 

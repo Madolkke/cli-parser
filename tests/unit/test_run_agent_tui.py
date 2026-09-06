@@ -294,7 +294,7 @@ def test_tool_feedback_creates_schema_template_capture_and_issue_blocks() -> Non
             "tool_name": "submit_ttp_template",
             "input": {
                 "result_schema": {"type": "object"},
-                "ttp_template": "<group name=\"items\">{{ name }}</group>",
+                "ttp_template": '<group name="items">{{ name }}</group>',
             },
             "output": {
                 "accepted": False,
@@ -346,8 +346,7 @@ def test_queue_observer_only_enqueues_and_journal_preserves_order(
     journal.append([SCRIPT._event_record(event) for event in events])
     journal.close()
     records = [
-        json.loads(line)
-        for line in path.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()
     ]
 
     assert [item["metadata"]["sequence"] for item in records] == [1, 2, 3]
@@ -415,17 +414,17 @@ async def test_long_stream_is_lossless_in_jsonl_and_bounded_in_view(
 
     records = [
         json.loads(line)
-        for line in (tmp_path / "events.jsonl").read_text(
+        for line in (tmp_path / "events.jsonl")
+        .read_text(
             encoding="utf-8",
-        ).splitlines()
+        )
+        .splitlines()
     ]
     assert [record["metadata"]["sequence"] for record in records] == list(
         range(1, chunk_count + 3),
     )
     deltas = [
-        record["delta"]
-        for record in records
-        if record["type"] == "TEXT_BLOCK_DELTA"
+        record["delta"] for record in records if record["type"] == "TEXT_BLOCK_DELTA"
     ]
     assert "".join(deltas) == chunk * chunk_count
 
@@ -454,7 +453,7 @@ async def test_textual_navigation_fold_follow_and_artifacts(tmp_path: Path) -> N
         run_directory=tmp_path,
         model_name="test-model",
         base_url="https://user:password@model.invalid/v1?api_key=secret#debug",
-        input_metadata=[{"path": "sample.raw", "bytes": 10, "sha256": "0" * 64}],
+        input_metadata=[{"path": "sample.raw", "bytes": 10}],
         flush_callback=lambda: flushes.append(None) or True,
     )
 
@@ -496,15 +495,19 @@ async def test_textual_navigation_fold_follow_and_artifacts(tmp_path: Path) -> N
 
     records = [
         json.loads(line)
-        for line in (tmp_path / "events.jsonl").read_text(
+        for line in (tmp_path / "events.jsonl")
+        .read_text(
             encoding="utf-8",
-        ).splitlines()
+        )
+        .splitlines()
     ]
     result = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
     assert [record["metadata"]["sequence"] for record in records] == list(
         range(1, 8),
     )
     assert result["script_status"] == "success"
+    assert result["script_version"] == 2
+    assert result["input_files"] == [{"path": "sample.raw", "bytes": 10}]
     assert result["model"]["base_url"] == "https://model.invalid/v1"
     assert result["generation_result"] == {"status": "success"}
     assert flushes == [None]

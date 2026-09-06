@@ -35,10 +35,10 @@ evals/test_sets/<case-id>/
 
 ## TOML 注册表
 
-`evals/datasets.toml` 是所有标准测试集的唯一注册、选择和状态入口，不承载测试集业务数据。每个条目包含元数据、输入文件哈希，以及可选的模板、Schema 和 expected 文件哈希：
+`evals/datasets.toml` 是所有标准测试集的唯一注册、选择和状态入口，不承载测试集业务数据。每个条目包含元数据、输入文件路径，以及可选的模板、Schema 和 expected 文件路径：
 
 ```toml
-version = 1
+version = 2
 
 [[dataset]]
 id = 1
@@ -48,15 +48,15 @@ platform = "vendor_platform"
 source = "source-name"
 tags = ["easy"]
 default_input = "inputs/001.txt"
-inputs = [{ file = "inputs/001.txt", sha256 = "..." }]
-template = { file = "template.ttp", sha256 = "..." }
-schema = { file = "schema.json", sha256 = "..." }
-expected = { file = "expected.json", sha256 = "..." }
+inputs = [{ file = "inputs/001.txt" }]
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 ```
 
-数据集目录名必须等于 `name`，且位于 `evals/test_sets/` 下；注册表中的每个目录都必须存在，目录中不允许有未登记目录。加载器会拒绝路径越界、重复 ID/名称、未知字段、缺少成对的 Schema/expected、文件名不连续、无效 SHA-256、非法 UTF-8、BOM、重复 JSON 键、输入数量越界以及不符合受限 Schema 的 records。
+数据集目录名必须等于 `name`，且位于 `evals/test_sets/` 下；注册表中的每个目录都必须存在，目录中不允许有未登记目录。加载器会拒绝路径越界、重复 ID/名称、未知字段、缺少成对的 Schema/expected、文件名不连续、非法 UTF-8、BOM、重复 JSON 键、输入数量越界以及不符合受限 Schema 的 records。
 
-目录实际内容决定阶段：只有 `inputs/` 是 `inputs-only`，再有 `template.ttp` 是 `template`，具备完整四件套才是 `complete`。缺失文件报告为 pending；格式、哈希、Schema、模板或四件套一致性错误报告为 preflight failure。不要在目录中保存模型生成结果、Trace 原文、凭据、临时日志或评测报告；运行产物放在被忽略的 `.artifacts/` 下。
+目录实际内容决定阶段：只有 `inputs/` 是 `inputs-only`，再有 `template.ttp` 是 `template`，具备完整四件套才是 `complete`。缺失文件报告为 pending；格式、Schema、模板或四件套一致性错误报告为 preflight failure。不要在目录中保存模型生成结果、Trace 原文、凭据、临时日志或评测报告；运行产物放在被忽略的 `.artifacts/` 下。
 
 ## 建集流程
 
@@ -65,9 +65,9 @@ expected = { file = "expected.json", sha256 = "..." }
 3. 仅根据输入编写语义化 Schema。先确定根对象和数组边界，再决定字段是否 required；字段不足时保守使用 `string`。
 4. 仅根据输入人工编写 expected records，逐输入核对字段值、字段缺失和数组顺序。
 5. 编写维护者基线 TTP 模板，避免整行捕获和过宽正则；对表头、分隔线、提示符和无法稳定归属的内容显式忽略。
-6. 运行 preflight。preflight 会校验文件安全性、Schema、expected records、模板白名单、输入映射和模板基线可执行性。
-7. 选择经人工审阅的 `default_input` 并登记到 TOML。运行默认 baseline，确认标准模板对该回显产生的 record 与同索引 expected 完全一致；使用 `--input-scope full` 再验证所有输入。baseline 失败时先修复四件套，不启动模型评测。
-8. 对四类文件计算 SHA-256，更新 `evals/datasets.toml`，并再次运行 preflight。
+6. 选择经人工审阅的 `default_input`，将默认输入与四类文件路径登记到 `evals/datasets.toml`。修改资产内容后直接重新验证；新增或删除文件时同步更新注册表。
+7. 运行 preflight，检查文件编码、大小、Schema、expected records、模板白名单、输入映射和模板基线可执行性。
+8. 运行默认 baseline，确认标准模板对默认回显产生的 record 与同索引 expected 完全一致；使用 `--input-scope full` 再运行 preflight 和 baseline，验证所有输入。baseline 失败时先修复四件套并重新验证，不启动模型评测。
 9. 通过 `ttp-only` 入口评估 Agent。默认模式固定注入标准 Schema、登记的 `default_input` 和同索引 expected record，只调用公共 `generate_from_schema()`，不运行 Schema Agent；`--input-scope full` 用于全部输入回归。评分只看 Agent 外最终验收和 records 与 expected 的严格比较。
 
 ## 运行入口
@@ -94,7 +94,7 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 - 重复实体未被去重，数组顺序与原始输入一致；
 - expected 没有来自模型、Trace、历史 artifact 或上游模板的内容；
 - baseline 与 expected 完全一致；
-- `datasets.toml` 中的文件哈希在最后一次修改后重新计算；
+- `datasets.toml` 中的路径和默认输入与实际文件一致；
 - 测试资产中没有 API Key、Authorization、Trace 原文或临时产物。
 
 ## 数据集阶段约定
@@ -115,10 +115,10 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 
 ### evals/datasets.toml
 
-`evals/datasets.toml` 由 `evaluation.py` 和 `scripts/run_test_sets.py` 直接读取，是唯一运行入口。数据集可以先登记为 inputs-only 或 template 阶段；补齐四件套并更新哈希后自动进入 complete 阶段。无需生成或维护 JSON manifest。
+`evals/datasets.toml` 由 `evaluation.py` 和 `scripts/run_test_sets.py` 直接读取，是唯一运行入口。数据集可以先登记为 inputs-only 或 template 阶段；补齐四件套并登记文件路径后自动进入 complete 阶段。无需生成或维护 JSON manifest。
 
 ```toml
-version = 1
+version = 2
 
 [[dataset]]
 id = 1                                  # 正整数，全局唯一，用于按数字指定运行
@@ -127,8 +127,8 @@ command = "show version"                # 产出该回显的命令
 platform = "broadcom_icos"              # 平台/网络操作系统
 source = "ntc-templates"                # 原始回显来源
 tags = ["easy"]                         # 标记一类测试例
-inputs = [                              # 相对数据集目录的路径 + 实测 SHA-256
-  { file = "inputs/001.txt", sha256 = "..." },
+inputs = [                              # 相对数据集目录的路径
+  { file = "inputs/001.txt" },
 ]
 ```
 
@@ -139,9 +139,12 @@ inputs = [                              # 相对数据集目录的路径 + 实�
 
 ### 第三方来源
 
-当前数据集的原始回显取自 [ntc-templates](https://github.com/networktocode/ntc-templates)（Network to Code，Apache License 2.0）的测试语料，仅做重编号拷贝，未修改内容。每个数据集通过 `source` 字段登记来源；新增第三方来源时必须在此与 `datasets.toml` 中同步说明许可与出处。
+当前数据集的原始回显取自 [ntc-templates](https://github.com/networktocode/ntc-templates)（Network to Code，Apache License 2.0）的测试语料，仅做重编号拷贝和下文注明的换行规范化，未修改回显内容。每个数据集通过 `source` 字段登记来源；新增第三方来源时必须在此与 `datasets.toml` 中同步说明许可与出处。
 
 ## 当前状态
+
+当前注册 11 个数据集、38 份输入，其中 10 个完整四件套覆盖 34 份输入：Easy 4 个、
+Medium 4 个、Hard 2 个；另有 Huawei 的 4 份输入供模板 smoke。
 
 2026-08 重新接入第一批数据集，见 `evals/datasets.toml`。
 `broadcom_icos.show_version`（5 份）、`fortinet.get_system_status`（3 份）、
@@ -186,6 +189,28 @@ variant + `method="table"` 方案交付：8/7/6/5/4 个 token 的五种行模式
 `cisco_ios.show_lldp_neighbors_detail`（5 份，标记 `hard`，重复邻居块、
 嵌套可选 MED 子块与多行文本叠加，为全库复杂度最高形态）与
 `cisco_ios.show_power_status`（3 份，标记 `hard`，跨行表头加主/子两级行结构）
-仍为 inputs-only，尚无 `schema.json`、`expected.json`，暂不具备 strict baseline 或
-ttp-only 资格；template 阶段的 `huawei` 仍可由 TOML runner 执行 template smoke。
+已补齐 Schema、共享 TTP 模板与按输入索引排列的 expected records。LLDP 默认选择
+`inputs/005.txt`，同时覆盖交换机、MED 电话邻居、占位值及根级总计；Power 默认选择
+`inputs/001.txt`，覆盖主/子行、空电压、异常状态和告警。所有叶子值保守使用字符串。
+
+LLDP 根 `neighbors` 数组按输入保序，五份分别包含 4、1、2、1、2 个邻居；仅有原文
+总计行的输入保存 `total_entries_displayed`。多行 `system_description` 保留换行，
+`management_addresses` 分别记录 IPv4/IPv6 或明确的未公布状态，`physical_media`
+保存介质能力对象列表或未公布状态。4 个 `med` 子对象共包含 6 条 `network_policies`，
+策略名、VLAN、tagging、Layer-2 priority 和 DSCP 分字段；供电信息位于 `power_device`。
+固定的 MED Codes 缩写图例属于解释性文字，不计为设备事实。原文 `not advertised`、
+`-`、`::` 和策略 VLAN `data` 均忠实保留；真正不存在的本地端口、VLAN、MED 或资产 ID
+行省略对应键，禁止跨邻居补值。
+模板用任意长度横线或本地接口行启动邻居，`contains="chassis_id"` 排除尾部空块；
+匿名根组只在输入第一行启动一次，确保尾部总计归入根对象。该锚点的 lookbehind
+在 XML 正文中用 `&lt;` 转义，匹配 TTP 包装输入时添加的起始换行。
+媒体能力的几类行分别使用多个 `re()`，避免正则中的 `|` 被 TTP 当作过滤器分隔符。
+多行系统描述以输入中的空白行结束；新增语料若改变描述边界或媒体行形状，应复核模板。
+
+Power 根 `power_supplies` 数组每份含 2 个主电源；前两份各含 4 个嵌套 `power_inputs`，
+第三份省略不存在的子数组。电源类型 `AC` 与带单位的 `4200W` / `750W` 额定功率分开
+捕获。001 的 `PS2-1` 电压槽为空，保留 `voltage: ""` 与独立的 `status: "off"`；
+001 尾部的异型电源提示作为可选根 `warning`，不会因两个型号相同而修正原文告警。
+表头、分隔线和告警的装饰星号不进入业务字段。template 阶段的 `huawei` 仍可由
+TOML runner 执行 template smoke。
 重新接入时不得复用旧的 expected、Schema、模板或历史目标记录。

@@ -203,7 +203,7 @@ function renderRuntimeSummary(config, configError) {
   const host = $("run-runtime-view"); host.replaceChildren();
   const settings = config.settings || {}; const policy = config.policy || {};
   const text = document.createElement("p"); text.className = "runtime-summary-line";
-  text.textContent = "模型：" + (settings.model_name || "未配置") + " · API Key：" + (settings.api_key_configured ? "已配置" : "未配置") + " · 指纹：" + (config.configuration_fingerprint || "-"); host.append(text);
+  text.textContent = "模型：" + (settings.model_name || "未配置") + " · API Key：" + (settings.api_key_configured ? "已配置" : "未配置"); host.append(text);
   const details = document.createElement("p"); details.className = "runtime-summary-line";
   details.textContent = "总超时 " + (policy.total_timeout_seconds ?? "-") + "s · Agent " + (policy.max_agent_rounds ?? "-") + " 轮 · TTP 提交 " + (policy.max_ttp_submissions ?? "-") + " 次"; host.append(details);
   $("run-runtime-summary").textContent = config.source === "env_baseline" ? "本次实际使用服务默认配置" : "本次实际使用服务默认配置 + 运行覆盖";
@@ -828,7 +828,7 @@ async function refreshRun() {
   const artifactSchema = result && result.artifact && result.artifact.result_schema;
   state.rerunAvailable = !running && Boolean(schema || artifactSchema);
   renderRuntimeSummary(config, data.config_error);
-  renderRunSummary(meta, result, config, Array.isArray(inputs) ? inputs : []);
+  renderRunSummary(meta, result, Array.isArray(inputs) ? inputs : []);
   $("progress").hidden = timelineEvents.length === 0 && !running; $("progress").open = running;
   $("bar-fill").classList.toggle("is-done", !running); renderLog(timelineEvents);
   if (!running) stopElapsedTicker(meta.elapsed_seconds);
@@ -840,7 +840,7 @@ async function refreshRun() {
   return data;
 }
 
-function renderRunSummary(meta, result, config, inputs) {
+function renderRunSummary(meta, result, inputs) {
   const panel = $("run-summary");
   const terminal = TERMINAL_STATUSES.includes(meta.status);
   panel.hidden = !terminal;
@@ -856,12 +856,10 @@ function renderRunSummary(meta, result, config, inputs) {
     ["输入数量", String(inputs.length)],
     ["创建时间", formatTime(meta.created_at)],
   ];
-  if (config && config.configuration_fingerprint) items.push(["配置指纹", config.configuration_fingerprint]);
   for (const [term, value] of items) {
     const cell = document.createElement("div");
     const dt = document.createElement("dt"); dt.textContent = term;
     const dd = document.createElement("dd"); dd.textContent = value;
-    if (["配置指纹"].includes(term)) dd.classList.add("mono");
     cell.append(dt, dd);
     grid.append(cell);
   }

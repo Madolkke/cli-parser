@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import sys
 from collections.abc import Mapping
@@ -66,9 +65,7 @@ def required_path_list(
     source = os.environ if environ is None else environ
     raw_value = source.get(name, "")
     values = tuple(
-        Path(value.strip())
-        for value in raw_value.split(os.pathsep)
-        if value.strip()
+        Path(value.strip()) for value in raw_value.split(os.pathsep) if value.strip()
     )
     if not values:
         raise ScriptConfigurationError(
@@ -149,7 +146,6 @@ def load_command_outputs(
             {
                 "path": shown_path,
                 "bytes": len(payload),
-                "sha256": hashlib.sha256(payload).hexdigest(),
             },
         )
 

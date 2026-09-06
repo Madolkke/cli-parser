@@ -1,6 +1,6 @@
 # 标准测试集唯一注册表（详见 evals/standard-test-dataset.md「数据集阶段约定」）。
 # 目录实际状态决定 inputs-only、template 或 complete 阶段；无需生成 JSON manifest。
-version = 1
+version = 2
 
 [[dataset]]
 id = 1
@@ -10,15 +10,15 @@ platform = "broadcom_icos"
 source = "ntc-templates"
 tags = ["easy"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "e8ba88c953b76683d9f053abec9e321d8140e1194791c4936c02461028fa8106" }
-schema = { file = "schema.json", sha256 = "a9bd72709a5c30a38daea40aad3b07c3d5690a545fb0448df556626687f1c68b" }
-expected = { file = "expected.json", sha256 = "6f81d8a9d32ad98fa814262fcaa48ee197a1424f76db5b48c6676d30267ff966" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "6ed87678b7fc9094b1473f6a2590a7a6b3e8d46e19355b9b2046eb1ab1073e27" },
-  { file = "inputs/002.txt", sha256 = "4753eee66a66f6bfd8e10784050f593c091d44263a9cf4cf7765972985e29b85" },
-  { file = "inputs/003.txt", sha256 = "d435185a3663e7457b8861dffdcc93061bcf58ebcc16fffc78789e525ceb2236" },
-  { file = "inputs/004.txt", sha256 = "40e02bc87b7723b0e6b06933b0b3c6a7d42aeff2b146c011f6beb3351409abeb" },
-  { file = "inputs/005.txt", sha256 = "12004d2c561788f8d6c5973f701184023918097ceb37c8b4804f6be4fa8c93e0" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
+  { file = "inputs/005.txt" },
 ]
 
 [[dataset]]
@@ -28,12 +28,16 @@ command = "show lldp neighbors detail"
 platform = "cisco_ios"
 source = "ntc-templates"
 tags = ["hard"]
+default_input = "inputs/005.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "0f46b3131887a2a1b51a90d0ce9088865da6871f343e41d5c94fd05f83d5c12e" },
-  { file = "inputs/002.txt", sha256 = "6b9e3d8c7b129512191544750774d6a694936d4068c4e8225cefd354ac8e87d2" },
-  { file = "inputs/003.txt", sha256 = "27d2f3fab3e5057a2dbd2403a66b05acabb74675eb0ccd55951f6a7cff70f9d1" },
-  { file = "inputs/004.txt", sha256 = "e49fa36f4d22447eff37db83ad6f75ba2439c7f7047a88b9990fd5cb7bce685d" },
-  { file = "inputs/005.txt", sha256 = "e75173f203b6f7bd055635ff667dbddca7be7ad3a07127ff5523fd0e9b042966" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
+  { file = "inputs/005.txt" },
 ]
 
 [[dataset]]
@@ -44,13 +48,13 @@ platform = "fortinet"
 source = "ntc-templates"
 tags = ["easy"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "3602f6799291bbffa50959e1921248071cbc40992ed4d8f3d60ccbcad55df1a8" }
-schema = { file = "schema.json", sha256 = "d79b5e55025f48b86dc954ee702df745ac22e4b1fbaa13558989abb8fd04022c" }
-expected = { file = "expected.json", sha256 = "6f5175a176e9ea65c36cd933b495ff7eecad1732e6240b6af36906a0a9288835" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "4d4f10f8582a136d9492c538e94c6a3f4906a5b8b2a6281ea0ac931598ab1980" },
-  { file = "inputs/002.txt", sha256 = "8934c9ff69e549244d21ef889b0c92248f9ff0e82eb20ed0669d8a26005f6a9a" },
-  { file = "inputs/003.txt", sha256 = "7915f45ca5ac93e30d03f5b26383fb91f1e74c7842ed9695180b400415bd148a" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
 ]
 
 [[dataset]]
@@ -60,12 +64,12 @@ command = "display port vlan"
 platform = "huawei_vrp"
 source = "ntc-templates"
 tags = []
-template = { file = "template.ttp", sha256 = "653ececbbbab2d05239e966dcef8ed031a6a208f6d427c3fde458668a7fb950f" }
+template = { file = "template.ttp" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "18820ba2711afaf18a79b36f02c013a84a5e5de0b9100dc60e2a1c1315dc82d2" },
-  { file = "inputs/002.txt", sha256 = "d4bd4d40b3f6bd59ca853624de2921066dc48b19a9aeb0ae7b84b00c299169e4" },
-  { file = "inputs/003.txt", sha256 = "2027f0059f15fa922917f40fef9f3a474b74cc0dfa43c7b828a93b75b0d8911c" },
-  { file = "inputs/004.txt", sha256 = "cde78ef1d3d90fa8ecfc515b4f63537d4312d77ea3b298825edf145ed6212a4e" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
 ]
 
 [[dataset]]
@@ -76,12 +80,12 @@ platform = "cisco_s300"
 source = "ntc-templates"
 tags = ["medium"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "70390e5cd53a85edcf0cb1c353e85e4362d3ee5fcd497e910e39f130c28be5be" }
-schema = { file = "schema.json", sha256 = "042141a4a74933e0f1ee54e2b3d60f27c961cd94a9811d20d86cb75271251b8a" }
-expected = { file = "expected.json", sha256 = "c5638943b05f3b50c741d77533a7d04954b3dcd472d6e727f8ad374de80d8141" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "95f9eed876a379f15e0eda3324105560831cf3ae44f5ba68b4c22ab783bbeabf" },
-  { file = "inputs/002.txt", sha256 = "79347150cf21d247c3e3d37496a30d0741c1b44c9d8e17a1bd4948d5c0f57fd9" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
 ]
 
 [[dataset]]
@@ -92,12 +96,12 @@ platform = "paloalto_panos"
 source = "ntc-templates"
 tags = ["easy"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "e206595a037de4e984fa076f54f653a95240ecc43f5de554b1cd4623b85f8fe1" }
-schema = { file = "schema.json", sha256 = "b8648240dc9160663c2600b9be39864ac2767106669f0f5055e388eab56aff7e" }
-expected = { file = "expected.json", sha256 = "6d0956efac93dc70637967c6fc23159adac5f8db130050ef75d81042d9853057" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "1e446776a8193d251b9cf2b89f978529867142f569dbf3040c271b65185af839" },
-  { file = "inputs/002.txt", sha256 = "ce9f15ede75b2c64fab700df03d3bbf83b9c84dee9eaf21c232e9806be1e9c32" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
 ]
 
 [[dataset]]
@@ -108,14 +112,14 @@ platform = "hp_procurve"
 source = "ntc-templates"
 tags = ["medium"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "34ea5650674119cdb89704f490d1c2754d252d3b45b5c938df332ce792362a73" }
-schema = { file = "schema.json", sha256 = "fdf4141aa4e66d439b907823f6252d49a140115617d29225f9e5eec467def732" }
-expected = { file = "expected.json", sha256 = "3a73f6b03c56467e84a7b59f31368f5b62c0e1887d75c5a6cbcaef6923ce4f51" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "e19b8f766fcef5d3d6e00cd78dc49d9898565913ec1e3fac4cef06059433ec83" },
-  { file = "inputs/002.txt", sha256 = "f3f874b82dfe3cdecb4d2509bd1615914e70c21638e3dc6bae3c0c9f9c9e9363" },
-  { file = "inputs/003.txt", sha256 = "438b2263c1647f5b5b7022e6628301afe897209114cc30363f5781a796e91f31" },
-  { file = "inputs/004.txt", sha256 = "d84289596e740cfbba7157964ba2b280293491e1505f9e8055e66763cd290f3e" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
 ]
 
 [[dataset]]
@@ -125,10 +129,14 @@ command = "show power status"
 platform = "cisco_ios"
 source = "ntc-templates"
 tags = ["hard"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "e74bb4997f01889a921635f157a05e7b811763ca32fca4402c2557a8c4b41875" },
-  { file = "inputs/002.txt", sha256 = "d9dc58206943a316055e5b716f18a914342d6668424f0f5464720d05a15629d2" },
-  { file = "inputs/003.txt", sha256 = "c64062034bde5b3eb1f5c4d8cefbce5ddee1cce9788a1bffa16aaf062e7b0412" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
 ]
 
 [[dataset]]
@@ -139,13 +147,13 @@ platform = "oneaccess_oneos"
 source = "ntc-templates"
 tags = ["easy"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "b45212d11822f1b71b7fddc37e835bc8a0b637962adff9e0507fde4487c7fc24" }
-schema = { file = "schema.json", sha256 = "236fe74b3b29f66a29e91d7eb24b40106896cc8fb68c61a33754795e4c808fee" }
-expected = { file = "expected.json", sha256 = "c7774fd0e840f4c462f14922b5bc11244844f1a64de47d2545b28eaa5ae1b9da" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "3b43b72100006d9a623ba92df931f3cf492b38e0552c40e07deb991da057fe75" },
-  { file = "inputs/002.txt", sha256 = "97fffb30e973da7f405e5b05f61d5199bfab56a11aff1efcf0eb6c86b9e74afb" },
-  { file = "inputs/003.txt", sha256 = "0b1981d9e3a459d3c7212fc24f58aab0676e2b46e266138b2c3866f6d9e4293d" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
 ]
 
 [[dataset]]
@@ -156,15 +164,15 @@ platform = "cisco_nxos"
 source = "ntc-templates"
 tags = ["medium"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "9cbfc075d9aa5fafb5d5290481d83ceb3dc559b701698bc61f23a5dc37f85b7e" }
-schema = { file = "schema.json", sha256 = "eb36491e5b6577f6d1df8f0bc54b0bd21a9f006795de8e55dbc936232dd530f6" }
-expected = { file = "expected.json", sha256 = "d099d736284e66e3cca8cd9448b8b16589a88e6160167321f4f3649c0a6518dc" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "92e981f491b5c4f2bdff87e9fc85294528aa0ae909f19e922c6283ea4cdfdaf5" },
-  { file = "inputs/002.txt", sha256 = "4c217de482d6e27ed5a1367a7ca9cb6fab5cfbc2bf024258c0b021b9418d41f3" },
-  { file = "inputs/003.txt", sha256 = "d3a32b4356a4f3c57623c5c03e2d695b955319010ba4cce8ee3a2c49fbb53268" },
-  { file = "inputs/004.txt", sha256 = "0552d4f00d02f36efc4f01cacc8604dbf0c0399e12dd1a436c364be8264d6216" },
-  { file = "inputs/005.txt", sha256 = "55528df06c039c8b2e7adb8d772d9124490a767b0a3cfdb8bd1eb3e91b3d05d9" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
+  { file = "inputs/005.txt" },
 ]
 
 [[dataset]]
@@ -175,10 +183,10 @@ platform = "cisco_ios"
 source = "ntc-templates"
 tags = ["medium"]
 default_input = "inputs/001.txt"
-template = { file = "template.ttp", sha256 = "e101d5159968fac08d2c3c628a4dfa53eeff1c75343b166e7d86ca48eae85417" }
-schema = { file = "schema.json", sha256 = "20fa460331b55fbe7ed676fba95f5d5f4a8abc2155b143be945a903ed46ca94f" }
-expected = { file = "expected.json", sha256 = "4826324c64303fd1b970484cf8439cf5096a69dba7f96be50ab9d50bcee6ce2d" }
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
 inputs = [
-  { file = "inputs/001.txt", sha256 = "b9addffdb50332171282631061d9d8812ff00ead01efb5bc09b45e05c12647a9" },
-  { file = "inputs/002.txt", sha256 = "76124dc2185d00a7c178be8531e6baeec157a269da813f2ac8da640026b6b9d7" },
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
 ]

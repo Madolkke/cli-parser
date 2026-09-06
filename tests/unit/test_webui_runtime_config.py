@@ -11,6 +11,7 @@ from cli_parser_agent.webui.runtime_config import (
     RuntimeParameters,
     full_config_payload,
     public_config_payload,
+    public_config_snapshot,
     resolve_runtime_config,
 )
 
@@ -94,7 +95,21 @@ def test_full_snapshot_contains_key_but_public_projection_does_not() -> None:
     assert "api_key" not in public["settings"]
     assert public["settings"]["api_key_configured"] is True
     assert "baseline-key" not in str(public)
-    assert len(public["configuration_fingerprint"]) == 64
+    assert "configuration_fingerprint" not in public
+    assert full["version"] == public["version"] == 1
+
+
+def test_historical_config_ignores_retired_fingerprint_without_mutation() -> None:
+    settings, policy = _baseline()
+    full = full_config_payload(resolve_runtime_config(settings, policy))
+    full["configuration_fingerprint"] = "historical-diagnostic"
+
+    public = public_config_snapshot(full)
+
+    assert "configuration_fingerprint" not in public
+    assert full["configuration_fingerprint"] == "historical-diagnostic"
+    assert full["settings"]["api_key"] == "baseline-key"
+    assert "baseline-key" not in str(public)
 
 
 def test_invalid_merged_constraints_are_rejected() -> None:

@@ -46,7 +46,7 @@ from cli_parser_agent import (  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-SCRIPT_VERSION = 1
+SCRIPT_VERSION = 2
 MAX_TIMELINE_CONTENT_CHARS = 64 * 1024
 TIMELINE_HEAD_CHARS = 48 * 1024
 TIMELINE_TAIL_CHARS = MAX_TIMELINE_CONTENT_CHARS - TIMELINE_HEAD_CHARS
@@ -126,13 +126,10 @@ def _json_safe(value: Any) -> Any:
         for key, item in value.items():
             shown_key = str(key)
             normalized = shown_key.strip().lower().replace("-", "_")
-            is_credential = (
-                normalized in _CREDENTIAL_KEYS
-                or normalized.endswith("_api_key")
+            is_credential = normalized in _CREDENTIAL_KEYS or normalized.endswith(
+                "_api_key"
             )
-            output[shown_key] = (
-                _REDACTED if is_credential else _json_safe(item)
-            )
+            output[shown_key] = _REDACTED if is_credential else _json_safe(item)
         return output
     if isinstance(value, Sequence) and not isinstance(
         value,
@@ -884,8 +881,7 @@ class AgentTuiApp(App[int]):
                     break
                 batch = [item]
                 batch_deadline = (
-                    asyncio.get_running_loop().time()
-                    + EVENT_BATCH_WINDOW_SECONDS
+                    asyncio.get_running_loop().time() + EVENT_BATCH_WINDOW_SECONDS
                 )
                 while len(batch) < EVENT_BATCH_MAX_ITEMS:
                     remaining = batch_deadline - asyncio.get_running_loop().time()
@@ -1124,8 +1120,7 @@ class AgentTuiApp(App[int]):
                 header = Text()
                 header.append(f"{entry.title}\n", style="bold")
                 header.append(
-                    f"阶段: {entry.phase or '-'}  "
-                    f"时间: {entry.elapsed_seconds:.3f}s\n",
+                    f"阶段: {entry.phase or '-'}  时间: {entry.elapsed_seconds:.3f}s\n",
                     style="dim",
                 )
                 self.query_one("#detail", Static).update(

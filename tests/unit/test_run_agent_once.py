@@ -32,18 +32,14 @@ def _configuration_environment(
         "OPENAI_API_KEY": "test-key",
         "OPENAI_MODEL": "test-model",
         "CLI_PARSER_ONCE_INPUT_FILES": os.pathsep.join(
-            str(path)
-            for path in input_paths
+            str(path) for path in input_paths
         ),
     }
 
 
 def test_environment_command_outputs_are_valid_and_ordered(tmp_path: Path) -> None:
     script = _load_script()
-    input_paths = tuple(
-        tmp_path / f"{index:03}.txt"
-        for index in range(1, 4)
-    )
+    input_paths = tuple(tmp_path / f"{index:03}.txt" for index in range(1, 4))
     for index, path in enumerate(input_paths, start=1):
         path.write_text(f"sample output {index}\n", encoding="utf-8")
 
@@ -60,7 +56,10 @@ def test_environment_command_outputs_are_valid_and_ordered(tmp_path: Path) -> No
         "002.txt",
         "003.txt",
     ]
-    assert all(len(item["sha256"]) == 64 for item in metadata)
+    assert all(set(item) == {"path", "bytes"} for item in metadata)
+    assert [item["bytes"] for item in metadata] == [
+        path.stat().st_size for path in input_paths
+    ]
 
 
 def test_command_output_loader_rejects_non_utf8(tmp_path: Path) -> None:
@@ -78,6 +77,7 @@ def test_configuration_reads_model_settings_from_environment() -> None:
 
     assert settings.api_key.get_secret_value() == "test-key"
     assert settings.model_name == "test-model"
+
 
 @pytest.mark.parametrize(
     ("value", "expected"),

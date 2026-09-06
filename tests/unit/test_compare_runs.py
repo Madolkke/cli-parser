@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+from copy import deepcopy
 from pathlib import Path
 from types import ModuleType
 
@@ -62,9 +63,73 @@ def test_config_differences_separate_intended_knobs_from_confounds() -> None:
 
     assert {key for key, _, _ in intended} == {
         "prompt.version",
-        "prompt.ttp_system_sha256",
     }
     assert [key for key, _, _ in confounds] == ["policy.max_agent_rounds"]
+
+
+def test_historical_hash_fields_do_not_mask_real_configuration_differences() -> None:
+    module = _load()
+    before = {
+        "configuration": {
+            "model": {
+                "name": "model-a",
+                "verify_tls": True,
+                "extra_body_configured": True,
+                "extra_body_sha256": "old-model-hash",
+                "other_sha256": "keep-before",
+            },
+            "prompt": {
+                "version": "v30",
+                "schema_system_sha256": "old-schema-hash",
+                "ttp_system_sha256": "old-ttp-hash",
+            },
+            "policy": {"max_agent_rounds": 13},
+        },
+    }
+    after = deepcopy(before)
+    after["configuration"]["model"].update(
+        name="model-b",
+        verify_tls=False,
+        extra_body_configured=False,
+        other_sha256="keep-after",
+    )
+    after["configuration"]["model"].pop("extra_body_sha256")
+    after["configuration"]["prompt"] = {"version": "v31"}
+    after["configuration"]["policy"]["max_agent_rounds"] = 14
+    snapshots = deepcopy((before, after))
+
+    intended, confounds = module.config_differences(before, after)
+
+    assert intended == [("prompt.version", "v30", "v31")]
+    assert {key for key, _, _ in confounds} == {
+        "model.name",
+        "model.verify_tls",
+        "model.extra_body_configured",
+        "model.other_sha256",
+        "policy.max_agent_rounds",
+    }
+    assert (before, after) == snapshots
+
+
+def test_only_historical_hashes_differing_compare_equally() -> None:
+    module = _load()
+    before = {
+        "configuration": {
+            "model": {"extra_body_sha256": "before"},
+            "prompt": {
+                "schema_system_sha256": "before",
+                "ttp_system_sha256": "before",
+            },
+        },
+    }
+    after = {
+        "configuration": {
+            "model": {"extra_body_sha256": "after"},
+            "prompt": {"ttp_system_sha256": "after"},
+        },
+    }
+
+    assert module.config_differences(before, after) == ([], [])
 
 
 def test_paired_bootstrap_resamples_cases_and_is_deterministic() -> None:
@@ -147,5 +212,8 @@ def test_main_runs_end_to_end(tmp_path: Path, capsys: pytest.CaptureFixture) -> 
             newline="\n",
         )
 
+    snapshots = {path: path.read_bytes() for path in (before, after)}
+
     assert module.main([str(before), str(after)]) == 0
     assert "+0.67" in capsys.readouterr().out
+    assert {path: path.read_bytes() for path in (before, after)} == snapshots

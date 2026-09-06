@@ -1,0 +1,58 @@
+<group>
+{{ ignore("(?&lt;=\\A\\n)[^\\r\\n]*") }}
+<group name="neighbors*" contains="chassis_id">
+{{ ignore("[-]+") }}
+Local Intf: {{ local_interface | WORD | _start_ }}
+Chassis id: {{ chassis_id | WORD }}
+Port id: {{ port_id | WORD }}
+Port Description: {{ port_description | ORPHRASE }}
+Port Description - {{ port_description | ORPHRASE }}
+System Name: {{ system_name | ORPHRASE }}
+System Name - {{ system_name | ORPHRASE }}
+System Description - {{ system_description | ORPHRASE }}
+{{ ignore("System Description:[ \t]*\r?\n") }}{{ system_description | re("[^\r\n]+(?:\r?\n(?![ \t]*\r?\n)[^\r\n]+)*") }}
+Time remaining: {{ time_remaining_seconds | DIGIT }} seconds
+System Capabilities: {{ system_capabilities | ORPHRASE }}
+System Capabilities - {{ system_capabilities | ORPHRASE }}
+Enabled Capabilities: {{ enabled_capabilities | ORPHRASE }}
+Enabled Capabilities - {{ enabled_capabilities | ORPHRASE }}
+Auto Negotiation - {{ auto_negotiation | ORPHRASE }}
+Media Attachment Unit type: {{ media_attachment_unit_type | ORPHRASE }}
+Media Attachment Unit type - {{ media_attachment_unit_type | ORPHRASE }}
+Vlan ID: {{ vlan_id | ORPHRASE }}
+Peer Source MAC: {{ peer_source_mac | WORD }}
+<group name="management_addresses">
+{{ ignore("Management Addresses:") }}
+Management Addresses - {{ status | ORPHRASE | _start_ }}
+    IP: {{ ipv4 | WORD }}
+    IPV6: {{ ipv6 | WORD }}
+</group>
+<group name="physical_media">
+{{ ignore("Physical media capabilities:") }}
+Physical media capabilities - {{ status | ORPHRASE | _start_ }}
+<group name="capabilities*">
+    {{ capability | re("[0-9]+base[^\r\n]*") | re("Symm[^\r\n]*") | re("Other/unknown") }}
+</group>
+</group>
+<group name="med">
+{{ ignore("MED Information:") }}
+    H/W revision: {{ hardware_revision | ORPHRASE }}
+    F/W revision: {{ firmware_revision | ORPHRASE }}
+    S/W revision: {{ software_revision | ORPHRASE }}
+    Serial number: {{ serial_number | ORPHRASE }}
+    Manufacturer: {{ manufacturer | ORPHRASE }}
+    Model: {{ model | ORPHRASE }}
+    Asset id: {{ asset_id | ORPHRASE }}
+    Capabilities: {{ capabilities | ORPHRASE }}
+    Device type: {{ device_type | ORPHRASE }}
+    Location - {{ location | ORPHRASE }}
+<group name="network_policies*">
+    Network Policy({{ application | re("[^)\r\n]+") }}): VLAN {{ vlan | WORD }}, {{ tagging | WORD }}, Layer-2 priority: {{ layer_2_priority | DIGIT }}, DSCP: {{ dscp | DIGIT }}
+</group>
+<group name="power_device">
+    PD device, Power source: {{ power_source | re("[^,\r\n]+") }}, Power Priority: {{ power_priority | re("[^,\r\n]+") }}, Wattage: {{ wattage | WORD }}
+</group>
+</group>
+</group>
+Total entries displayed: {{ total_entries_displayed | DIGIT }}
+</group>

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -25,14 +23,17 @@ class SettingsOverrides(BaseModel):
     temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     parallel_tool_calls: bool | None = None
     thinking_enable: bool | None = None
-    reasoning_effort: Literal[
-        "none",
-        "minimal",
-        "low",
-        "medium",
-        "high",
-        "xhigh",
-    ] | None = None
+    reasoning_effort: (
+        Literal[
+            "none",
+            "minimal",
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+        ]
+        | None
+    ) = None
     max_tokens: int | None = Field(default=None, ge=1)
     context_size: int | None = Field(default=None, ge=1)
     model_max_retries: int | None = Field(default=None, ge=0)
@@ -170,27 +171,12 @@ def public_config_snapshot(payload: dict[str, Any]) -> dict[str, Any]:
     api_key = str(settings.pop("api_key", ""))
     settings["api_key_configured"] = bool(api_key)
     settings["parallel_tool_calls"] = False
-    safe = {
+    return {
         "version": payload["version"],
         "source": payload["source"],
         "settings": settings,
         "policy": payload["policy"],
     }
-    safe["configuration_fingerprint"] = configuration_fingerprint(safe)
-    return safe
-
-
-def configuration_fingerprint(public_payload: dict[str, Any]) -> str:
-    """Fingerprint a redacted configuration without hashing the API Key."""
-
-    encoded = json.dumps(
-        public_payload,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-        allow_nan=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def _settings_values(settings: TtpGeneratorSettings) -> dict[str, Any]:
@@ -214,7 +200,6 @@ __all__ = [
     "RuntimeConfigError",
     "RuntimeParameters",
     "SettingsOverrides",
-    "configuration_fingerprint",
     "full_config_payload",
     "public_config_payload",
     "public_config_snapshot",

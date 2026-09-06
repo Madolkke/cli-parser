@@ -228,6 +228,7 @@ class _ProgressQueue:
             self._ready.clear()
         return item
 
+
 class RunManager:
     """Run one generation at a time and fan progress out to SSE listeners."""
 
@@ -299,6 +300,7 @@ class RunManager:
 
     async def _execute(self, run_id: str, coroutine_factory: Any) -> None:
         queue = _ProgressQueue()
+
         def observer(event: WebUIProgressEvent) -> None:
             queue.put_nowait(event)
 
@@ -398,6 +400,16 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _public_run_meta(meta: dict[str, Any]) -> dict[str, Any]:
+    """Ignore retired diagnostics without rewriting historical run files."""
+
+    return {
+        key: value
+        for key, value in meta.items()
+        if key != "runtime_configuration_fingerprint"
+    }
+
+
 def _schema_for_rerun(
     store: RunStore,
     run_id: str,
@@ -446,7 +458,7 @@ def create_app(
             raise HTTPException(status_code=400, detail=str(error)) from error
         if meta is None:
             raise HTTPException(status_code=404, detail="run not found")
-        return meta
+        return _public_run_meta(meta)
 
     def _public_run_config(
         run_id: str,
@@ -463,7 +475,10 @@ def create_app(
 
     @app.get("/api/runs")
     def list_runs() -> dict[str, Any]:
-        return {"runs": store.list_runs(), "active_run": manager.active_run}
+        return {
+            "runs": [_public_run_meta(meta) for meta in store.list_runs()],
+            "active_run": manager.active_run,
+        }
 
     @app.get("/api/runtime-config")
     def runtime_config() -> dict[str, Any]:
@@ -484,8 +499,6 @@ def create_app(
             runtime_config = service.resolve_runtime_config(payload.parameters)
         except RuntimeConfigError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
-        public_config = public_config_snapshot(full_config_payload(runtime_config))
-
         run_id = store.create(
             mode=payload.mode,
             command_outputs=command_outputs,
@@ -496,11 +509,9 @@ def create_app(
             run_id,
             runtime_config_source=runtime_config.source,
             runtime_model_name=runtime_config.settings.model_name,
-            runtime_configuration_fingerprint=public_config[
-                "configuration_fingerprint"
-            ],
         )
         if payload.mode == "propose":
+
             def factory(observer: Any) -> Any:
                 return service.run(
                     "propose",
@@ -509,6 +520,7 @@ def create_app(
                     runtime_config=runtime_config,
                 )
         else:
+
             def factory(observer: Any) -> Any:
                 return service.run(
                     "full",
@@ -580,8 +592,6 @@ def create_app(
         except RuntimeConfigError as error:
             raise HTTPException(status_code=422, detail=str(error)) from error
         full_config = full_config_payload(runtime_config)
-        public_config = public_config_snapshot(full_config)
-
         child_run_id = store.create_schema_rerun(
             source_run_id=run_id,
             schema=schema,
@@ -594,9 +604,6 @@ def create_app(
             child_run_id,
             runtime_config_source=runtime_config.source,
             runtime_model_name=runtime_config.settings.model_name,
-            runtime_configuration_fingerprint=public_config[
-                "configuration_fingerprint"
-            ],
         )
 
         def factory(observer: Any) -> Any:
@@ -697,8 +704,7 @@ def create_app(
                     return
                 if manager.active_run != run_id:
                     if not any(
-                        event.get("type") == "run.finished"
-                        for event in replayed_events
+                        event.get("type") == "run.finished" for event in replayed_events
                     ):
                         meta = store.read_meta(run_id) or {}
                         terminal = manager._number(

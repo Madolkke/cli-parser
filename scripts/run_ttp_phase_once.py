@@ -158,7 +158,7 @@ async def _run() -> int:
     _run_support.write_json(
         result_path,
         {
-            "script_version": 1,
+            "script_version": 2,
             "mode": "template_only",
             "started_at": started_at,
             "finished_at": finished_at,
