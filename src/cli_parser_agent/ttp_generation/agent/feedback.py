@@ -8,6 +8,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ..contracts import ValidationIssue
+from .coverage import MAX_COVERAGE_PATHS, build_record_coverage
 
 if TYPE_CHECKING:
     from .session import GenerationSession
@@ -260,6 +261,7 @@ def _feedback_block(
     issues: Sequence[Any],
     schema: Mapping[str, Any] | None,
     input_count: int,
+    coverage_facts: Sequence[tuple[str, dict[str, Any]]] = (),
 ) -> str:
     payload = {
         "feedback_version": 1,
@@ -278,6 +280,15 @@ def _feedback_block(
             selected.pop()
             payload["issues_omitted"] = len(issues) - len(selected)
             break
+    coverage = payload.get("record_coverage")
+    if isinstance(coverage, dict):
+        for key, fact in coverage_facts[:MAX_COVERAGE_PATHS]:
+            coverage[key].append(fact)
+            coverage["optional_paths_omitted"] -= 1
+            if len(_serialize(payload).encode("utf-8")) > MAX_FEEDBACK_BYTES:
+                coverage[key].pop()
+                coverage["optional_paths_omitted"] += 1
+                break
     return "<validation_feedback>\n" + _serialize(payload) + "\n</validation_feedback>"
 
 
@@ -288,7 +299,13 @@ def submission_feedback(
     candidate_updated: bool,
     returned_record_count: int,
     issues: Sequence[Any],
+    records: Sequence[Any] | None = None,
 ) -> str:
+    coverage, coverage_facts = build_record_coverage(
+        schema=session.frozen_schema,
+        records=records,
+        input_count=len(session.command_outputs),
+    )
     return _feedback_block(
         state={
             "scope": "full_input_validation",
@@ -306,10 +323,12 @@ def submission_feedback(
                 if session.has_validated_ttp_candidate
                 else None
             ),
+            "record_coverage": coverage,
         },
         issues=issues,
         schema=session.frozen_schema,
         input_count=len(session.command_outputs),
+        coverage_facts=coverage_facts,
     )
 
 

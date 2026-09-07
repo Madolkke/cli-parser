@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v33-parser-compatibility-zh-cn"
+PROMPT_VERSION = "ttp-generator-v34-coverage-and-structure-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -105,6 +105,17 @@ record 数量；submissions_used 和 remaining_submissions 表示模板提交预
 candidate_updated 表示本次是否更新有效候选；retained_candidate_submission_index
 是当前保留的有效候选的提交编号，没有候选时为 null。后续提交失败不会清除已有
 有效候选，不能把保留候选的状态误认为本次提交已通过。
+
+record_coverage 只描述本次返回 records 的字段存在情况，无解析结果时为 null。
+required_paths_complete 只表示现有对象实例中必填键存在，且输入与根 record 映射完整；
+它不证明类型、字段值或数组数量正确。optional_paths_absent 表示某个输入的现有父对象
+在该 Schema 路径下都没有可选字段；optional_paths_partial 表示只有部分父对象含有它。
+每项的 parent_occurrences 和 present_occurrences 分别是父对象数与含该键的对象数。
+这两个列表合计最多 24 项，optional_paths_total 和 optional_paths_omitted 记录总数与
+省略数，并共享反馈 JSON 的 8 KiB 上限；缺少父容器时不会据此列出其子字段。
+这些事实不证明原文一定存在对应字段。逐输入对照原文核对这些路径；原文中有明确
+对应内容就修复捕获，原文确实没有才省略。可选表示允许某些实例没有该字段，不表示
+可以放弃原文已有字段；不要用空值补造缺失字段。
 
 两个工具的反馈版本 feedback_version 为 1。issues 提供受控错误码 code、输入索引
 input_index、字段或模板结构路径 path、Schema keyword 及有界修正事实。先依据
@@ -213,7 +224,8 @@ Errors: {{ errors | DIGIT }}
   必须验证当前章节缺少该字段、后续章节却有同名标签的情况；字段值只能归属原文中的
   对应章节。`_end_` 会丢弃结束行的捕获值，不能直接附到最后一个必填字段来修复边界。
   此标题规则只用于明确的章节边界，不用于空行、纯分隔线或表格表头控制行。
-- 其余情况优先使用普通具名匹配行，不用 `ignore` 构造空控制行。若 records 中出现空
+- 除明确的章节标题和下述混合根结构的真实标题锚点外，优先使用普通具名匹配行，
+  不用 `ignore` 构造空控制行。若 records 中出现空
   object，直接对照源文本字面布局判断它是否忠实；若单行表格模板返回 `[{}]` 或关键
   数组为空，首先检查是否把单 token
   字段误用了 PHRASE，并将其恢复为 WORD。完成这项检查前不要改 XML wrapper、添加
@@ -224,9 +236,38 @@ Errors: {{ errors | DIGIT }}
   在输入间变化，优先使用 method="table"，让每个重复数据行从同一列结构产生一个
   record；不要为同名兄弟字段创建多个具名 group，也不要把列数变化当成多个根对象。
 - 一条业务记录跨多行时，先确认后续行没有自己的记录起点，再在同一个具名 group 中
-  使用 joinmatches 拼接同一字段；折行字段使用空分隔符，空格分隔的多值字段使用
-  单个空格。不要把独立的下一条记录拼入上一条，也不要同时用 table 和 joinmatches
+  使用 joinmatches 拼接同一字段；同一个 token 的视觉折行使用空分隔符，明确以
+  空格分隔的多值字段使用单个空格，原本多行的自由文本用 "\\n" 保留行界。
+  不要把独立的下一条记录拼入上一条，也不要同时用 table 和 joinmatches
   掩盖尚未确认的行边界。
+- 多行自由文本必须先找到可验证的续行边界，不能用无约束的整行捕获吞掉后续字段。
+  例如 notes 行都有两个前导空格，Status 和下一个 Entry 都从行首开始时：
+```xml
+<group name="entries*">
+Entry: {{ name | WORD }}
+  {{ notes | re("[^\\n]+") | joinmatches("\\n") }}
+Status: {{ state | WORD }}
+</group>
+```
+  模板 notes 行的两个前导空格是匹配边界，不能为排版删掉；无缩进的 Status 和
+  Entry 不属于 notes。若实际输入没有这样的边界，先设计可区分续行与后续标签的
+  规则，不能机械照搬宽泛匹配。不要把 _end_ 附在必须保留的最后一个字段上；TTP
+  会丢弃结束行的捕获值。复核某条记录没有 notes、下一条却有 notes 时不会串记录。
+- 章节内有重复子章节时，每层 group 都以属于该层的真实标题或标识行开始。标题可
+  捕获冻结字段时优先捕获，下一次同层标题重新开始该层对象，避免从后续章节补捕
+  可选字段。例如冻结 Schema 定义 units 数组及其 counters 数组时：
+```xml
+<group name="units*">
+Unit: {{ name | WORD }}
+<group name="counters*">
+Counters: {{ profile | WORD }}
+Packets: {{ packets | DIGIT }}
+Errors: {{ errors | DIGIT }}
+</group>
+</group>
+```
+  验证前一个 Counters 没有 Packets、后一个却有 Packets，且下一个 Unit 仍各自拥有
+  独立 counters。不同层级不能只靠同名属性行隐式拼接。
 - 每次 submit_ttp_template 后，先检查所有输入的 record 数量、根结构、字段路径和
   字段来源。若所有输入结果已与冻结 Schema 和原文逐项对应，应调用 finish_generation；
   后续探索不得无证据地替换已有正确候选。复核表格时，排除表头和分隔线后数出预期
@@ -252,7 +293,8 @@ Errors: {{ errors | DIGIT }}
   例如 `{{ interface | WORD | exclude("Interface") }}`；只有所有数据行确实共享稳定值
   时，才在对应真实字段上使用 `equal`，例如 `{{ ok | WORD | equal("YES") }}`。条件
   必须附加在冻结字段的捕获 pipeline 上并保留该字段；不要把稳定值改成模板字面量，
-  也不要增加全是 `ignore` 的表头控制行或额外 group pattern。修改后重新核对数组长度、
+  也不要增加全是 `ignore` 的表头控制行或额外 group pattern。本条针对纯表格的额外
+  表头记录，不禁止混合根结构使用下述真实标题锚点。修改后重新核对数组长度、
   第一条和最后一条数据。
 - 当两个冻结字段之间存在可空或变长的未建模列时，不要用 `.*`、`\\S.*`、ROW、
   ORPHRASE 或其他贪心表达式直接跨过它；贪心回溯通常会把右侧最后一列误当成目标
@@ -282,6 +324,23 @@ Routing Tables: {{ routing_table_type | WORD }}
 </group>
 </group>
 ```
+- 根 record 同时有重复子数组和尾部标量时，在同一个未命名最外层 group 内保留它们。
+  在子数组之前选取原文确实存在、能唯一识别本块的真实标题作为首条匹配行，启动
+  外层 group；标题无需捕获为辅助字段。尾部字段仍写在外层，不另建一个根 group。
+  例如原文先有 Inventory overview，再有 Module 行，最后可能有装饰行时：
+```xml
+<group>
+{{ ignore("Inventory overview") }}
+<group name="modules*">
+Module {{ name | WORD }}: {{ state | WORD }}
+</group>
+*** Advisory: {{ advisory | ORPHRASE }} ***
+</group>
+```
+  本例 advisory 表示 Advisory 标签后的业务值，标签和两侧 *** 是模板中的固定边界，
+  不进入该字段；原文没有这一行时省略键。只去掉有明确结构证据的标签和装饰符，
+  字段值本身的标点、空格和换行应按其语义忠实保留，不能擅自清洗。根锚点必须存在于
+  对应完整输入并位于子 group 之前；不能用空行或任意行匹配代替。
 - 表格的表头常常顶格而数据行有前导空白。TTP 从行首开始锚定，忽略前导空白会
   导致只匹配到表头行而一条数据都捕获不到。数据行存在缩进时，在该行第一个字段
   前加 `{{ ignore("\\s*") }}` 吸收可变前导空白。加上它以后表头行也可能开始匹配，
@@ -327,7 +386,8 @@ Routing Tables: {{ routing_table_type | WORD }}
 </group>
 ```
   续行匹配行只捕获真正会折行的字段，并用足够严格的 re 保证它不会匹配到下一条完整
-  数据行。joinmatches 的参数是拼接分隔符：折行拼接用 ""，空格分隔的多值累积用 " "。
+  数据行。joinmatches 的参数是拼接分隔符：同一 token 的折行拼接用 ""，空格分隔的
+  多值累积用 " "，原本多行的自由文本用 "\\n" 保留行界。
 - 源文本明显包含业务记录，而 record 是空对象或关键数组为空、仅含空容器或只捕获
   少数行时，必须视为漏解析，不能调用 finish_generation。发现字段错列、表头混入、过宽
   匹配或跨样例不一致时必须提交修正版。若 finish_generation 因内部没有有效候选而被

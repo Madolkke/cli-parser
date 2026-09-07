@@ -132,6 +132,8 @@ async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     requests: list[dict[str, Any]] = []
+    schema = _result_schema()
+    schema["properties"]["advisory"] = {"type": "string"}
 
     async def create_completion(**kwargs: Any) -> ChatCompletion:
         requests.append(deepcopy(kwargs))
@@ -144,6 +146,7 @@ async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
         if len(requests) == 2:
             feedback = _tool_feedback(kwargs, "bad-pipe")
             assert feedback["accepted"] is False
+            assert feedback["record_coverage"] is None
             assert feedback["issues"][0]["code"] == "ttp.incompatible_argument_pipe"
             assert feedback["issues"][0]["details"]["required_action"] == (
                 "split_pipe_argument"
@@ -157,6 +160,17 @@ async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
             )
         assert len(requests) == 3
         assert _tool_feedback(kwargs, "repaired")["accepted"] is True
+        coverage = _tool_feedback(kwargs, "repaired")["record_coverage"]
+        assert coverage["required_paths_complete"] is True
+        assert coverage["optional_paths_absent"] == [
+            {
+                "input_index": 0,
+                "path": "/advisory",
+                "parent_occurrences": 1,
+                "present_occurrences": 0,
+            }
+        ]
+        assert coverage["optional_paths_omitted"] == 0
         return _completion(
             tool_name=FINISH_GENERATION_TOOL_NAME,
             tool_arguments={},
@@ -174,9 +188,7 @@ async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
         settings=TtpGeneratorSettings(api_key="offline", model_name="offline"),
     )
     result = await generator.generate_from_schema(
-        TemplateRequest(
-            command_outputs=["value: one\n"], result_schema=_result_schema()
-        )
+        TemplateRequest(command_outputs=["value: one\n"], result_schema=schema)
     )
     assert result.status == "success"
     assert len(requests) == 3
@@ -410,6 +422,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     assert test_feedback["tests_used"] == 1
     assert test_feedback["issues"] == []
     assert "accepted" not in test_feedback
+    assert "record_coverage" not in test_feedback
 
     final_request = ttp_requests[3]
     accepted_feedback = _tool_feedback(final_request, "call-ttp-accepted")

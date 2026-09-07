@@ -32,6 +32,7 @@
 - Schema 阶段只注册 `submit_result_schema`。第一个通过确定性校验的 Draft 2020-12 Schema 永久冻结。
 - 模板阶段固定注册 `submit_ttp_template`、可选的 `test_ttp_template` 和无参数的 `finish_generation`。测试工具只对一份独立文本执行 parse-only 实验，不保存候选，也不执行 Schema 回验。
 - 模板提交与独立测试的模型反馈先返回有界 `<validation_feedback>`，再返回完整解析结果；校验事实来自当前确定性执行的白名单投影，不读取 Trace。反馈区分本次校验与保留候选，校验通过不代表内容完整或忠实。
+- 模板提交反馈还提供基于冻结 Schema 与本次 records 的有界字段覆盖事实；可选路径缺失只提示对照原文复核，不改变验收或推断原文存在字段。独立测试不提供 Schema 覆盖事实。
 - 每次模型回复最多调用一个阶段工具。普通文本不构成产物；零工具回复使用固定提醒重试，并计入阶段和总预算。
 - 有效模板提交只更新最新候选。模型复核完整解析结果后必须显式调用 `finish_generation`；未 finish 时，即使存在候选也不算成功。
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。

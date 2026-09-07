@@ -133,7 +133,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v33-parser-compatibility-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v34-coverage-and-structure-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -174,8 +174,6 @@ Agent 层的私有构造器与诊断 payload 分别生成模型消息。每条 i
 
 构造器不复制任意 `message`、`details`、异常正文、解析值或额外属性名称。字段名和 Schema 路径须来自冻结 Schema，字典形式的诊断执行相同校验；未知错误码映射为 `validation.unknown_issue`，未知异常类别映射为 `OtherError`。单个反馈 JSON 最多 `24` 条 issue、`8 KiB UTF-8`；required 详情的 `missing_required` 最多 `24` 个字段，并以 `missing_required_omitted` 记录省略字段数。按照上游跨输入交错顺序先保留顶层状态与计数，再加入完整 issue；不截断序列化后的 JSON，也不把该限额用于 records。
 
-### 6. Agent 外最终验收
-
 变量参数字符串中的裸 `|` 会被当前 TTP 错当作过滤器分隔符，导致 worker 异常或静默失效。
 静态门禁在 worker 启动前返回 `ttp.incompatible_argument_pipe`，包含受控结构路径和
 `required_action=split_pipe_argument`；可无歧义定位原始源码时提供从 1 开始的行列位置，
@@ -183,6 +181,34 @@ Agent 层的私有构造器与诊断 payload 分别生成模型消息。每条 i
 重写参数，不禁止正常的过滤器管道，也不把无裸字符的转义写法一律视为正则交替。
 多个独立 `re` 或 `exclude` 调用须以实际匹配结果验证其语义。反馈仍遵守 24 条 issue、
 8 KiB JSON 和完整 records 不截断的边界。
+
+`submit_ttp_template` 还提供 `record_coverage`；这是反馈版本 1 的增量字段，不改变公共
+API、工具入参或验收结果。无解析结果时为 `null`。存在 records 时，其字段如下：
+
+| 字段 | 语义 |
+| --- | --- |
+| `required_paths_complete` | 输入到根 record 映射完整，且现有对象实例的所有 required 键存在；不证明类型、值、数组数量或 Schema 整体验收通过 |
+| `optional_paths_absent` | 某个输入的现有父对象在该路径均没有对应可选键 |
+| `optional_paths_partial` | 某个输入的现有父对象只有部分包含对应可选键 |
+| `optional_paths_total`、`optional_paths_omitted` | 两类缺失事实的总项数和因条数或字节限额省略的项数 |
+
+每条缺失事实只含 `input_index`、冻结 Schema 路径 `path`、`parent_occurrences` 和
+`present_occurrences`。数组元素按 `*` 聚合；仅遍历实际存在且形状匹配的父容器，缺失可选
+父对象不推导其子字段缺失，空数组也不虚构对象实例。显式存在的 `null` 算键存在，其类型
+合法性仍由原 Schema issues 判定。字段来自本次解析结果，包括被拒绝的 records，不读取
+保留候选的旧 records。parse-only 工具不计算或返回此字段。
+
+两类列表跨全部输入合计最多 24 项，按输入交错；同一反馈 JSON 仍限 8 KiB。先保留顶层
+状态、诊断和覆盖计数，再按现有顺序加入 issues，最后加入完整覆盖项；不截断 JSON 或
+records。覆盖事实不判断源文本存在字段，也不把可选字段变成必填。模型必须对照原文：
+有明确对应内容时修复捕获，确实没有时省略，不能用空字符串或 null 补造不存在的信息。
+
+v34 提供可执行的合成示例：以真实早期标题启动未命名根组，使重复子数组与尾部标量
+同属一个根对象；按真实缩进区分自由文本续行、后续字段和下一实体；逐层用真实标识行
+重启重复章节；把有明确结构意义的标签与两侧装饰留在模板中，忠实保留值内部标点和换行。
+根锚点是限定场景的起点，不是任意空控制行；模型不得机械照搬合成样例的标签或结构。
+
+### 6. Agent 外最终验收
 
 `finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 

@@ -706,6 +706,7 @@ async def test_ttp_history_compacts_only_stale_submission_results() -> None:
     assert latest_feedback["accepted"] is True
     assert latest_feedback["remaining_submissions"] == 6
     assert latest_feedback["retained_candidate_submission_index"] == 3
+    assert latest_feedback["record_coverage"]["required_paths_complete"] is True
     for forbidden in (
         "first-attempt",
         "second-attempt",
@@ -802,6 +803,7 @@ async def test_ttp_history_preserves_tests_and_latest_valid_candidate() -> None:
     assert latest_feedback["candidate_updated"] is False
     assert latest_feedback["retained_candidate_submission_index"] == 2
     assert latest_feedback["submissions_used"] == 3
+    assert latest_feedback["record_coverage"]["required_paths_complete"] is True
     for call_id in (
         "test-before-correction",
         "test-before-failure",
@@ -818,6 +820,7 @@ async def test_ttp_history_preserves_tests_and_latest_valid_candidate() -> None:
         assert feedback["scope"] == "parse_only"
         assert feedback["parse_succeeded"] is True
         assert "retained_candidate_submission_index" not in feedback
+        assert "record_coverage" not in feedback
     for forbidden in (
         "overcaptured",
         "secret feedback",

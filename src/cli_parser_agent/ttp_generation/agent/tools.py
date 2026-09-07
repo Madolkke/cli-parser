@@ -295,6 +295,19 @@ _TTP_PARSE_FAILURE_CODES = {
     "ttp.worker_host_unsupported",
     "ttp.worker_start_failed",
 }
+_TTP_UNAVAILABLE_RECORD_CODES = (
+    _TTP_SYNTAX_OR_SAFETY_CODES
+    | _TTP_PARSE_FAILURE_CODES
+    | {
+        "ttp.invalid_shape",
+        "ttp.invalid_mapping",
+        "ttp.invalid_record",
+        "ttp.multiple_root_objects",
+        "ttp.result_too_large",
+        "ttp.invalid_timeout",
+        "ttp.no_inputs",
+    }
+)
 
 
 def _issue_code(issue: Any) -> str | None:
@@ -353,7 +366,7 @@ def _ttp_result_chunk(
     *,
     accepted: bool,
     issues: Sequence[Any] = (),
-    matched_records: Sequence[Any] = (),
+    matched_records: Sequence[Any] | None = None,
     **details: Any,
 ) -> _TracedToolResult:
     diagnostic_payload = _result_payload(
@@ -362,7 +375,7 @@ def _ttp_result_chunk(
         issues=issues,
         **details,
     )
-    records = _jsonable(tuple(matched_records))
+    records = _jsonable(tuple(matched_records) if matched_records is not None else ())
     model_text = _format_ttp_records_for_model(records)
     if not records:
         model_text = f"{model_text}\n{_brief_ttp_error(issues)}"
@@ -372,6 +385,7 @@ def _ttp_result_chunk(
         candidate_updated=details.get("candidate_updated") is True,
         returned_record_count=len(records),
         issues=issues,
+        records=records if matched_records is not None else None,
     )
     model_text = f"{feedback}\n{model_text}"
     return _TracedToolResult(
@@ -843,6 +857,8 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         "只提交完整的共享 TTP 模板。系统会使用每份完整命令输出和已冻结的 "
         "JSON Schema 对它进行验证，并直接返回按输入索引排列的 TTP 匹配结果。"
         "validation_feedback 提供本次验收、错误位置、提交预算和保留候选编号；"
+        "record_coverage 提供本次 records 的有界可选字段缺失与部分覆盖事实，"
+        "需对照原文复核，不能仅因可选就省略已有内容；"
         "accepted 只表示确定性验收通过，仍须复核完整结果并显式 finish。"
     )
     input_schema = TemplateSubmissionInput.model_json_schema()
@@ -1081,7 +1097,15 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
             accepted=accepted,
             capture=capture,
             issues=issues,
-            matched_records=outcome.records,
+            matched_records=(
+                None
+                if not outcome.records
+                and any(
+                    _issue_code(issue) in _TTP_UNAVAILABLE_RECORD_CODES
+                    for issue in issues
+                )
+                else outcome.records
+            ),
             validation_summary=_validation_feedback_summary(
                 issues=issues,
                 matched_records=outcome.records,

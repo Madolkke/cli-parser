@@ -212,7 +212,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-    assert PROMPT_VERSION == "ttp-generator-v33-parser-compatibility-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v34-coverage-and-structure-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -690,6 +690,7 @@ async def test_template_submission_requires_a_frozen_schema() -> None:
         "remaining_submissions": session.max_ttp_submissions,
         "candidate_updated": False,
         "retained_candidate_submission_index": None,
+        "record_coverage": None,
         "issues": [
             {
                 "code": "schema_not_frozen",
@@ -905,6 +906,13 @@ async def test_model_receives_separately_labelled_records_for_each_input() -> No
         "issues": [],
         "issues_total": 0,
         "issues_omitted": 0,
+        "record_coverage": {
+            "required_paths_complete": False,
+            "optional_paths_absent": [],
+            "optional_paths_partial": [],
+            "optional_paths_total": 0,
+            "optional_paths_omitted": 0,
+        },
     }
     assert session.records == tuple(records)
 
