@@ -12,6 +12,7 @@ from openai.types.chat import ChatCompletion
 from cli_parser_agent import (
     GenerationPolicy,
     GenerationRequest,
+    TemplateRequest,
     TtpGenerator,
     TtpGeneratorSettings,
     ValidationIssue,
@@ -125,6 +126,60 @@ def _tool_feedback(request: dict[str, Any], call_id: str) -> dict[str, Any]:
     )
     assert separator
     return json.loads(serialized)
+
+
+async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[dict[str, Any]] = []
+
+    async def create_completion(**kwargs: Any) -> ChatCompletion:
+        requests.append(deepcopy(kwargs))
+        if len(requests) == 1:
+            return _completion(
+                tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+                tool_arguments={"ttp_template": 'value: {{ value | re("one|two") }}'},
+                tool_call_id="bad-pipe",
+            )
+        if len(requests) == 2:
+            feedback = _tool_feedback(kwargs, "bad-pipe")
+            assert feedback["accepted"] is False
+            assert feedback["issues"][0]["code"] == "ttp.incompatible_argument_pipe"
+            assert feedback["issues"][0]["details"]["required_action"] == (
+                "split_pipe_argument"
+            )
+            return _completion(
+                tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+                tool_arguments={
+                    "ttp_template": 'value: {{ value | re("one") | re("two") }}'
+                },
+                tool_call_id="repaired",
+            )
+        assert len(requests) == 3
+        assert _tool_feedback(kwargs, "repaired")["accepted"] is True
+        return _completion(
+            tool_name=FINISH_GENERATION_TOOL_NAME,
+            tool_arguments={},
+            tool_call_id="finished",
+        )
+
+    monkeypatch.setattr(
+        openai,
+        "AsyncClient",
+        lambda **_: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_completion))
+        ),
+    )
+    generator = TtpGenerator(
+        settings=TtpGeneratorSettings(api_key="offline", model_name="offline"),
+    )
+    result = await generator.generate_from_schema(
+        TemplateRequest(
+            command_outputs=["value: one\n"], result_schema=_result_schema()
+        )
+    )
+    assert result.status == "success"
+    assert len(requests) == 3
 
 
 async def test_first_ttp_wire_request_has_no_schema_phase_history(

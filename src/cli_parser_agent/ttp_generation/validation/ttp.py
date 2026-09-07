@@ -398,6 +398,48 @@ def _split_variable_pipeline(expression: str) -> list[str]:
     return parts
 
 
+def _argument_pipe_offset(expression: str) -> int | None:
+    """Find a literal pipe that TTP would split before evaluating arguments."""
+
+    lines = expression.splitlines(keepends=True)
+    try:
+        for token in tokenize.generate_tokens(StringIO(expression).readline):
+            if token.type == tokenize.STRING and "|" in token.string:
+                line, column = token.start
+                return (
+                    sum(len(text) for text in lines[: line - 1])
+                    + column
+                    + token.string.index("|")
+                )
+    except (IndentationError, tokenize.TokenError):
+        # The existing syntax inspection reports malformed expressions.
+        pass
+    return None
+
+
+def _incompatible_argument_pipe_issue(
+    template: str,
+    variable: str,
+    offset: int,
+    path: str,
+) -> ValidationIssue:
+    details: dict[str, Any] = {"required_action": "split_pipe_argument"}
+    # XML decoding and repeated expressions can obscure the source location.
+    # Report it only when the original expression has an unambiguous match.
+    start = template.find(variable)
+    if "&" not in template and start >= 0 and template.count(variable) == 1:
+        position = start + 2 + offset
+        details["line"] = template.count("\n", 0, position) + 1
+        details["column"] = position - template.rfind("\n", 0, position)
+    return _issue(
+        "ttp.incompatible_argument_pipe",
+        "TTP splits literal pipes inside argument strings; use separate "
+        "compatible filters or a pattern without a literal pipe",
+        path=path,
+        details=details,
+    )
+
+
 def _walk_groups(
     element: ET.Element,
     *,
@@ -518,22 +560,23 @@ def _walk_groups(
         )
 
 
-def _iter_template_text(element: ET.Element) -> Sequence[str]:
+def _iter_template_text(element: ET.Element) -> Sequence[tuple[str, str]]:
     """Iterate XML text without recursion on attacker-controlled nesting."""
 
-    chunks: list[str] = []
-    stack: list[tuple[ET.Element, bool]] = [(element, False)]
+    chunks: list[tuple[str, str]] = []
+    stack: list[tuple[ET.Element, bool, str]] = [(element, False, "/template")]
     while stack:
-        current, is_tail = stack.pop()
+        current, is_tail, path = stack.pop()
         if is_tail:
             if current.tail:
-                chunks.append(current.tail)
+                chunks.append((current.tail, path))
             continue
         if current.text:
-            chunks.append(current.text)
-        for child in reversed(list(current)):
-            stack.append((child, True))
-            stack.append((child, False))
+            chunks.append((current.text, path))
+        for index, child in reversed(list(enumerate(current))):
+            stack.append((child, True, path))
+            child_path = f"{path}/group[{index}]" if child.tag == "group" else path
+            stack.append((child, False, child_path))
     return chunks
 
 
@@ -647,7 +690,7 @@ def inspect_ttp_template(
         )
 
     variable_count = 0
-    for chunk in _iter_template_text(root):
+    for chunk, chunk_path in _iter_template_text(root):
         if len(issues) >= MAX_TTP_VALIDATION_ISSUES:
             break
         for line in chunk.splitlines():
@@ -688,6 +731,17 @@ def inspect_ttp_template(
             continue
         variable_count += len(matches)
         for match in matches:
+            pipe_offset = _argument_pipe_offset(match.group(1))
+            if pipe_offset is not None:
+                issues.append(
+                    _incompatible_argument_pipe_issue(
+                        template,
+                        match.group(0),
+                        pipe_offset,
+                        chunk_path,
+                    ),
+                )
+                continue
             expression = match.group(1).strip()
             try:
                 parts = _split_variable_pipeline(expression)

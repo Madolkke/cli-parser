@@ -254,3 +254,28 @@ def test_long_and_non_schema_paths_are_not_echoed() -> None:
     )
     assert all(issue["path"] is None for issue in feedback["issues"])
     assert all(issue["details"] == {} for issue in feedback["issues"])
+
+
+def test_pipe_compatibility_feedback_projects_only_fixed_repair_facts() -> None:
+    serialized, feedback = _render(
+        [
+            {
+                "code": "ttp.incompatible_argument_pipe",
+                "path": "/template/group[0]",
+                "details": {
+                    "required_action": "split_pipe_argument",
+                    "line": 3,
+                    "column": 18,
+                    "argument": "PRIVATE_TEXT",
+                    "function": "PRIVATE_NAME",
+                },
+            }
+        ]
+    )
+    assert "PRIVATE" not in serialized
+    assert feedback["issues"][0]["path"] == "/template/group[0]"
+    assert feedback["issues"][0]["details"] == {
+        "required_action": "split_pipe_argument",
+        "line": 3,
+        "column": 18,
+    }

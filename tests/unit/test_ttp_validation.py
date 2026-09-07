@@ -445,13 +445,165 @@ def test_callers_can_tighten_but_not_loosen_static_ttp_limits() -> None:
     )
 
 
-def test_regex_alternation_is_not_mistaken_for_a_pipeline_separator() -> None:
-    template = 'State: {{ state | re("up|down") }}'
+@pytest.mark.parametrize(
+    "expression",
+    [
+        'value | re("up|down")',
+        'value | re("Alpha One.*|Beta Two.*")',
+        'value | exclude("red fox|blue bird")',
+        "value | contains('red|blue')",
+        'value | equal("red|blue")',
+        'value | notequal("red|blue")',
+        'value | contains_re("red|blue")',
+        'value | endswith_re("red|blue")',
+        'value | exclude_re("red|blue")',
+        'value | notendswith_re("red|blue")',
+        'value | notstartswith_re("red|blue")',
+        'value | startswith_re("red|blue")',
+        'value | joinmatches("|")',
+        'ignore("red|blue")',
+        r'value | re(r"red\|blue")',
+    ],
+)
+def test_argument_pipes_are_rejected_before_evaluation(expression: str) -> None:
+    template = '<group name="items*">\n{{ ' + expression + " }}\n</group>"
 
-    result = validate_ttp_template(template, ["State: up"], _line_schema("state"))
+    issues = inspect_ttp_template(template)
+
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.code == "ttp.incompatible_argument_pipe"
+    assert issue.path == "/template/group[0]"
+    assert issue.details == {
+        "required_action": "split_pipe_argument",
+        "line": 2,
+        "column": template.splitlines()[1].rfind("|") + 1,
+    }
+    assert expression not in issue.message
+    assert expression not in str(issue.details)
+
+
+@pytest.mark.parametrize("encoded_pipe", ["&#124;", "&#x7c;"])
+def test_argument_pipe_check_runs_after_xml_decoding(encoded_pipe: str) -> None:
+    template = '{{ value | re("red' + encoded_pipe + 'blue") }}'
+
+    issue = inspect_ttp_template(template)[0]
+
+    assert issue.code == "ttp.incompatible_argument_pipe"
+    assert issue.path == "/template"
+    assert issue.details == {"required_action": "split_pipe_argument"}
+
+
+def test_argument_pipe_position_does_not_guess_for_repeated_expressions() -> None:
+    expression = '{{ value | exclude("red|blue") }}'
+    template = expression + "\n" + expression
+
+    issues = inspect_ttp_template(template)
+
+    assert len(issues) == 2
+    assert all(
+        issue.details == {"required_action": "split_pipe_argument"} for issue in issues
+    )
+
+
+def test_argument_pipe_reports_multiline_position_and_containing_group() -> None:
+    template = (
+        '<template>\n<group>\n<group name="items*">\n'
+        '{{ value }}\n</group>\n{{ status |\n re("up|down") }}\n'
+        "</group>\n</template>"
+    )
+
+    issue = inspect_ttp_template(template)[0]
+
+    assert issue.code == "ttp.incompatible_argument_pipe"
+    assert issue.path == "/template/group[0]"
+    assert issue.details == {
+        "required_action": "split_pipe_argument",
+        "line": 7,
+        "column": 8,
+    }
+
+
+def test_long_argument_pipe_diagnostics_remain_bounded() -> None:
+    secret_argument = "a" * 4_000 + "|" + "b" * 4_000
+    template = '{{ value | exclude("' + secret_argument + '") }}\n'
+
+    issues = inspect_ttp_template(template * 7)
+
+    assert len(issues) == 7
+    assert all(issue.code == "ttp.incompatible_argument_pipe" for issue in issues)
+    assert all(len(str(issue.model_dump())) < 500 for issue in issues)
+    assert secret_argument not in str(issues)
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{{ value | WORD | to_str }}",
+        '{{ value | exclude("red fox") | exclude("blue bird") }}',
+        '{{ value | re("up") | re("down") }}',
+        r'{{ value | re("[\x7c]") }}',
+        r'{{ value | re("[\u007c]") }}',
+        r'{{ ignore("[\x7c]") }} {{ value }}',
+        "| {{ value | WORD }} |",
+    ],
+)
+def test_compatible_pipeline_and_argument_spellings_stay_allowed(
+    template: str,
+) -> None:
+    assert inspect_ttp_template(template) == []
+
+
+def test_separate_regex_filters_match_each_supported_alternative() -> None:
+    template = 'State: {{ state | re("up") | re("down") }}'
+
+    result = validate_ttp_template(
+        template, ["State: up", "State: down"], _line_schema("state")
+    )
+    unmatched = validate_ttp_template(
+        template, ["State: elsewhere"], _line_schema("state")
+    )
 
     assert result.valid
-    assert result.records == [{"state": "up"}]
+    assert result.records == [{"state": "up"}, {"state": "down"}]
+    assert not unmatched.valid
+
+
+def test_separate_exclude_filters_remove_each_unwanted_value() -> None:
+    template = (
+        '<group name="items*">\n'
+        '{{ value | ORPHRASE | exclude("red fox") | exclude("blue bird") }}\n'
+        "</group>"
+    )
+
+    result = validate_ttp_template(
+        template,
+        ["red fox\nblue bird\ngreen leaf"],
+        _array_schema("items", "value"),
+    )
+
+    assert result.valid
+    assert result.records == [{"items": [{"value": "green leaf"}]}]
+
+
+def test_incompatible_argument_pipes_never_start_a_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_worker(*args, **kwargs):
+        pytest.fail("incompatible argument reached a TTP worker")
+
+    module = "cli_parser_agent.ttp_generation.validation.ttp"
+    monkeypatch.setattr(f"{module}._run_ttp_isolated", unexpected_worker)
+    monkeypatch.setattr(f"{module}._run_ttp_test_isolated", unexpected_worker)
+    template = '{{ value | re("Alpha One.*|Beta Two.*") }}'
+
+    submitted = validate_ttp_template(template, ["Alpha One"], _line_schema())
+    tested = parse_ttp_template(template, "Alpha One")
+
+    assert _codes(submitted.issues) == {"ttp.incompatible_argument_pipe"}
+    assert _codes(tested.issues) == {"ttp.incompatible_argument_pipe"}
+    assert submitted.records == []
+    assert tested.result is None
 
 
 def test_real_linux_outputs_are_fully_parsed_with_ignore_calls() -> None:

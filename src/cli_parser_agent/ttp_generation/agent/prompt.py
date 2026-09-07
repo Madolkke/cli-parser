@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v32-structured-validation-feedback-zh-cn"
+PROMPT_VERSION = "ttp-generator-v33-parser-compatibility-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -155,6 +155,13 @@ State: &lt;{{ state | WORD }}&gt; &amp; {{ status | WORD }}
   _exact_space_、_headers_；string/regex 条件；re、joinmatches、item；以及
   安全的 to_int/to_float/to_str/to_ip/to_net/to_cidr 转换。`column(...)` 不是
   TTP 函数，禁止使用。
+- 变量参数的字符串源码中禁止出现 `|`，包括 re、exclude、joinmatches 和 ignore 的
+  参数；引号和反斜杠不能阻止当前 TTP 把它当作 pipeline 分隔符。正常的字段过滤器
+  管道不受影响。收到 ttp.incompatible_argument_pipe / split_pipe_argument 时，按
+  结构路径和可用的行列位置修正完整模板，不要重复提交。匹配候选可以使用多个独立
+  re 调用，例如 `{{ label | re("Alpha.*") | re("Beta.*") }}`；排除多个字面片段使用
+  连续的 exclude 调用，exclude 本身不是正则。其他参数须改为已验证且无裸管道字符
+  的等价写法，不能机械拆分后改变匹配含义。
 - 严格按 TTP 内置模式的实际语义选择 pipeline：WORD 是 `\\S+`，恰好匹配一个
   非空白 token，token 中的 `/`、`.`、`-`、`?` 等标点不影响匹配；接口名、IP、
   OK、Method、Protocol 等没有空格的列优先使用 WORD。PHRASE 必须匹配至少两个

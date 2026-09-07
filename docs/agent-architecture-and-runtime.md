@@ -133,7 +133,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v32-structured-validation-feedback-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v33-parser-compatibility-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -175,6 +175,14 @@ Agent 层的私有构造器与诊断 payload 分别生成模型消息。每条 i
 构造器不复制任意 `message`、`details`、异常正文、解析值或额外属性名称。字段名和 Schema 路径须来自冻结 Schema，字典形式的诊断执行相同校验；未知错误码映射为 `validation.unknown_issue`，未知异常类别映射为 `OtherError`。单个反馈 JSON 最多 `24` 条 issue、`8 KiB UTF-8`；required 详情的 `missing_required` 最多 `24` 个字段，并以 `missing_required_omitted` 记录省略字段数。按照上游跨输入交错顺序先保留顶层状态与计数，再加入完整 issue；不截断序列化后的 JSON，也不把该限额用于 records。
 
 ### 6. Agent 外最终验收
+
+变量参数字符串中的裸 `|` 会被当前 TTP 错当作过滤器分隔符，导致 worker 异常或静默失效。
+静态门禁在 worker 启动前返回 `ttp.incompatible_argument_pipe`，包含受控结构路径和
+`required_action=split_pipe_argument`；可无歧义定位原始源码时提供从 1 开始的行列位置，
+无法准确定位时省略。XML 解码后的字符串也检查。规则检查字符串源码中的字符，不自动
+重写参数，不禁止正常的过滤器管道，也不把无裸字符的转义写法一律视为正则交替。
+多个独立 `re` 或 `exclude` 调用须以实际匹配结果验证其语义。反馈仍遵守 24 条 issue、
+8 KiB JSON 和完整 records 不截断的边界。
 
 `finish_generation` 成功后，workflow 仍会在 Agent 外重新校验冻结 Schema，重新执行 TTP 安全检查和新的 spawn 全文解析，并复核 records 数量、索引映射与 Schema。成功 artifact 使用这次重验得到的 records，而不是直接信任工具缓存；终验失败会直接返回结构化失败，不重新打开 TTP Agent。
 

@@ -38,6 +38,7 @@ _KNOWN_CODES = frozenset(
         "ttp.invalid_group_method",
         "ttp.invalid_group_name",
         "ttp.invalid_ignore_syntax",
+        "ttp.incompatible_argument_pipe",
         "ttp.invalid_line_control",
         "ttp.invalid_root_tag",
         "ttp.invalid_utf8",
@@ -112,6 +113,7 @@ _EXCEPTION_TYPES = frozenset(
     ],
 )
 _ACTIONS = {
+    "ttp.incompatible_argument_pipe": {"split_pipe_argument"},
     "ttp.invalid_ignore_syntax": {"replace_with_ignore_call"},
     "ttp.invalid_xml": {"escape_xml_metacharacters"},
     "ttp.invalid_line_control": {"attach_to_schema_field"},
@@ -234,7 +236,7 @@ def _project_issue(
     action = details.get("required_action")
     if isinstance(action, str) and action in _ACTIONS.get(code, set()):
         safe_details["required_action"] = action
-    if code == "ttp.invalid_xml":
+    if code in {"ttp.invalid_xml", "ttp.incompatible_argument_pipe"}:
         for key in ("line", "column"):
             value = details.get(key)
             if _bounded_int(value):

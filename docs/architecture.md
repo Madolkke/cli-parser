@@ -59,7 +59,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和 AgentScope 初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。middleware 只禁止 AgentScope 用摘要替换当前阶段证据，不再过滤工具。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v32-structured-validation-feedback-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v33-parser-compatibility-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -358,6 +358,10 @@ TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式�
 - [AgentScope v2.0.4 源码标签](https://github.com/agentscope-ai/agentscope/tree/v2.0.4)
 
 ### TTP 提示的章节与正文边界
+
+v33 增加当前 TTP 参数分词的兼容性门禁与修正提示：变量字符串参数中的裸 `|` 在解析器
+实例化前拒绝，返回受控错误码、路径、可验证行列和固定修正动作；普通 pipeline 保持允许。
+规则覆盖 `re`、字符串条件及 `ignore`，不自动改写模板或放宽执行白名单。
 
 v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文的字面字符；同字段的不同章节用独立 group 和唯一标题的 `ignore(pattern)` 起点，不使用独立 `_start_`。示例代码块按输入实际行首书写，测试原样提取且不清除缩进。完整候选优先直接提交，局部实验只用于明确疑问；模型先根据结构化校验事实定位错误，再对照逐输入匹配结果、冻结 Schema 和原文复核后调用 finish。`accepted=true` 只表示本次确定性校验通过，不证明业务内容完整或忠实；保留候选编号也不表示本次提交通过。测试工具反馈只描述独立实验文本，提交反馈才对应全部完整输入。
 

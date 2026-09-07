@@ -274,6 +274,7 @@ _TTP_SYNTAX_OR_SAFETY_CODES = {
     "ttp.invalid_group_method",
     "ttp.invalid_group_name",
     "ttp.invalid_ignore_syntax",
+    "ttp.incompatible_argument_pipe",
     "ttp.invalid_line_control",
     "ttp.invalid_root_tag",
     "ttp.invalid_utf8",
