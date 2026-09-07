@@ -459,7 +459,7 @@ async def test_textual_navigation_fold_follow_and_artifacts(tmp_path: Path) -> N
 
     async with app.run_test(size=(120, 40)) as pilot:
         await asyncio.wait_for(app._completion_event.wait(), timeout=2)
-        await pilot.pause(0.2)
+        await asyncio.wait_for(app.screen.wait_for_refresh(), timeout=2)
         assert app.ready_to_exit is True
         assert app.final_exit_code == 0
         assert app.following is True
@@ -485,6 +485,9 @@ async def test_textual_navigation_fold_follow_and_artifacts(tmp_path: Path) -> N
         app._view_dirty = True
         await app._refresh_view()
         detail_scroll = app.query_one("#detail-scroll", SCRIPT.VerticalScroll)
+        # Static.update schedules layout; paging before refresh sees the old height.
+        await asyncio.wait_for(detail_scroll.wait_for_refresh(), timeout=2)
+        assert detail_scroll.max_scroll_y > 0
         before_scroll = detail_scroll.scroll_y
         await pilot.press("pagedown")
         after_page_down = detail_scroll.scroll_y
