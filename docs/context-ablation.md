@@ -89,3 +89,43 @@ formatter 估算执行容量门禁。后者的 Thinking 计数修正主要改变
 真实评测的 `task_intact` 直接验证初始任务文本（含采样输入和冻结 Schema）仍完整存在。
 候选结果完整性依靠保护规则和离线 SDK 测试，v1 sidecar 没有逐轮记录候选正文相等结果，
 因此不能声称真实评测提供了候选 records 逐轮字节相等的独立证据。
+
+## 2026-09-08 消融结果与选型
+
+四组从 `6e62880` 的独立 checkout 顺序执行，使用 v34 提示、deepseek-v4-flash、
+temperature 0、HTTP timeout 120 秒、总预算 900 秒、13 轮、9 次提交、3 次测试。
+两个 hard 数据集各重复 4 次、并发 4，使用注册表的默认输入范围；不是全部输入评测。
+模型参数、采样、预算、提示和输入选择在四组间一致，评分来自标准 runner 的独立验收。
+
+| 变体 | 严格通过 | 有效候选 | finish 成功 | LLDP / Power 严格通过 | 平均耗时（秒） |
+| --- | --- | --- | --- | --- | --- |
+| current | 3/8 | 5/8 | 3/8 | 0/4 / 3/4 | 707.77 |
+| estimator | 1/8 | 6/8 | 2/8 | 0/4 / 1/4 | 710.29 |
+| retention | 4/8 | 4/8 | 4/8 | 0/4 / 4/4 | 628.66 |
+| combined | 2/8 | 5/8 | 2/8 | 0/4 / 2/4 | 687.75 |
+
+| 变体 | Schema 拒绝/提交 | worker 失败/提交 | 摘要完成次数 | 初始任务丢失请求数 |
+| --- | --- | --- | --- | --- |
+| current | 16/31 | 1/31 | 2 | 2 |
+| estimator | 12/34 | 1/34 | 0 | 0 |
+| retention | 16/28 | 0/28 | 0 | 0 |
+| combined | 16/34 | 1/34 | 0 | 0 |
+
+四组均无 SystemExit 提交失败，`context.fit` 各 8 次；这个采样拟合事件与自动摘要次数
+不是同一指标。每组 8 个 sidecar 都按 Trace UUID 唯一匹配，观测没有省略。
+retention 的 53 次请求和 combined 的 59 次请求都保留初始任务；两组均无上下文完整性
+停止、容量停止或已记录的 provider context 拒绝，但真实请求没有接近容量上限。
+
+本轮不把实验上下文策略迁入生产。estimator 修正了误计 Thinking 导致的压缩触发，
+retention 保留了权威任务与候选复核材料；机制验证成立，严格准确率收益尚不稳定。
+retention 与 combined 的模型策略相同，共 6/16 严格通过，与 current 的 3/8 比例相同；
+这只是描述性比较，不构成等效性检验。四组都未解决 LLDP，不能凭单组 Power 4/4 宣称
+整体准确率提升，也不能用本轮未超限证明真实长上下文的容量安全。
+
+后续优先验证整行锚点、自由文本与业务标签的匹配冲突、字段值与装饰符边界，以及已有
+可复核候选时是否应将下一轮启动门槛与 HTTP I/O timeout 分离。保持显式 finish 和独立
+终验；第 9 次提交之后仍允许 finish 会改变现有协议，不属于本轮改动。
+
+脱敏明细位于 `.artifacts/accuracy-optimization/` 的 `final-comparison.json`、
+`ablation-mechanisms.json` 和 `implementation-and-results.md`。Token 为已观测用量，
+超时或取消请求可能没有 usage；缺少记录不能按零计入完整用量。
