@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v34-coverage-and-structure-zh-cn"
+PROMPT_VERSION = "ttp-generator-v35-coverage-and-structure-boundary-clarification-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -241,7 +241,8 @@ Errors: {{ errors | DIGIT }}
   不要把独立的下一条记录拼入上一条，也不要同时用 table 和 joinmatches
   掩盖尚未确认的行边界。
 - 多行自由文本必须先找到可验证的续行边界，不能用无约束的整行捕获吞掉后续字段。
-  例如 notes 行都有两个前导空格，Status 和下一个 Entry 都从行首开始时：
+  例如同一个 Entry 内所有匹配到的缩进行都属于 notes，notes 行都有两个前导空格，
+  Status 和下一个 Entry 都从行首开始时：
 ```xml
 <group name="entries*">
 Entry: {{ name | WORD }}
@@ -249,9 +250,11 @@ Entry: {{ name | WORD }}
 Status: {{ state | WORD }}
 </group>
 ```
-  模板 notes 行的两个前导空格是匹配边界，不能为排版删掉；无缩进的 Status 和
-  Entry 不属于 notes。若实际输入没有这样的边界，先设计可区分续行与后续标签的
-  规则，不能机械照搬宽泛匹配。不要把 _end_ 附在必须保留的最后一个字段上；TTP
+  模板 notes 行的两个前导空格用于筛选匹配行，不能为排版删掉；无缩进的 Status 和
+  Entry 行不会被捕获为 notes，但 Status 行本身不会终止 notes 捕获。XML 中匹配行
+  的排列顺序不限定捕获区间；同一个 Entry 内，Status 之后的同缩进行仍会追加到 notes。
+  若后面还有同缩进的非 notes 内容，不能直接使用本例，必须另设经过解析验证的边界。
+  不要把 _end_ 附在必须保留的最后一个字段上；TTP
   会丢弃结束行的捕获值。复核某条记录没有 notes、下一条却有 notes 时不会串记录。
 - 章节内有重复子章节时，每层 group 都以属于该层的真实标题或标识行开始。标题可
   捕获冻结字段时优先捕获，下一次同层标题重新开始该层对象，避免从后续章节补捕

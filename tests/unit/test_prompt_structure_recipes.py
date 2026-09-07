@@ -58,7 +58,7 @@ def test_root_anchor_keeps_children_and_trailing_scalar_with_value_boundary():
     ]
 
 
-def test_multiline_note_stops_at_unindented_field_and_preserves_newline():
+def test_multiline_note_excludes_unindented_fields_and_preserves_newline():
     schema = obj(
         {
             "entries": array(
@@ -85,6 +85,38 @@ def test_multiline_note_stops_at_unindented_field_and_preserves_newline():
             ]
         }
     ]
+
+
+def test_multiline_recipe_does_not_end_notes_at_later_status_pattern():
+    schema = obj(
+        {
+            "entries": array(
+                obj(
+                    {"name": STRING, "notes": STRING, "state": STRING},
+                    ["name", "state"],
+                )
+            )
+        },
+        ["entries"],
+    )
+    source = "Entry: e1\n  first line\nStatus: up\n  Counter detail: 7\n"
+    result = validate_ttp_template(_prompt_template("Entry: {{ name"), [source], schema)
+
+    assert result.valid, result.issues
+    assert result.records == [
+        {
+            "entries": [
+                {
+                    "name": "e1",
+                    "state": "up",
+                    "notes": "first line\nCounter detail: 7",
+                }
+            ]
+        }
+    ]
+    # Matching a later XML line does not bound earlier continuation patterns.
+    assert "Status 行本身不会终止 notes 捕获" in TTP_SYSTEM_PROMPT
+    assert "若后面还有同缩进的非 notes 内容，不能直接使用本例" in TTP_SYSTEM_PROMPT
 
 
 def test_nested_repeated_section_titles_reset_optional_children():
