@@ -129,3 +129,24 @@ retention 与 combined 的模型策略相同，共 6/16 严格通过，与 curre
 脱敏明细位于 `.artifacts/accuracy-optimization/` 的 `final-comparison.json`、
 `ablation-mechanisms.json` 和 `implementation-and-results.md`。Token 为已观测用量，
 超时或取消请求可能没有 usage；缺少记录不能按零计入完整用量。
+
+## 最终 v35 回归
+
+提示边界复核发现缩进示例不会在 Status 行结束 notes 捕获，因此 v35 补充适用条件和
+实际解析反例测试。最终版本在 `32f7f2f` 上使用生产默认上下文策略单独完成同配置的
+8 次标准评测，未重跑失败 trial；四组 v34 消融不受影响。
+
+v35 严格通过 3/8、有效候选 7/8、finish 与独立验收均为 3/8；LLDP 为 0/4 严格通过、
+3/4 有候选，Power 为 3/4 严格通过、4/4 有候选。平均耗时 640.67 秒，首次完整提交
+平均 347.22 秒。Schema 拒绝 12/30 次提交，worker 失败 1/30 次提交和 2/20 次独立
+测试；一次提交被裸管道兼容性门禁拦截，SystemExit 为零。
+
+四个有候选但未 finish 的 trial 全部因剩余时间低于 120 秒而跳过下一轮，剩余分别为
+61.297、58.906、84.531、100.641 秒；均未开始终验，不能把这些候选算作严格通过。
+原生摘要和供应商拒绝强制 tool_choice 的现象仍有记录；这次直接标准评测没有实验
+sidecar，不能据此报告精确的原始任务丢失次数。
+
+最终生产版本为 3/8，v32 基线为 0/8，v34 current 为 3/8；改善集中于 Power，样本不足
+以认定稳定泛化收益。最终离线验收为 824 passed、3 live skipped，Ruff 及格式检查通过，
+标准离线 baseline 仍为 10/10，评测资产未修改。详见本地
+`.artifacts/accuracy-optimization/v35/20260907T180402.519249Z/summary.json`。
