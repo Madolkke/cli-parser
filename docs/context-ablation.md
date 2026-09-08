@@ -157,3 +157,81 @@ sidecar，不能据此报告精确的原始任务丢失次数。
 以认定稳定泛化收益。最终离线验收为 824 passed、3 live skipped，Ruff 及格式检查通过，
 标准离线 baseline 仍为 10/10，评测资产未修改。详见本地
 `.artifacts/accuracy-optimization/v35/20260907T180402.519249Z/summary.json`。
+
+## 2026-09-09 Thinking 计数默认修正与回归
+
+产品实现提交为 `7a27c33`，在 `ObservedOpenAIChatModel.count_tokens` 的消息副本中
+排除 formatter 未发送的 Thinking；Schema/TTP 两阶段统一使用该实现。其余计数沿用
+AgentScope 算法，真实消息与观察通道不变。原生摘要、结果截断、历史折叠和时间门槛
+保持原状；本次不是权威上下文保留策略的上线，也不减少模型生成推理的预算。
+
+离线验收为 **845 passed、3 live skipped**，Ruff 与全仓格式检查通过，默认范围
+preflight 无失败、baseline 为 **10/10**。新增测试验证消息及 metadata 不变、两阶段
+初始拟合一致、240K 字符 Thinking 不触发摘要，以及真实可见长文本仍在容量内触发
+原生摘要。直接产品调用与 `estimator` 的 SDK 请求、轮次、提交和候选状态完全一致；
+旧 `current` 仍能复现 Thinking 误触发。评测资产、依赖和 v35 提示没有修改。
+
+真实评测从干净的 `7a27c33` 执行，通过 `estimator` 观察适配器委托标准 runner，
+仅运行修复版 8 次，没有补跑失败 trial。模型、policy、提示、输入选择及 case/trial
+数量均与上一节 v35 历史对照一致：deepseek-v4-flash、temperature 0、非流式、
+max_tokens 8192、context 128000、模型重试 2、HTTP timeout 120 秒；总预算
+900 秒、13 轮、9 次提交、3 次独立测试。两个 hard 用例各 4 次、并发 4，使用
+LLDP `inputs/005.txt` 和 Power `inputs/001.txt`，不是 full scope。
+
+| 指标 | 历史 v35 | Thinking 修正 |
+| --- | --- | --- |
+| 严格通过 | 3/8 | 2/8 |
+| 有效候选 | 7/8 | 4/8 |
+| finish 成功 / 独立验收通过 | 3/8 / 3/8 | 2/8 / 2/8 |
+| LLDP 严格通过 / 有效候选 | 0/4 / 3/4 | 0/4 / 0/4 |
+| Power 严格通过 / 有效候选 | 3/4 / 4/4 | 2/4 / 4/4 |
+| Schema 拒绝 / 提交 | 12/30 | 21/32 |
+| worker 失败 / 提交 | 1/30 | 0/32 |
+| worker 失败 / 独立测试 | 2/20 | 0/22 |
+| SystemExit（提交与独立测试合计） | 0 | 0 |
+| 平均耗时（秒） | 640.67 | 672.48 |
+| 首次完整提交平均耗时（秒） | 347.22（8 次观测） | 339.92（8 次观测） |
+| 首个有效候选平均耗时（秒） | 487.21（7 次观测） | 424.53（4 次观测） |
+| 已观测输入 Token | 2,626,260 | 2,941,510 |
+| 已观测输出 / 推理 Token | 619,943 / 594,977 | 596,701 / 575,011 |
+
+Schema/worker 计数来自限定 Trace UUID 和时间范围的 Laminar 聚合，严格通过来自
+标准 runner 独立评分。首个有效候选的观测分母不同，不能将其平均值直接解释为加速。
+新组 58 次请求中有 56 个带 usage 的 LLM span，56 个均记录推理用量；另外两次
+在途调用被总截止取消。历史推理用量为 57/61 个 LLM span。因此 Token 是已观测
+用量，不代表完整账单，也不支持宣称推理成本降低。
+
+机制 sidecar 与全部 **8/8** trial 按唯一 Trace UUID 对齐，无遗漏、重复或未关联
+Agent。**58/58** 次请求保留初始任务文本（含采样输入和冻结 Schema），58 次检查
+前后的工具配对均完整且顺序有效；compression 触发和完成均为 **0**，显式
+`tool_choice` 和发送 reasoning content 均为 **0**。`context.fit` 仍为 8 次，
+不能把这个初始拟合事件当成摘要。计数最大值为 13,499，formatter 请求近似值最大为
+14,607，均远离 128,000 的配置容量；这些近似值不是供应商 tokenizer 结果。
+没有记录 provider context 拒绝。本次没有真实压缩，不证明压缩发生后任务仍完整，
+也没有验证保留候选 records 在真实历史中始终完整。历史 v35 未启用 sidecar，
+不提供可直接对比的精确压缩次数或初始任务丢失次数。
+
+失败漏斗如下：
+
+- LLDP 全部 11 次提交都被 Schema 拒绝，4 次 trial 均无有效候选。trial 2/4 在
+  剩余 95.844/70.266 秒时被 120 秒启动门槛拦住；trial 1/3 到 900 秒总截止取消
+  在途调用。提前停止 trial 的顶层结果仍是 `agent_stopped`，rounds 中记录了
+  `insufficient_remaining_time` 和阶段 `generation_timeout`；报告据事件说明触发事实。
+  取消后出现的 no-tool retry 事件没有伴随后续模型请求，不能解释为模型主动空回复。
+- Power 四次均产生候选，trial 3/4 显式 finish 并严格通过；trial 1/2 都继续修正
+  到第 9 次提交，因提交预算耗尽结束，未调用 finish。其中 trial 2 直到第 9 次
+  提交才首次通过，仍按既有协议因预算耗尽失败。两个候选的严格正确性未知，
+  不能自动计作成功，也不能据此断言放宽时间门槛能解决这两次失败。
+- 裸管道门禁拦截一次 LLDP 独立测试；全部提交和独立测试均无 worker 错误。
+  worker 错误下降没有转化为整体准确率提升。
+
+结论：**计数与 formatter 不一致的确定性缺陷已修复，本轮准确率没有改善**。
+严格通过和有效候选均较历史对照下降，尤其 LLDP 的 Schema 拒绝仍需独立排查。
+本次是历史对照而非同期随机实验，8 次样本不能确定下降由计数修正导致，也不能
+认定修正改善准确率。按既定范围保留默认计数修正，原生摘要仍可能丢失输入或 Schema；
+完整上下文保护、候选复核与 finish 改进仍需后续单独设计和验证。
+
+本地脱敏产物位于 `.artifacts/thinking-token-fix/`：`comparison.json/.md`、
+`estimator.json`、`mechanisms.json` 和 `offline.json`；标准运行目录为
+`evaluation/20260908T154425.977638Z`。这些统计不导出输入、Schema、模板、records
+或 Trace 正文，不持久化内容哈希。
