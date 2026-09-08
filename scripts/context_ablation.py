@@ -22,10 +22,10 @@ from agentscope.agent import ContextConfig
 from agentscope.message import (
     Msg,
     TextBlock,
-    ThinkingBlock,
     ToolCallBlock,
     ToolResultBlock,
 )
+from agentscope.model import OpenAIChatModel
 from openai.types.chat import ChatCompletion
 
 from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings, observability
@@ -181,21 +181,6 @@ def _fail_context_integrity(agent: Any) -> None:
     raise ContextAblationIntegrityError("context integrity failed")
 
 
-def _without_thinking(messages: list[Msg]) -> list[Msg]:
-    return [
-        message.model_copy(
-            update={
-                "content": [
-                    block
-                    for block in message.get_content_blocks()
-                    if not isinstance(block, ThinkingBlock)
-                ],
-            },
-        )
-        for message in messages
-    ]
-
-
 def _pair_facts(messages: list[Msg]) -> dict[str, int | bool]:
     calls: dict[str, str] = {}
     results: dict[str, str] = {}
@@ -335,10 +320,10 @@ def context_ablation(variant: str) -> Iterator[AblationReport]:
         async def count_tokens(
             self, messages: list[Msg], tools: list[dict] | None
         ) -> int:
-            return await super().count_tokens(
-                _without_thinking(messages) if corrected else messages,
-                tools,
-            )
+            if corrected:
+                return await super().count_tokens(messages, tools)
+            # Keep the historical arms stable after the product estimator fix.
+            return await OpenAIChatModel.count_tokens(self, messages, tools)
 
         async def _call_api(
             self,
@@ -493,7 +478,11 @@ def _synthetic_schema() -> dict[str, Any]:
 
 
 async def offline_variant(
-    variant: str, *, parameter_rejection: bool = False
+    variant: str,
+    *,
+    parameter_rejection: bool = False,
+    thinking_chars: int = 240_000,
+    visible_reply_chars: int = 0,
 ) -> dict[str, Any]:
     """Exercise the real AgentScope/OpenAI formatter with a synthetic transport."""
 
@@ -570,8 +559,12 @@ async def offline_variant(
                         "finish_reason": "tool_calls",
                         "message": {
                             "role": "assistant",
-                            "content": None,
-                            "reasoning_content": "x" * 240_000
+                            "content": "z" * visible_reply_chars
+                            if stage_calls == 1
+                            and not is_summary
+                            and visible_reply_chars
+                            else None,
+                            "reasoning_content": "x" * thinking_chars
                             if stage_calls == 1 and not is_summary
                             else None,
                             "tool_calls": [

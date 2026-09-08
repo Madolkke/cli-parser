@@ -92,6 +92,14 @@ observer 同步接收原始 AgentScope `AgentEvent` 和项目补充的 `CustomEv
 
 Schema Agent 的 rejected candidate、issues、Thinking、ToolCall/ToolResult、零工具提醒和 usage 都不会进入 TTP `AgentState`。
 
+两阶段默认使用的 `ObservedOpenAIChatModel.count_tokens` 在消息副本中排除
+OpenAI formatter 不发送的 `ThinkingBlock`，其余内容和工具定义继续使用 AgentScope
+原有 UTF-8 字节近似计数。这不是供应商 tokenizer，也不减少模型生成的推理 Token；
+修正只避免未发送的历史 Thinking 提前触发压缩。真实历史、metadata、observer 和
+Laminar 中的 Thinking 保持原样，初始拟合及原生压缩内部计数均使用同一修正实现。
+压缩阈值、模型摘要、工具结果截断和项目提交历史折叠规则不变；真实可见内容达到
+阈值时仍会压缩，摘要仍可能丢失初始输入或冻结 Schema。
+
 ### 阶段专属工具
 
 两个 Toolkit 按阶段固定注册工具：

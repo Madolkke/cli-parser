@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, TypeVar, cast
 
 import openai
-from agentscope.message import Msg
+from agentscope.message import Msg, ThinkingBlock
 from agentscope.model import ChatResponse, OpenAIChatModel
 from agentscope.tool import ToolChoice
 from lmnr import Laminar
@@ -247,7 +247,7 @@ async def _close_stream_on_exit(
 
 
 class ObservedOpenAIChatModel(OpenAIChatModel):
-    """Instrument the adapter entry while retaining the AgentScope 2.0 loop."""
+    """Observe attempts and align token estimation with the OpenAI formatter."""
 
     def __init__(
         self,
@@ -257,6 +257,30 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
     ) -> None:
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
+
+    async def count_tokens(
+        self,
+        messages: list[Msg],
+        tools: list[dict] | None,
+    ) -> int:
+        """Exclude unsent Thinking from counting copies, preserving history."""
+
+        # The locked OpenAI formatter skips ThinkingBlock, while the generic
+        # AgentScope estimator counts it. Keep every other estimate unchanged;
+        # this remains a UTF-8 approximation, not a provider tokenizer.
+        counting_messages = [
+            message.model_copy(
+                update={
+                    "content": [
+                        block
+                        for block in message.get_content_blocks()
+                        if not isinstance(block, ThinkingBlock)
+                    ],
+                },
+            )
+            for message in messages
+        ]
+        return await super().count_tokens(counting_messages, tools)
 
     async def _call_api(
         self,

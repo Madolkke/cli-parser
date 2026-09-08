@@ -2,7 +2,7 @@
 
 `scripts/context_ablation.py` 是默认关闭的开发实验适配器。它只在当前进程调用标准
 `scripts/run_test_sets.py` 期间替换 builder 使用的两个类和实验用历史折叠函数；退出时恢复，产品默认
-AgentScope 压缩、公共 API、采样、提示词、预算和评测资产不变。不要在同一进程嵌套
+AgentScope 压缩机制、公共 API、采样、提示词、预算和评测资产不变。不要在同一进程嵌套
 变体，或在实验期间执行无关生成；同一变体的并发 trial 各自拥有独立记录。
 
 | 变体 | Thinking 估算 | 上下文策略 |
@@ -11,6 +11,12 @@ AgentScope 压缩、公共 API、采样、提示词、预算和评测资产不�
 | `estimator` | 从计数副本移除 OpenAI formatter 未发送的 Thinking | 原生自动摘要和 ToolResult 截断 |
 | `retention` | AgentScope 原实现 | 固定保留任务，关闭模型摘要和 ToolResult 截断 |
 | `combined` | 移除未发送的 Thinking | 同 `retention` |
+
+Thinking 计数修正已单独纳入产品默认实现。上表四组保留历史实验定义：`current`
+表示旧计数对照，不再代表最新产品默认；`current` 和 `retention` 显式调用
+AgentScope 原始计数，`estimator` 和 `combined` 调用产品修正计数。直接产品调用与
+`estimator` 的 SDK 请求、预算及折叠行为由离线 parity 测试验证。保留策略仍仅供实验，
+没有迁入产品默认。下方带日期的历史评测和当时选型结论保持原样。
 
 估算修正不删除 AgentState、observer 或 Trace 中的 Thinking，也不会减少 formatter
 本来就未发送的内容。它继续使用 UTF-8 字节数除以 4 的近似值，并不是供应商 tokenizer。
@@ -73,7 +79,8 @@ tools 的总估算。它仅帮助定位上下文增长来自哪类实际发送�
 
 先比较原始任务保留率、摘要请求和显式 tool_choice 请求数、容量停止及工具配对；再按 case
 比较严格通过率、有效候选、finish、Schema 错误和 worker 失败。Token、耗时及估算变化
-只作辅助指标。8 次 trial 不足以预设准确率必然提升，未取得证据前不迁移为生产策略。
+只作辅助指标。8 次 trial 不足以预设准确率必然提升，权威上下文保留策略仍需容量和
+完整性验证后再决定是否迁入产品默认；Thinking 计数修正单独按确定性兼容性验收。
 
 ## v1 结果解释边界
 
