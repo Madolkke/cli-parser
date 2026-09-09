@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v36-container-start-guidance-zh-cn"
+PROMPT_VERSION = "ttp-generator-v37-string-value-fidelity-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -374,10 +374,25 @@ Module {{ name | WORD }}: {{ state | WORD }}
   `class`、`for`）在 TTP 变量中仍按普通字段名原样使用，绝不能擅自重命名。
   TTP `DIGIT` 的结果是文本；冻结字段为 integer 时在 `DIGIT` 后添加 `to_int`，
   其他转换同理。
-- 冻结 Schema 中未列入 required 的字段可以在对应原文不存在时缺失。模板必须让
-  TTP 省略未匹配的可选键，不能用空 string 或 null 代替不存在的字段，也不能因
-  可选行不存在而丢弃其父 object、同级必填字段或整条业务记录。原文字段槽明确存在
-  但字面值为空时，可以按冻结 Schema 忠实捕获为空 string。
+- 冻结 Schema 中未列入 required 的字段，只有对应标签、值槽或所属可选行不存在时，
+  才让 TTP 省略未匹配的可选键；不能因此丢弃父 object、同级必填字段或整条记录。
+  对冻结类型为 string 的字段，必须区分：值槽不存在时省略键；值槽明确存在但为空时
+  忠实捕获为空 string；值槽中有状态字符串或占位字符串时保留原字符串。
+  不能仅因其含义看似“不可用”而用 exclude 排除、缩小匹配范围或替换为空 string、
+  null。复核 optional_paths_absent 和 optional_paths_partial 时，逐个检查对应实例的
+  原文值槽，不能把状态值解释为字段不存在。只去除明确位于业务值之外的标签和固定
+  装饰边界；业务值内的符号不能仅凭外观清洗。此要求不改变冻结数字字段的合法转换，
+  也不禁止排除表头。以下 assets 的 name 为必填 string，result 为可选 string，
+  Result 标签后的值槽由逗号界定：
+```xml
+<group name="assets*">
+Asset: {{ name | WORD }}
+Result: {{ result | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?") }} ,
+</group>
+```
+  例如 `Result: ready ,` 捕获为 "ready"，`Result: ?pending review ,` 捕获为
+  "?pending review"，`Result:  ,` 捕获为 ""；某个 Asset 完全没有 Result 行时才
+  省略 result，仍保留该 Asset。这里 ? 属于值，Result: 和逗号属于结构边界。
 - 每次 submit_ttp_template 反馈中的 `<parsed_record>` 块都是当前候选对对应完整输入的
   真实解析结果。
   必须检查结果块数量是否与输入数量相等，并用每个块的 `input_index` 对照同索引原文。

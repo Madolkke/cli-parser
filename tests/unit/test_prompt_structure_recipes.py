@@ -273,3 +273,77 @@ def test_container_recipe_bare_heading_loses_tails_despite_child_results():
         ("schema.record_mismatch", "/items/*", "required", ("tail",)),
         ("schema.record_mismatch", "/", "required", ("total",)),
     }
+
+
+_ASSET_SOURCE = """Asset: cedar
+Result: ready ,
+Asset: birch
+Result: ?pending review ,
+Asset: elm
+Asset: fir
+Result:  ,
+Asset: ash
+Result: complete ,
+"""
+
+_ASSET_RECORD = {
+    "assets": [
+        {"name": "cedar", "result": "ready"},
+        {"name": "birch", "result": "?pending review"},
+        {"name": "elm"},
+        {"name": "fir", "result": ""},
+        {"name": "ash", "result": "complete"},
+    ]
+}
+
+
+def _asset_schema():
+    return obj(
+        {"assets": array(obj({"name": STRING, "result": STRING}, ["name"]))},
+        ["assets"],
+    )
+
+
+def test_asset_recipe_distinguishes_status_empty_slot_and_absent_field():
+    result = validate_ttp_template(
+        _prompt_template('<group name="assets*">'),
+        [_ASSET_SOURCE],
+        _asset_schema(),
+    )
+
+    assert result.valid, result.issues
+    assert result.issues == []
+    assert result.records == [_ASSET_RECORD]
+
+
+def test_asset_recipe_excluding_status_passes_schema_but_loses_source_value():
+    template = _prompt_template('<group name="assets*">')
+    ending = " }} ,"
+    assert template.count(ending) == 1
+    excluded_template = template.replace(ending, ' | exclude("?pending review") }} ,')
+    result = validate_ttp_template(excluded_template, [_ASSET_SOURCE], _asset_schema())
+
+    expected = deepcopy(_ASSET_RECORD)
+    del expected["assets"][1]["result"]
+    assert result.valid, result.issues
+    assert result.issues == []
+    assert result.records == [expected]
+    assert result.records != [_ASSET_RECORD]
+
+
+def test_asset_recipe_literal_value_prefix_passes_schema_but_cleans_source_value():
+    template = _prompt_template('<group name="assets*">')
+    prefix = "Result: {{ result"
+    assert template.count(prefix) == 1
+    cleaned_template = template.replace(prefix, "Result: ?{{ result")
+    source = "Asset: birch\nResult: ?pending review ,\n"
+    result = validate_ttp_template(cleaned_template, [source], _asset_schema())
+
+    assert result.valid, result.issues
+    assert result.issues == []
+    assert result.records == [
+        {"assets": [{"name": "birch", "result": "pending review"}]}
+    ]
+    assert result.records != [
+        {"assets": [{"name": "birch", "result": "?pending review"}]}
+    ]
