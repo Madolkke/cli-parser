@@ -1,6 +1,7 @@
 """Synthetic recipes only; no evaluation inputs or reference templates."""
 
 import re
+from copy import deepcopy
 
 from cli_parser_agent.ttp_generation.agent.prompt import TTP_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.validation.ttp import validate_ttp_template
@@ -167,3 +168,108 @@ def test_nested_repeated_section_titles_reset_optional_children():
             ]
         }
     ]
+
+
+_CONTAINER_SOURCE = """Inventory
+Item: alpha
+Features:
+  Feature: red
+  Feature: blue
+Tail: alpha done
+Item: beta
+Tail: beta done
+Item: gamma
+Features:
+  Feature: green
+Tail: gamma done
+Total: 3
+"""
+
+_CONTAINER_RECORD = {
+    "items": [
+        {
+            "name": "alpha",
+            "features": {
+                "capabilities": [{"capability": "red"}, {"capability": "blue"}]
+            },
+            "tail": "alpha done",
+        },
+        {"name": "beta", "tail": "beta done"},
+        {
+            "name": "gamma",
+            "features": {"capabilities": [{"capability": "green"}]},
+            "tail": "gamma done",
+        },
+    ],
+    "total": "3",
+}
+
+
+def _container_schema():
+    return obj(
+        {
+            "items": array(
+                obj(
+                    {
+                        "name": STRING,
+                        "tail": STRING,
+                        "features": obj(
+                            {
+                                "capabilities": array(
+                                    obj({"capability": STRING}, ["capability"])
+                                )
+                            },
+                            ["capabilities"],
+                        ),
+                    },
+                    ["name", "tail"],
+                )
+            ),
+            "total": STRING,
+        },
+        ["items", "total"],
+    )
+
+
+def test_container_recipe_keeps_optional_sections_parent_tails_and_root_total():
+    result = validate_ttp_template(
+        _prompt_template('<group name="features">'),
+        [_CONTAINER_SOURCE],
+        _container_schema(),
+    )
+
+    assert result.valid, result.issues
+    assert result.issues == []
+    assert result.records == [_CONTAINER_RECORD]
+
+
+def test_container_recipe_bare_heading_loses_tails_despite_child_results():
+    template = _prompt_template('<group name="features">')
+    heading = '{{ ignore("Features:") }}'
+    assert template.count(heading) == 1
+    result = validate_ttp_template(
+        template.replace(heading, "Features:"),
+        [_CONTAINER_SOURCE],
+        _container_schema(),
+    )
+
+    expected = deepcopy(_CONTAINER_RECORD)
+    del expected["items"][0]["tail"]
+    del expected["items"][2]["tail"]
+    del expected["total"]
+    assert not result.valid
+    assert result.records == [expected]
+    # Upstream deduplicates identical required issues at wildcard paths.
+    assert len(result.issues) == 2
+    assert {
+        (
+            issue.code,
+            issue.path,
+            issue.details["keyword"],
+            tuple(issue.details["missing_required"]),
+        )
+        for issue in result.issues
+    } == {
+        ("schema.record_mismatch", "/items/*", "required", ("tail",)),
+        ("schema.record_mismatch", "/", "required", ("total",)),
+    }

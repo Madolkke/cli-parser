@@ -59,7 +59,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和模型初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。两阶段模型在计数副本中排除 OpenAI formatter 未发送的 Thinking，其余沿用 AgentScope 近似算法；初始输入不含 Thinking，因此本次修正不改变初始拟合。原生摘要与工具结果截断仍启用，没有保护权威输入的 middleware，摘要仍可能丢失输入或冻结 Schema。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v35-coverage-and-structure-boundary-clarification-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v36-container-start-guidance-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。
 
 ### 2.4 可选 Laminar 调试 Trace
 
@@ -365,6 +365,11 @@ v34 增加本次 records 的 `record_coverage`：只统计 required 键存在及
 锚点、尾部标量、多行文本、嵌套章节与值边界示例，不使用评测模板或标准答案。
 v35 澄清多行示例的适用条件：同一实体内所有匹配缩进行均须属于目标文本。后续标签行
 和 XML 匹配行次序本身不会终止续行捕获；后面出现同缩进非目标内容时必须另设验证过的边界。
+v36 补充无自身字段、只含重复子组的容器起点示例：完整真实标题的 `ignore` 匹配启动
+容器，不增加辅助字段。裸标题不构成匹配起点，子列表有结果不证明父级尾字段保留，
+移动 XML 声明位置也不能替代起点；须复核有章节、无可选章节、再次有章节的重复实体
+及各层尾字段。示例原样提取后通过隔离解析与 Schema 校验，单因素反例验证尾字段缺失。
+本次仅更新 TTP 提示，Schema 提示正文、解析规则和反馈协议不变。
 
 v33 增加当前 TTP 参数分词的兼容性门禁与修正提示：变量字符串参数中的裸 `|` 在解析器
 实例化前拒绝，返回受控错误码、路径、可验证行列和固定修正动作；普通 pipeline 保持允许。

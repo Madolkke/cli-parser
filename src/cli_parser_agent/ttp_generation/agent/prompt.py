@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v35-coverage-and-structure-boundary-clarification-zh-cn"
+PROMPT_VERSION = "ttp-generator-v36-container-start-guidance-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -271,6 +271,28 @@ Errors: {{ errors | DIGIT }}
 ```
   验证前一个 Counters 没有 Packets、后一个却有 Packets，且下一个 Unit 仍各自拥有
   独立 counters。不同层级不能只靠同名属性行隐式拼接。
+- 容器没有自身字段、只包含重复子组时，也需要有效匹配起点；用完整真实标题的
+  ignore 匹配启动容器，不增加辅助字段。例如根对象包含 items 数组，每个 item
+  可含 features 容器及其 capabilities 数组，子组之后还有父级 tail、根层还有 total：
+```xml
+<group>
+{{ ignore("Inventory") }}
+<group name="items*">
+Item: {{ name | WORD }}
+<group name="features">
+{{ ignore("Features:") }}
+<group name="capabilities*">
+  Feature: {{ capability | WORD }}
+</group>
+</group>
+Tail: {{ tail | ORPHRASE }}
+</group>
+Total: {{ total | DIGIT }}
+</group>
+```
+  裸标题文本不构成匹配起点；不能仅因 capabilities 子列表产生结果，就认定父级 tail
+  和根层 total 被保留。移动尾字段在 XML 中的声明位置不能替代有效起点。复核连续
+  重复实体、缺少可选 features 章节的实体，以及再次出现章节的实体和各层尾字段。
 - 每次 submit_ttp_template 后，先检查所有输入的 record 数量、根结构、字段路径和
   字段来源。若所有输入结果已与冻结 Schema 和原文逐项对应，应调用 finish_generation；
   后续探索不得无证据地替换已有正确候选。复核表格时，排除表头和分隔线后数出预期
