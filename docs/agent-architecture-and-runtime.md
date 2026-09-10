@@ -141,7 +141,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v37-string-value-fidelity-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v38-multivalue-string-guidance-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -228,6 +228,13 @@ v36 补充无自身字段、只含重复子组的容器起点示例：完整真�
 移动 XML 声明位置也不能替代起点；须复核有章节、无可选章节、再次有章节的重复实体
 及各层尾字段。示例原样提取后通过隔离解析与 Schema 校验，单因素反例验证尾字段缺失。
 本次仅更新 TTP 提示，Schema 提示正文、解析规则和反馈协议不变。
+
+v38 明确冻结 string 的三类拼接约定：同一 token 的视觉折行使用空分隔符；
+一个标签下纵向列举的名称或选项使用单个空格按顺序连接；有行界语义的自由文本
+保留换行。对齐缩进和列表物理换行属于排版，词项内部空格、大小写和符号仍保留。
+合成列表正例覆盖重复实体、可选列表缺失和尾字段；双向反例验证误选分隔符仍可
+通过 Schema，因此字段覆盖和 accepted 不能替代表示方式复核。Schema 提示、
+反馈协议、解析和严格评分规则保持不变。
 
 ### 6. Agent 外最终验收
 

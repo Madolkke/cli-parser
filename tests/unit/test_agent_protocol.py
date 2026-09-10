@@ -212,7 +212,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-    assert PROMPT_VERSION == "ttp-generator-v37-string-value-fidelity-zh-cn"
+    assert PROMPT_VERSION == "ttp-generator-v38-multivalue-string-guidance-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT
@@ -312,7 +312,9 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     assert "只有最近一次提交的独立解析结果块会完整保留" in TTP_SYSTEM_PROMPT
     assert "不表示那次" in TTP_SYSTEM_PROMPT
     assert '优先使用 method="table"' in TTP_SYSTEM_PROMPT
-    assert "在同一个具名 group 中" in TTP_SYSTEM_PROMPT
+    assert "在同一个 group 中" in TTP_SYSTEM_PROMPT
+    assert "纵向多值列表当成自由文本" in TTP_SYSTEM_PROMPT
+    assert "提交后除了检查条目齐全和顺序，还要复核拼接分隔符" in TTP_SYSTEM_PROMPT
     assert "后续探索不得无证据地替换已有正确候选" in TTP_SYSTEM_PROMPT
     assert "已有完整共享模板时直接 submit_ttp_template" in TTP_SYSTEM_PROMPT
     assert "不要先用全文和相同" in TTP_SYSTEM_PROMPT

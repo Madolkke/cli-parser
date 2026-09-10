@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v37-string-value-fidelity-zh-cn"
+PROMPT_VERSION = "ttp-generator-v38-multivalue-string-guidance-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -235,11 +235,29 @@ Errors: {{ errors | DIGIT }}
   行；确认同一物理数据行上的字段边界和每列是否可能包含空格。若表头列数或顺序
   在输入间变化，优先使用 method="table"，让每个重复数据行从同一列结构产生一个
   record；不要为同名兄弟字段创建多个具名 group，也不要把列数变化当成多个根对象。
-- 一条业务记录跨多行时，先确认后续行没有自己的记录起点，再在同一个具名 group 中
-  使用 joinmatches 拼接同一字段；同一个 token 的视觉折行使用空分隔符，明确以
-  空格分隔的多值字段使用单个空格，原本多行的自由文本用 "\\n" 保留行界。
+- 一条业务记录跨多行时，先确认后续行没有自己的记录起点，再在同一个 group 中
+  使用 joinmatches 拼接同一字段。冻结字段为 string 时，按逻辑值区分三种情况：
+  同一个 token 因列宽折行，使用空分隔符；一个标签下逐行列举多个名称或选项，使用
+  单个空格按原顺序连接，物理换行和对齐缩进属于列表排版；正文各行本身具有行界
+  语义的自由文本，才用 "\\n" 保留行界。不能只因原文跨行或 Schema 写了 string，
+  就把纵向多值列表当成自由文本。多词条目内部的空格、大小写和符号仍须保留。
   不要把独立的下一条记录拼入上一条，也不要同时用 table 和 joinmatches
   掩盖尚未确认的行边界。
+- 例如同一 Bundle 的 Choices 标签下逐行列举名称，冻结 choices 为 string；只有
+  两个空格缩进的行属于该列表，State 和下一个 Bundle 都顶格时：
+```xml
+<group name="bundles*">
+Bundle: {{ name | WORD }}
+Choices: {{ choices | ORPHRASE | joinmatches(" ") }}
+  {{ choices | ORPHRASE | joinmatches(" ") }}
+State: {{ state | WORD }}
+</group>
+```
+  Choices 首行值为 `fast mode`、续行为 `?standby` 和 `local cache` 时，结果应为
+  "fast mode ?standby local cache"。纵向列举不要求在结果中保留换行；这不是清洗
+  业务值内的符号。若后续还有同缩进的其他字段，必须另设边界，不能直接套用。
+  提交后除了检查条目齐全和顺序，还要复核拼接分隔符；Schema 通过和字段覆盖完整
+  都不能证明分隔符符合上述规则。以下 notes 示例仅适用于有行界语义的正文。
 - 多行自由文本必须先找到可验证的续行边界，不能用无约束的整行捕获吞掉后续字段。
   例如同一个 Entry 内所有匹配到的缩进行都属于 notes，notes 行都有两个前导空格，
   Status 和下一个 Entry 都从行首开始时：
@@ -426,8 +444,8 @@ Result: {{ result | re("(?:[^ \\t,](?:[^,]*[^ \\t,])?)?") }} ,
 </group>
 ```
   续行匹配行只捕获真正会折行的字段，并用足够严格的 re 保证它不会匹配到下一条完整
-  数据行。joinmatches 的参数是拼接分隔符：同一 token 的折行拼接用 ""，空格分隔的
-  多值累积用 " "，原本多行的自由文本用 "\\n" 保留行界。
+  数据行。joinmatches 的分隔符按前述逻辑值分类选择：同一 token 的折行用 ""，
+  纵向多值列举用 " "，有行界语义的自由文本用 "\\n"；不要仅根据物理换行选择。
 - 源文本明显包含业务记录，而 record 是空对象或关键数组为空、仅含空容器或只捕获
   少数行时，必须视为漏解析，不能调用 finish_generation。发现字段错列、表头混入、过宽
   匹配或跨样例不一致时必须提交修正版。若 finish_generation 因内部没有有效候选而被
