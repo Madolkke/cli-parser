@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v39-verified-structure-boundaries-zh-cn"
+PROMPT_VERSION = "ttp-generator-v38-multivalue-string-guidance-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -224,7 +224,7 @@ Errors: {{ errors | DIGIT }}
   必须验证当前章节缺少该字段、后续章节却有同名标签的情况；字段值只能归属原文中的
   对应章节。`_end_` 会丢弃结束行的捕获值，不能直接附到最后一个必填字段来修复边界。
   此标题规则只用于明确的章节边界，不用于空行、纯分隔线或表格表头控制行。
-- 除明确的章节标题和下述混合根结构经验证的完整行锚点外，优先使用普通具名匹配行，
+- 除明确的章节标题和下述混合根结构的真实标题锚点外，优先使用普通具名匹配行，
   不用 `ignore` 构造空控制行。若 records 中出现空
   object，直接对照源文本字面布局判断它是否忠实；若单行表格模板返回 `[{}]` 或关键
   数组为空，首先检查是否把单 token
@@ -291,13 +291,10 @@ Errors: {{ errors | DIGIT }}
   独立 counters。不同层级不能只靠同名属性行隐式拼接。
 - 容器没有自身字段、只包含重复子组时，也需要有效匹配起点；用完整真实标题的
   ignore 匹配启动容器，不增加辅助字段。例如根对象包含 items 数组，每个 item
-  可含 features 容器及其 capabilities 数组，子组之后还有父级 tail、根层还有 total。
-  本例没有唯一根标题：每个 Item 前都有完整的 ========= 分隔行，且这类分隔行只在
-  实体之间出现，不出现在 Features 内部或 Item 的其他字段之间。根起点匹配完整
-  分隔行，Item 仍由自己的具名行启动；不把分隔行变成数组元素或辅助字段：
+  可含 features 容器及其 capabilities 数组，子组之后还有父级 tail、根层还有 total：
 ```xml
 <group>
-{{ ignore("=========") }}
+{{ ignore("Inventory") }}
 <group name="items*">
 Item: {{ name | WORD }}
 <group name="features">
@@ -314,9 +311,6 @@ Total: {{ total | DIGIT }}
   裸标题文本不构成匹配起点；不能仅因 capabilities 子列表产生结果，就认定父级 tail
   和根层 total 被保留。移动尾字段在 XML 中的声明位置不能替代有效起点。复核连续
   重复实体、缺少可选 features 章节的实体，以及再次出现章节的实体和各层尾字段。
-  不要因分隔行重复就断定会产生多个根；也不能因此把任意重复分隔行当成安全起点。
-  若同样的行会出现在嵌套章节内部，本例可能丢失父级 tail，必须另选起点并验证。
-  验证实验须保留完整起点行和父子关系，不能把多列表头简化成一个词后推断原文可用。
 - 每次 submit_ttp_template 后，先检查所有输入的 record 数量、根结构、字段路径和
   字段来源。若所有输入结果已与冻结 Schema 和原文逐项对应，应调用 finish_generation；
   后续探索不得无证据地替换已有正确候选。复核表格时，排除表头和分隔线后数出预期
@@ -374,10 +368,8 @@ Routing Tables: {{ routing_table_type | WORD }}
 </group>
 ```
 - 根 record 同时有重复子数组和尾部标量时，在同一个未命名最外层 group 内保留它们。
-  在子数组之前选取原文确实存在的完整行作为首条匹配行，启动外层 group；优先使用
-  能识别本块的真实标题。没有唯一标题时，可以验证完整表头行或上例限定位置的分隔
-  行，但只匹配表头的首词或截短装饰行不能代表匹配完整行。起点不捕获辅助字段，
-  不与子组争用同一业务起始行。尾部字段仍写在外层，不另建一个根 group。
+  在子数组之前选取原文确实存在、能唯一识别本块的真实标题作为首条匹配行，启动
+  外层 group；标题无需捕获为辅助字段。尾部字段仍写在外层，不另建一个根 group。
   例如原文先有 Inventory overview，再有 Module 行，最后可能有装饰行时：
 ```xml
 <group>

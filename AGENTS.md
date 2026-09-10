@@ -39,7 +39,6 @@
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。
 - 两阶段请求都省略 `tool_choice`，并固定 `parallel_tool_calls=False`。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
 - 两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
-- 混合根结构的生成指导要求验证完整早期输入行作为起点；重复分隔行仅在已验证的实体间位置适用，不能推广到嵌套章节内部。该指导不改变模板白名单或确定性验收。
 - 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；提示实现以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码。
 
 ## 确定性门禁

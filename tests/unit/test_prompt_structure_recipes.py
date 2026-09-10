@@ -237,16 +237,14 @@ def test_nested_repeated_section_titles_reset_optional_children():
     ]
 
 
-_CONTAINER_SOURCE = """=========
+_CONTAINER_SOURCE = """Inventory
 Item: alpha
 Features:
   Feature: red
   Feature: blue
 Tail: alpha done
-=========
 Item: beta
 Tail: beta done
-=========
 Item: gamma
 Features:
   Feature: green
@@ -416,37 +414,3 @@ def test_asset_recipe_literal_value_prefix_passes_schema_but_cleans_source_value
     assert result.records != [
         {"assets": [{"name": "birch", "result": "?pending review"}]}
     ]
-
-
-def test_container_recipe_full_root_line_cannot_be_shortened():
-    template = _prompt_template('<group name="features">')
-    result = validate_ttp_template(
-        template.replace('{{ ignore("=========") }}', '{{ ignore("===") }}'),
-        [_CONTAINER_SOURCE],
-        _container_schema(),
-    )
-    assert not result.valid
-    assert result.records == [{}]
-    assert len(result.issues) == 1
-    assert result.issues[0].path == "/"
-    assert result.issues[0].details == {
-        "keyword": "required",
-        "missing_required": ["items", "total"],
-    }
-
-
-def test_container_recipe_optional_tail_absence_does_not_leak_from_next_item():
-    schema = _container_schema()
-    schema["required"] = ["items"]
-    schema["properties"]["items"]["items"]["required"] = ["name"]
-    source = _CONTAINER_SOURCE.replace("Tail: beta done\n", "").replace(
-        "Total: 3\n", ""
-    )
-    expected = deepcopy(_CONTAINER_RECORD)
-    del expected["items"][1]["tail"]
-    del expected["total"]
-    result = validate_ttp_template(
-        _prompt_template('<group name="features">'), [source], schema
-    )
-    assert result.valid, result.issues
-    assert result.records == [expected]
