@@ -59,18 +59,19 @@ def test_root_anchor_keeps_children_and_trailing_scalar_with_value_boundary():
     ]
 
 
-def test_multiline_note_excludes_unindented_fields_and_preserves_newline():
-    schema = obj(
+def _entry_schema(required=("name", "state")):
+    return obj(
         {
             "entries": array(
-                obj(
-                    {"name": STRING, "notes": STRING, "state": STRING},
-                    ["name", "state"],
-                )
+                obj({"name": STRING, "notes": STRING, "state": STRING}, required)
             )
         },
         ["entries"],
     )
+
+
+def test_multiline_note_excludes_unindented_fields_and_preserves_newline():
+    schema = _entry_schema()
     inputs = [
         "Entry: e1\n  first line\n  second line\nStatus: up\n"
         "Entry: e2\nStatus: down\nEntry: e3\n  final note\nStatus: up\n"
@@ -147,10 +148,7 @@ def test_multivalue_newline_separator_passes_schema_but_changes_representation()
 def test_free_text_space_separator_passes_schema_but_loses_line_boundaries():
     template = _prompt_template("Entry: {{ name")
     assert template.count('joinmatches("\\n")') == 1
-    schema = obj(
-        {"entries": array(obj({"name": STRING, "notes": STRING, "state": STRING}))},
-        ["entries"],
-    )
+    schema = _entry_schema(required=())
     result = validate_ttp_template(
         template.replace('joinmatches("\\n")', 'joinmatches(" ")'),
         ["Entry: delta\n  first line\n  second line\nStatus: ready\n"],
@@ -168,17 +166,7 @@ def test_free_text_space_separator_passes_schema_but_loses_line_boundaries():
 
 
 def test_multiline_recipe_does_not_end_notes_at_later_status_pattern():
-    schema = obj(
-        {
-            "entries": array(
-                obj(
-                    {"name": STRING, "notes": STRING, "state": STRING},
-                    ["name", "state"],
-                )
-            )
-        },
-        ["entries"],
-    )
+    schema = _entry_schema()
     source = "Entry: e1\n  first line\nStatus: up\n  Counter detail: 7\n"
     result = validate_ttp_template(_prompt_template("Entry: {{ name"), [source], schema)
 
