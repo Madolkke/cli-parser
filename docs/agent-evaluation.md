@@ -11,7 +11,7 @@
 默认范围内对 TOML 中显式指定的单份 `default_input` 产生与同索引
 `expected.json` record 完全一致的 records。`--input-scope full` 才验证全部输入。
 
-## 两种运行模式
+## 三种运行模式
 
 ```powershell
 uv run python scripts/run_test_sets.py list --registry evals/datasets.toml
@@ -32,7 +32,7 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 严格通过条件是：生成成功、独立验收通过、records 数量和输入索引一致、records 与
 `expected.json` 深度全等。对象键顺序忽略；数组顺序、类型、缺失字段、`null` 和空字符串
 严格区分。报告保留 records exact、逐输入通过率、叶子 precision/recall/F1、TTP 轮次、
-提交次数、首个有效候选、终止原因、耗时和可选 Laminar Trace ID。Schema 质量不作为本入口
+提交次数、首个有效候选、终止原因、耗时和可选 Laminar Trace ID。Schema 质量不作为 TTP-only 模式
 的分数。
 
 ## 资产边界
@@ -41,7 +41,7 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 结果、Trace、历史 artifact、上游模板或模型生成答案。标准 TTP 模板是可审查的确定性基线，
 用于确认四件套自身闭环；TTP-only Agent 只按 Schema 和 expected records 评估。
 
-运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、脱敏配置及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。完整两阶段 Schema Agent 评测不属于本入口。
+运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、脱敏配置及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。Schema-only 只运行独立 Schema 阶段，完整两阶段评测不属于本入口。
 
 runner 版本 5 始终收集安全执行事实；`--trace-rounds` 仅控制逐事件明细落盘。漏斗区分有效候选、finish 调用、finish 成功及最终验收，缺少观测时省略数值指标而非填写零。候选轨迹只有可证实的时间顺序才判定有效提交发生于成功 finish 之前，否则报告未知。严格评分与遥测完整性独立，正确率 baseline 格式保持版本 1。配置记录模型重试次数、TLS 校验开关和 `extra_body` 是否配置，不包含凭据或请求扩展正文。
 
@@ -97,3 +97,37 @@ runner v5 TTP-only 目录，核对记录的输入选择、case/trial 数、模�
 历史 WebUI 运行仍可打开和重执行，页面不再展示配置指纹。此前 `.artifacts/` 中的
 launcher、审计脚本及报告作为历史材料保留；后续测试使用标准入口。Git 原生提交 ID
 和 `uv.lock` 依赖包校验仍保留，不参与 case 或 trial 评分。
+
+
+## Schema-only 基线
+
+`run --mode schema-only` 对每份所选输入调用独立生成器的公共 `propose_schema()`，不运行
+TTP Agent。默认输入选择、数据集 ID 并集、并发、重复次数、配置脱敏和退出时 Laminar flush
+与现有入口共用；只有通过离线 preflight 的 complete 数据集参与。人工 Schema、标准模板和
+expected 仅用于离线验收或评测侧比较，不进入被测请求。使用产品默认 Thinking 计数。
+
+```powershell
+uv run --env-file .env python scripts/run_test_sets.py run --registry evals/datasets.toml --mode schema-only --trials 4 --concurrency 4 --dataset-id 1 --trace-rounds
+```
+
+runner v5 的 Schema-only 文件显式保存 `mode=schema-only`；不生成 TTP 的 strict_pass、
+finish 或 records 分数。禁止与 `--baseline`、`--write-baseline` 或非零
+`--regression-tolerance` 组合。一次正常记录完成返回 0，提案失败仍计入所有 trial 的分母；
+配置/preflight 错误返回 2，人工取消返回 130，已完成的 trial 文件保留。
+
+成功提案在评测侧再次运行共用 Schema 校验。报告记录生成和复验状态、Schema 提交及轮次、
+首份提交验收、首次冻结时间、拒绝类别、终止原因、Token 和耗时。拒绝计数是该类别影响的
+已观察提交数，同一提交中的重复 issue 不放大计数；没有观测时用 null，观测完整性单独标记。
+推理 Token 若观察事件未提供则为 null，后续仅可从 Laminar 数值字段补充，不推算为零。
+
+结构描述仅保存属性数、叶子数、深度（根为 0，数组元素计一层）、类型分布、required 数和
+属性 description 覆盖率。在内存中按字段路径、节点类型、相对于父对象的 required 标志
+比较成功提案，忽略属性顺序、required 顺序、description；落盘只保存变体数量、主导比例和
+两两一致率。不足两份时一致率不可用。人工 Schema 的路径、类型、required 差异只保存数量，
+作为审阅线索，不是准确率；人工 Schema 可覆盖模型本次未见的其他输入。
+
+语义审阅必须在 Laminar UI 逐条只读进行。按命名、主要字段覆盖、逻辑值拆分、结构归属、
+类型及必填、业务边界和过度约束七项记录通过/有问题/证据不足/不适用，并给出
+可接受/需修正/无法判断。没有可见业务错误才记为可接受，明确错误记需修正，关键证据缺失
+记无法判断。描述缺失本身不构成错误。正文、Schema、description、enum 值、结构签名和内容
+哈希均不写入本地报告；只保存受控分类、字段路径、计数和 Trace/span 标识。

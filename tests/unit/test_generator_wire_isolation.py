@@ -549,3 +549,64 @@ async def test_schema_keyword_rejection_reaches_model_before_corrected_freeze(
     assert result.artifact.result_schema == valid
     assert result.artifact.records == [{"device_class": "router"}]
     assert len(requests) == 4
+
+
+async def test_schema_only_evaluation_wire_rejects_then_freezes(monkeypatch):
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "schema_eval_runner",
+        Path(__file__).resolve().parents[2] / "scripts/run_test_sets.py",
+    )
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    requests = []
+    valid = _result_schema()
+    invalid = deepcopy(valid)
+    invalid["properties"] = {"class": {"type": "string"}}
+    invalid["required"] = ["class"]
+
+    async def create_completion(**kwargs):
+        requests.append(deepcopy(kwargs))
+        assert len(requests) <= 2
+        assert [t["function"]["name"] for t in kwargs["tools"]] == [
+            SUBMIT_SCHEMA_TOOL_NAME
+        ]
+        assert "REFERENCE_ONLY" not in _request_text(kwargs)
+        if len(requests) == 2:
+            assert "schema.python_keyword_property_name" in _request_text(kwargs)
+        return _completion(
+            tool_name=SUBMIT_SCHEMA_TOOL_NAME,
+            tool_arguments={"result_schema": invalid if len(requests) == 1 else valid},
+            tool_call_id=f"schema-{len(requests)}",
+        )
+
+    monkeypatch.setattr(
+        openai,
+        "AsyncClient",
+        lambda **_: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_completion))
+        ),
+    )
+    reference = deepcopy(valid)
+    reference["description"] = "REFERENCE_ONLY"
+    document, schema = await runner._run_schema_trial(
+        SimpleNamespace(
+            inputs=[SimpleNamespace(text="Value: alpha")], schema=reference
+        ),
+        TtpGeneratorSettings(api_key="offline", model_name="offline"),
+        GenerationPolicy(),
+        runner._SchemaTracer(record_rows=True),
+    )
+    assert len(requests) == 2
+    assert schema == valid
+    assert document["generation_success"] is True
+    assert document["proposal_revalidated"] is True
+    facts = document["observations"]
+    assert facts["observed_submissions"] == 2
+    assert facts["submission_observation_complete"] is True
+    assert facts["first_submission_accepted"] is False
+    assert facts["first_frozen_seconds"] is not None
+    assert facts["rejection_counts"]["schema.python_keyword_property_name"] == 1
+    assert facts["input_tokens"] == 2

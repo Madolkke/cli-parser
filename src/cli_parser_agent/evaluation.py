@@ -2480,3 +2480,70 @@ def safe_trial_facts(
         "last_attempt_present": result.get("last_attempt") is not None,
         "metrics": dict(scores),
     }
+
+
+def schema_proposal_metrics(
+    schema: Mapping[str, Any], reference: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Return numeric description and reference differences, never schema content."""
+    actual = schema_signature(schema)
+    expected = schema_signature(reference)
+    properties = [
+        node for path, node in actual.items() if path != "/" and not path.endswith("/*")
+    ]
+    leaves = [node for node in actual.values() if node.type not in {"object", "array"}]
+    described = 0
+
+    def visit(node):
+        nonlocal described
+        for child in node.get("properties", {}).values():
+            described += int(
+                isinstance(child.get("description"), str)
+                and bool(child["description"].strip())
+            )
+            visit(child)
+        if "items" in node:
+            visit(node["items"])
+
+    visit(schema)
+    common = actual.keys() & expected.keys()
+    return {
+        "property_count": len(properties),
+        "leaf_count": len(leaves),
+        "max_depth": max(
+            ((0 if path == "/" else path.count("/")) for path in actual), default=0
+        ),
+        "type_counts": dict(Counter(node.type for node in actual.values())),
+        "required_count": sum(node.required for node in properties),
+        "description_count": described,
+        "description_coverage": described / len(properties) if properties else None,
+        "reference_path_missing_count": len(expected.keys() - actual.keys()),
+        "reference_path_added_count": len(actual.keys() - expected.keys()),
+        "reference_type_difference_count": sum(
+            actual[p].type != expected[p].type for p in common
+        ),
+        "reference_required_difference_count": sum(
+            actual[p].required != expected[p].required for p in common
+        ),
+    }
+
+
+def schema_repeat_consistency(schemas: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Compare successful proposals in memory; return no paths or signatures."""
+    signatures = [
+        tuple(sorted((p, n.type, n.required) for p, n in schema_signature(s).items()))
+        for s in schemas
+    ]
+    counts = Counter(signatures)
+    pairs = len(signatures) * (len(signatures) - 1) // 2
+    equal_pairs = sum(n * (n - 1) // 2 for n in counts.values())
+    return {
+        "valid_proposals": len(signatures),
+        "structure_variants": len(counts),
+        "dominant_structure_share": max(counts.values()) / len(signatures)
+        if signatures
+        else None,
+        "pair_count": pairs,
+        "equal_pair_count": equal_pairs,
+        "pairwise_consistency": equal_pairs / pairs if pairs else None,
+    }

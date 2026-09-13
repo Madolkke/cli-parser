@@ -9,6 +9,7 @@ import math
 import re
 import subprocess
 import sys
+import time
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from agentscope import event as agent_events  # noqa: E402
 
 from cli_parser_agent import (  # noqa: E402
     GenerationPolicy,
+    GenerationRequest,
     TemplateRequest,
     TtpGenerator,
     TtpGeneratorSettings,
@@ -38,6 +40,8 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     preflight_dataset_registry,
     project_execution_facts,
     safe_trial_facts,
+    schema_proposal_metrics,
+    schema_repeat_consistency,
     score_ttp_template_output,
     select_dataset_entries,
     wilson_interval,
@@ -118,7 +122,9 @@ def _build_parser() -> argparse.ArgumentParser:
         _add_input_scope_argument(command)
     run = commands.add_parser("run")
     run.add_argument("--registry", type=Path, required=True)
-    run.add_argument("--mode", choices=("baseline", "ttp-only"), required=True)
+    run.add_argument(
+        "--mode", choices=("baseline", "ttp-only", "schema-only"), required=True
+    )
     _add_selection_arguments(run)
     _add_input_scope_argument(run)
     run.add_argument("--trials", type=_trials, default=1)
@@ -614,6 +620,245 @@ async def _run_ttp(
     return 1 if status == "regressed" else 0
 
 
+class _SchemaTracer:
+    """Project observations immediately; never retain candidate bodies."""
+
+    def __init__(self, *, record_rows=False):
+        self.rounds = _RoundTracer(record_rows=record_rows)
+        self.submissions = []
+        self.input_tokens = []
+        self.output_tokens = []
+
+    def __call__(self, event):
+        self.rounds(event)
+        metadata = getattr(event, "metadata", None) or {}
+        if metadata.get("phase") != "schema":
+            return
+        if type(event) is agent_events.ModelCallEndEvent:
+            for field in ("input_tokens", "output_tokens"):
+                value = getattr(event, field, None)
+                if (
+                    isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                ):
+                    getattr(self, field).append(value)
+        if (
+            type(event) is not agent_events.CustomEvent
+            or event.name != "cli_parser.tool.result"
+        ):
+            return
+        value = event.value
+        if (
+            not isinstance(value, Mapping)
+            or value.get("tool_name") != "submit_result_schema"
+        ):
+            return
+        output = value.get("output")
+        if not isinstance(output, Mapping) or not isinstance(
+            output.get("accepted"), bool
+        ):
+            return
+        categories = set()
+        issues = output.get("issues", [])
+        for issue in issues if isinstance(issues, list) else []:
+            code = issue.get("code") if isinstance(issue, Mapping) else None
+            categories.add(
+                code
+                if isinstance(code, str)
+                and code
+                in {
+                    "schema.python_keyword_property_name",
+                    "schema.invalid_property_name",
+                    "schema.reserved_scalar_field_name",
+                }
+                else "schema.other_rejection"
+            )
+        elapsed = metadata.get("elapsed_seconds")
+        self.submissions.append(
+            {
+                "accepted": output["accepted"],
+                "categories": sorted(categories),
+                "elapsed_seconds": elapsed
+                if isinstance(elapsed, (int, float))
+                and not isinstance(elapsed, bool)
+                and math.isfinite(elapsed)
+                and elapsed >= 0
+                else None,
+            }
+        )
+
+    def facts(self):
+        return {
+            "observed_submissions": len(self.submissions),
+            "first_submission_accepted": self.submissions[0]["accepted"]
+            if self.submissions
+            else None,
+            "first_frozen_seconds": next(
+                (s["elapsed_seconds"] for s in self.submissions if s["accepted"]), None
+            ),
+            "rejection_counts": {
+                code: sum(
+                    not s["accepted"] and code in s["categories"]
+                    for s in self.submissions
+                )
+                if self.submissions
+                else None
+                for code in (
+                    "schema.python_keyword_property_name",
+                    "schema.invalid_property_name",
+                    "schema.reserved_scalar_field_name",
+                    "schema.other_rejection",
+                )
+            },
+            "input_tokens": sum(self.input_tokens) if self.input_tokens else None,
+            "output_tokens": sum(self.output_tokens) if self.output_tokens else None,
+            "usage_observations": len(self.input_tokens),
+            "reasoning_tokens": None,
+        }
+
+
+async def _run_schema_trial(case, settings, policy, tracer):
+    from cli_parser_agent.ttp_generation.validation import validate_result_schema
+
+    started = time.monotonic()
+    schema = None
+    document = {
+        "generation_success": False,
+        "proposal_revalidated": None,
+        "exception_type": None,
+    }
+    try:
+        result = await TtpGenerator(settings=settings, policy=policy).propose_schema(
+            GenerationRequest(command_outputs=[item.text for item in case.inputs]),
+            observer=tracer,
+        )
+        document["generation_success"] = result.status == "success"
+        metadata = result.metadata
+        document.update(
+            {
+                "trace_id": metadata.laminar_trace_id,
+                "schema_submissions": metadata.schema_submissions,
+                "schema_agent_rounds": metadata.schema_agent_rounds,
+                "termination_reason": metadata.termination_reason,
+            }
+        )
+        if result.proposal is not None:
+            issues = validate_result_schema(result.proposal.result_schema)
+            document["proposal_revalidated"] = not issues
+            if not issues:
+                schema = result.proposal.result_schema
+                document["structure"] = schema_proposal_metrics(schema, case.schema)
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        document["exception_type"] = (
+            type(error).__name__
+            if type(error)
+            in {ValueError, TypeError, RuntimeError, OSError, TimeoutError}
+            else "Exception"
+        )
+    document["elapsed_seconds"] = time.monotonic() - started
+    document["observations"] = tracer.facts()
+    document["observations"]["submission_observation_complete"] = (
+        document.get("schema_submissions") == len(tracer.submissions)
+        if "schema_submissions" in document
+        else None
+    )
+    return document, schema
+
+
+async def _run_schema(args, registry, reports):
+    cases = tuple(report.case for report in reports if report.case is not None)
+    settings, policy, artifact_root, configuration = _configuration()
+    run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
+    git_state = _git_state()
+    semaphore = asyncio.Semaphore(args.concurrency)
+
+    async def execute(case, index):
+        async with semaphore:
+            started_at = datetime.now(UTC).isoformat()
+            tracer = _SchemaTracer(record_rows=args.trace_rounds)
+            document, schema = await _run_schema_trial(case, settings, policy, tracer)
+            document.update(
+                {
+                    "runner_version": RUNNER_VERSION,
+                    "mode": "schema-only",
+                    "case_id": case.id,
+                    "case": _case_metadata(case, args.input_scope),
+                    "trial_index": index,
+                    "trial_id": f"{run_directory.name}/{case.id}/{index + 1}",
+                    "started_at": started_at,
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "git": git_state,
+                }
+            )
+            directory = run_directory / "datasets" / case.id / "trials"
+            directory.mkdir(parents=True, exist_ok=True)
+            _run_support.write_json(directory / f"trial-{index + 1:02d}.json", document)
+            if args.trace_rounds:
+                with (directory / f"trial-{index + 1:02d}.rounds.jsonl").open(
+                    "w", encoding="utf-8"
+                ) as handle:
+                    for row in tracer.rounds.rows:
+                        handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+            print(
+                f"{case.id} trial={index + 1}: "
+                f"schema_success={document['generation_success']}",
+                flush=True,
+            )
+            return document, schema
+
+    print(
+        f"running Schema-only evaluation: cases={len(cases)} "
+        f"trials={args.trials} concurrency={args.concurrency}",
+        flush=True,
+    )
+    results = await asyncio.gather(
+        *(execute(case, i) for case in cases for i in range(args.trials))
+    )
+    trials = [document for document, _ in results]
+    consistency = {
+        case.id: schema_repeat_consistency(
+            [
+                schema
+                for document, schema in results
+                if document["case_id"] == case.id and schema is not None
+            ]
+        )
+        for case in cases
+    }
+    summary = {
+        "runner_version": RUNNER_VERSION,
+        "mode": "schema-only",
+        "status": "recorded",
+        "captured_at": datetime.now(UTC).isoformat(),
+        "input_scope": args.input_scope,
+        "selected_inputs": _selection_metadata(reports),
+        "registry": {"path": str(registry.path)},
+        "git": git_state,
+        "configuration": configuration,
+        "case_count": len(cases),
+        "trial_count": len(trials),
+        "generation_success_count": sum(t["generation_success"] for t in trials),
+        "generation_success_rate": sum(t["generation_success"] for t in trials)
+        / len(trials)
+        if trials
+        else None,
+        "proposal_revalidated_count": sum(
+            t["proposal_revalidated"] is True for t in trials
+        ),
+        "proposal_revalidation_observations": sum(
+            t["proposal_revalidated"] is not None for t in trials
+        ),
+        "cases": consistency,
+        "trials": trials,
+    }
+    _run_support.write_json(run_directory / "summary.json", summary)
+    print(f"summary_json: {run_directory / 'summary.json'}", flush=True)
+    return 0
+
+
 class _RoundTracer:
     """Always collect execution facts; optionally retain allowlisted event rows."""
 
@@ -933,6 +1178,14 @@ def _list_cases(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
+        if getattr(args, "mode", None) == "schema-only" and (
+            args.baseline is not None
+            or args.write_baseline is not None
+            or args.regression_tolerance
+        ):
+            raise ScriptConfigurationError(
+                "schema-only does not support TTP baseline options"
+            )
         if args.command == "list":
             return _list_cases(args)
         registry = load_dataset_registry(args.registry)
@@ -977,6 +1230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
             print(f"preflight failed; artifacts: {run_directory}", file=sys.stderr)
             return 2
+        if args.mode == "schema-only":
+            return asyncio.run(_run_schema(args, registry, reports))
         return asyncio.run(_run_ttp(args, registry, reports))
     except (HarnessError, ScriptConfigurationError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -985,7 +1240,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("cancelled", file=sys.stderr)
         return 130
     finally:
-        if args.command == "run" and getattr(args, "mode", None) == "ttp-only":
+        if args.command == "run" and getattr(args, "mode", None) in {
+            "ttp-only",
+            "schema-only",
+        }:
             _run_support.flush_laminar()
 
 

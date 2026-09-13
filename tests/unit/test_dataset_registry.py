@@ -951,3 +951,266 @@ def test_preflight_rejects_python_keyword_schema_in_temporary_asset(tmp_path):
     report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
     assert report.status == "failed"
     assert report.errors == ("dataset demo.case.schema.json is not supported",)
+
+
+@pytest.mark.parametrize("option", ["--baseline", "--write-baseline"])
+def test_schema_mode_rejects_ttp_baselines_before_loading(option, tmp_path):
+    runner = _load_runner()
+    assert (
+        runner.main(
+            [
+                "run",
+                "--registry",
+                str(tmp_path / "missing.toml"),
+                "--mode",
+                "schema-only",
+                option,
+                str(tmp_path / "baseline.json"),
+            ]
+        )
+        == 2
+    )
+
+
+async def test_schema_only_runner_concurrency_and_safe_artifacts(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    from cli_parser_agent import GenerationPolicy, TtpGeneratorSettings
+
+    runner = _load_runner()
+    registry = load_dataset_registry(_write_dataset(tmp_path, complete=True))
+    reports = preflight_dataset_registry(registry)
+    root = tmp_path / "output"
+    monkeypatch.setattr(
+        runner,
+        "_configuration",
+        lambda: (
+            TtpGeneratorSettings(api_key="offline", model_name="offline"),
+            GenerationPolicy(),
+            root,
+            {},
+        ),
+    )
+    calls = []
+    active = 0
+    peak = 0
+    schema = {
+        "type": "object",
+        "properties": {
+            "model_value": {
+                "type": "string",
+                "description": "PRIVATE_DESCRIPTION",
+                "enum": ["PRIVATE_ENUM"],
+            }
+        },
+        "additionalProperties": False,
+    }
+
+    class Generator:
+        def __init__(self, **kwargs):
+            pass
+
+        async def propose_schema(self, request, *, observer):
+            nonlocal active, peak
+            calls.append(request.model_dump())
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0.02)
+            active -= 1
+            return SimpleNamespace(
+                status="success",
+                proposal=SimpleNamespace(result_schema=schema),
+                metadata=SimpleNamespace(
+                    laminar_trace_id=None,
+                    schema_submissions=1,
+                    schema_agent_rounds=1,
+                    termination_reason="success",
+                ),
+            )
+
+    monkeypatch.setattr(runner, "TtpGenerator", Generator)
+    args = runner._build_parser().parse_args(
+        [
+            "run",
+            "--registry",
+            str(registry.path),
+            "--mode",
+            "schema-only",
+            "--trials",
+            "4",
+            "--concurrency",
+            "2",
+            "--trace-rounds",
+        ]
+    )
+    assert await runner._run_schema(args, registry, reports) == 0
+    assert peak == 2
+    assert calls == [{"command_outputs": ["Value: alpha\n"]}] * 4
+    summary_path = next(root.glob("*/summary.json"))
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["generation_success_count"] == 4
+    assert summary["cases"]["demo.case"]["pairwise_consistency"] == 1
+    assert len({t["trial_id"] for t in summary["trials"]}) == 4
+    content = "".join(
+        p.read_text(encoding="utf-8") for p in root.rglob("*") if p.is_file()
+    )
+    for secret in [
+        "PRIVATE_DESCRIPTION",
+        "PRIVATE_ENUM",
+        "model_value",
+        "Value: alpha",
+        "strict_pass",
+        "signature",
+        "sha256",
+    ]:
+        assert secret not in content
+
+
+@pytest.mark.parametrize("failure", ["exception", "cancelled", "budget"])
+async def test_schema_trial_failures_and_cancellation(tmp_path, monkeypatch, failure):
+    import asyncio
+    from types import SimpleNamespace
+
+    runner = _load_runner()
+
+    class Generator:
+        def __init__(self, **kwargs):
+            pass
+
+        async def propose_schema(self, request, *, observer):
+            if failure == "cancelled":
+                raise asyncio.CancelledError()
+            if failure == "exception":
+                raise RuntimeError("SECRET exception")
+            return SimpleNamespace(
+                status="failed",
+                proposal=None,
+                metadata=SimpleNamespace(
+                    laminar_trace_id=None,
+                    schema_submissions=0,
+                    schema_agent_rounds=0,
+                    termination_reason="generation_timeout",
+                ),
+            )
+
+    monkeypatch.setattr(runner, "TtpGenerator", Generator)
+    case = SimpleNamespace(inputs=[SimpleNamespace(text="private input")])
+    if failure == "cancelled":
+        with pytest.raises(asyncio.CancelledError):
+            await runner._run_schema_trial(case, None, None, runner._SchemaTracer())
+        return
+    result, schema = await runner._run_schema_trial(
+        case, None, None, runner._SchemaTracer()
+    )
+    assert schema is None
+    assert result["generation_success"] is False
+    assert result["observations"]["input_tokens"] is None
+    assert "SECRET" not in json.dumps(result)
+    if failure == "budget":
+        assert result["termination_reason"] == "generation_timeout"
+
+
+def test_schema_structure_metrics_ignore_order_and_detect_contract_changes():
+    from copy import deepcopy
+
+    from cli_parser_agent.evaluation import (
+        schema_proposal_metrics,
+        schema_repeat_consistency,
+    )
+
+    base = {
+        "type": "object",
+        "properties": {"first": {"type": "string"}, "last": {"type": "string"}},
+        "required": ["first", "last"],
+        "additionalProperties": False,
+    }
+    reordered = deepcopy(base)
+    reordered["properties"] = dict(reversed(list(reordered["properties"].items())))
+    reordered["required"].reverse()
+    reordered["description"] = "different description"
+    assert schema_repeat_consistency([base, reordered])["structure_variants"] == 1
+    assert schema_repeat_consistency([])["pairwise_consistency"] is None
+    assert schema_repeat_consistency([base])["pairwise_consistency"] is None
+    for change in ["type", "required", "rename", "nested"]:
+        candidate = deepcopy(base)
+        if change == "type":
+            candidate["properties"]["first"]["type"] = "integer"
+        if change == "required":
+            candidate["required"] = ["first"]
+        if change == "rename":
+            candidate["properties"]["new"] = candidate["properties"].pop("first")
+        if change == "nested":
+            candidate["properties"]["first"] = {
+                "type": "array",
+                "items": {"type": "string"},
+            }
+        assert schema_repeat_consistency([base, candidate])["structure_variants"] == 2
+    metrics = schema_proposal_metrics(base, base)
+    assert metrics["property_count"] == 2
+    assert metrics["leaf_count"] == 2
+    assert metrics["reference_path_added_count"] == 0
+
+
+def test_schema_observer_projects_malformed_diagnostics_without_bodies():
+    from agentscope import event as events
+
+    tracer = _load_runner()._SchemaTracer()
+    assert tracer.facts()["rejection_counts"]["schema.other_rejection"] is None
+    for issues in [
+        None,
+        [{"code": ["SECRET"]}, {"code": "SECRET", "details": "SECRET"}],
+    ]:
+        tracer(
+            events.CustomEvent(
+                metadata={
+                    "phase": "schema",
+                    "sensitive": True,
+                    "elapsed_seconds": True,
+                },
+                name="cli_parser.tool.result",
+                value={
+                    "tool_name": "submit_result_schema",
+                    "input": {"SECRET": "SECRET"},
+                    "output": {"accepted": False, "issues": issues},
+                },
+            )
+        )
+    assert "SECRET" not in json.dumps(tracer.facts())
+    assert tracer.submissions[0]["elapsed_seconds"] is None
+    assert tracer.facts()["rejection_counts"]["schema.other_rejection"] == 1
+
+
+async def test_schema_proposal_is_independently_revalidated(monkeypatch):
+    from types import SimpleNamespace
+
+    runner = _load_runner()
+
+    class Generator:
+        def __init__(self, **kwargs):
+            pass
+
+        async def propose_schema(self, request, *, observer):
+            return SimpleNamespace(
+                status="success",
+                proposal=SimpleNamespace(result_schema={"type": "string"}),
+                metadata=SimpleNamespace(
+                    laminar_trace_id=None,
+                    schema_submissions=1,
+                    schema_agent_rounds=1,
+                    termination_reason="success",
+                ),
+            )
+
+    monkeypatch.setattr(runner, "TtpGenerator", Generator)
+    document, schema = await runner._run_schema_trial(
+        SimpleNamespace(inputs=[SimpleNamespace(text="Value: alpha")]),
+        None,
+        None,
+        runner._SchemaTracer(),
+    )
+    assert document["generation_success"] is True
+    assert document["proposal_revalidated"] is False
+    assert document["observations"]["submission_observation_complete"] is False
+    assert schema is None
+    assert "structure" not in document
