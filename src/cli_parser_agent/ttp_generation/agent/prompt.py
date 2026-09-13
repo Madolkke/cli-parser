@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v41-schema-record-scope-and-string-fidelity-zh-cn"
+PROMPT_VERSION = "ttp-generator-v40-python-identifier-field-names-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -45,12 +45,8 @@ SCHEMA_SYSTEM_PROMPT = """\
   也不要为了保险把所有字段都设为可选——两种偏差都会让结果契约与原文不一致。
   典型情形：固定宽表中同时存在完整数据行和缺列数据行时，只有每行都有的列才是
   required；重复详情块中只在部分块出现的属性一定是可选。
-- 区分输入样例、根 record 和业务实体：输入样例是同一命令不同执行的完整输出；
-  每份完整输出按输入索引恰好对应一个根 record；其中一行表格或一个详情块才是
-  业务实体。重复实体放入根内 array，实体内部的重复子项放入所属实体的 array；
-  共享标题和汇总留在根层。不要把单个实体的 Schema 当成整份输出的 Schema，
-  也不要增加按样例编号包装的容器。只有单个设备属性的平面输出仍可直接使用根字段，
-  不必增加 array；不要根据展示的实体数量固定数组长度。
+- 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
+  record；重复表格行或重复详情块应表示为根 record 内的 array。
 - 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
   应分别成为独立字段。字段名应表达该值的真实含义。
 - 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
@@ -62,74 +58,10 @@ SCHEMA_SYSTEM_PROMPT = """\
   array 条目的字段都能在每条对应记录中稳定得到，且没有遗漏明显的稳定业务列。
 - 保守推断类型。含义不明确的值保留为 string。只有不含前导零、单位、标识符或
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
-  才能使用 boolean。string 的类型与 description 必须遵守同一保真规则：字段标签、
-  值槽或所属可选行不存在时省略该键；值槽存在但为空时允许忠实使用空 string，
-  应捕获 ""；值槽存在非空状态或占位字符串时保留原字符串及值内符号。
-  可选字段不代表可以丢弃已出现的值；不得在 description 中要求将已有字符串改为
-  空 string、缺键或另一种状态。绝不能虚构空 string 或 null 代替不存在的字段。
-  只去除有结构证据的业务值外布局空白，不凭外观清洗值内符号；这不改变上述合法数字转换。
+  才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
+  可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
   整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
-  检查第二个实体及其子项的归属：一个根对象能否表达整份输入，而非仅第一个实体？
-  逐个检查 description 是否要求丢弃或改写原文已有的 string。
-
-整份输出与值槽的通用正例（字段仅适用于此合成结构，不是所有命令的固定字段）：
-```text
-Report: workshop
-Asset: cedar
-Result: ready,
-Check: lamp, State: lit
-Check: latch, State: shut
-Asset: birch
-Result: ~pending~,
-Asset: elm
-Result: ,
-Asset: ash
-Check: relay, State: idle
-Total: 4
-```
-这里 report_name 和 total 属于整份输出；四个实体进入 assets，检查项归属于各自
-实体的 checks。result 在 elm 中为 ""，在 ash 中缺键，在 birch 中保留 "~pending~"；
-checks 只在部分实体出现。逗号是值槽的结构边界。完整 Schema 为：
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["report_name", "assets", "total"],
-  "properties": {
-    "report_name": {"type": "string"},
-    "assets": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": ["name"],
-        "properties": {
-          "name": {"type": "string"},
-          "result": {
-            "type": "string",
-            "description": "保留原字符串及值内符号；空槽保留空字符串，缺行时省略。"
-          },
-          "checks": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["name", "state"],
-              "properties": {
-                "name": {"type": "string"},
-                "state": {"type": "string"}
-              }
-            }
-          }
-        }
-      }
-    },
-    "total": {"type": "integer"}
-  }
-}
-```
 """
 
 TTP_SYSTEM_PROMPT = """\

@@ -1,12 +1,9 @@
 """Independent synthetic contracts; no evaluation or trace-derived material."""
 
-import json
-import re
 from copy import deepcopy
 
 import pytest
 
-from cli_parser_agent.ttp_generation.agent.prompt import SCHEMA_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.validation.json_schema import (
     validate_records_against_schema,
     validate_result_schema,
@@ -69,22 +66,6 @@ def _expected():
         ],
         "total": 4,
     }
-
-
-def test_schema_prompt_example_matches_independent_contract_and_input():
-    blocks = re.findall(r"```json\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)
-    assert len(blocks) == 1
-    shown = json.loads(blocks[0])
-    assert shown == _contract()
-    assert validate_result_schema(shown) == []
-    assert validate_records_against_schema([_expected()], shown) == []
-    inputs = re.findall(r"```text\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)
-    assert inputs == [
-        "Report: workshop\nAsset: cedar\nResult: ready,\n"
-        "Check: lamp, State: lit\nCheck: latch, State: shut\n"
-        "Asset: birch\nResult: ~pending~,\nAsset: elm\nResult: ,\n"
-        "Asset: ash\nCheck: relay, State: idle\nTotal: 4"
-    ]
 
 
 def test_whole_output_contract_supports_different_entity_counts_without_mutation():

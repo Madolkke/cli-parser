@@ -368,7 +368,6 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     assert schema_requests[0]["tools"][0]["function"]["description"] == (
         SubmitResultSchemaTool.description
     )
-    assert "整份单次命令输出" in SubmitResultSchemaTool.description
     for request in ttp_requests:
         assert "Report: workshop" not in _request_text(request)
         assert "第二个实体及其子项" not in _request_text(request)
