@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v38-multivalue-string-guidance-zh-cn"
+PROMPT_VERSION = "ttp-generator-v40-python-identifier-field-names-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -30,8 +30,10 @@ SCHEMA_SYSTEM_PROMPT = """\
 - 使用 JSON Schema Draft 2020-12，根类型必须是 object。它描述单份命令输出的
   一个解析后 record，而不是服务响应或样例列表。
 - 每个 object 都要将 additionalProperties 设置为 false。字段名必须是英文 ASCII
-  snake_case。`as`、`class`、`for` 等 Python 关键字也是合法字段名，必须按业务语义
-  保留，不能因实现语言擅自改名。标量字段不能命名为 `ignore`，因为它是解析器的保留
+  snake_case，长度不超过 120 个字符，禁止 Python 保留关键字，如 `as`、`class`、
+  `for`。按业务含义改名，例如设备类别用 `device_class`，不要机械追加尾随下划线。
+  `match`、`case` 等软关键字及 `type`、`id`、`format` 等内置名称可以使用。
+  标量字段不能命名为 `ignore`，因为它是解析器的保留
   变量；确有该业务含义时改用明确且非保留的语义名称。名为 `ignore` 的 object 或
   array 容器不受此限制。只把在该 object 的每个实例中都存在的 properties 列入 required；
   只在部分实例中出现的明确业务字段保留为可选 property，也可以省略 required。
@@ -388,8 +390,7 @@ Module {{ name | WORD }}: {{ state | WORD }}
   导致只匹配到表头行而一条数据都捕获不到。数据行存在缩进时，在该行第一个字段
   前加 `{{ ignore("\\s*") }}` 吸收可变前导空白。加上它以后表头行也可能开始匹配，
   此时按上面的表头规则在真实字段 pipeline 上用 `exclude` 排除表头字面量。
-- 保持冻结字段名、嵌套结构和标量类型不变。Python 关键字字段（例如 `as`、
-  `class`、`for`）在 TTP 变量中仍按普通字段名原样使用，绝不能擅自重命名。
+- 保持合法冻结字段名、嵌套结构和标量类型不变，绝不能擅自重命名。
   TTP `DIGIT` 的结果是文本；冻结字段为 integer 时在 `DIGIT` 后添加 `to_int`，
   其他转换同理。
 - 冻结 Schema 中未列入 required 的字段，只有对应标签、值槽或所属可选行不存在时，

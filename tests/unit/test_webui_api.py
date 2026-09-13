@@ -459,10 +459,28 @@ def test_edited_schema_is_validated_before_it_is_saved(tmp_path: Path) -> None:
         ]
         assert client.get(f"/api/runs/{run_id}").json()["schema"] == CLOSED_SCHEMA
 
+        keyword_schema = {
+            "type": "object",
+            "properties": {"class": {"type": "string"}},
+            "additionalProperties": False,
+        }
+        rejected = client.put(
+            f"/api/runs/{run_id}/schema", json={"result_schema": keyword_schema}
+        ).json()
+        assert rejected["saved"] is False
+        assert rejected["issues"][0]["code"] == "schema.python_keyword_property_name"
+        assert client.get(f"/api/runs/{run_id}").json()["schema"] == CLOSED_SCHEMA
+        # Historical records can be read but cannot be rerun under the new contract.
+        client.app.state.store.write_schema(run_id, keyword_schema)
+        assert client.get(f"/api/runs/{run_id}").json()["schema"] == keyword_schema
+        assert client.post(f"/api/runs/{run_id}/rerun").status_code == 400
+        assert len(client.app.state.store.list_runs()) == 1
+        assert generator.calls == ["propose_schema"]
+
         renamed = {
             "type": "object",
-            "properties": {"as": {"type": "string"}},
-            "required": ["as"],
+            "properties": {"device_class": {"type": "string"}},
+            "required": ["device_class"],
             "additionalProperties": False,
         }
         accepted = client.put(

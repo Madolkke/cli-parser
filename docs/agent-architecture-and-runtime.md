@@ -127,7 +127,7 @@ workflow 随后创建 `ttp_schema_generator`。其系统提示只讨论细粒度
 
 ### 3. 提交、修正并冻结 Schema
 
-Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具检查元模式、安全子集、复杂度、封闭对象、字段名和 required 集合。符合 ASCII `snake_case` 的 Python 关键字字段合法；标量字段名 `ignore` 在这里以 `schema.reserved_scalar_field_name` 拒绝，object 和 array 容器名 `ignore` 仍允许。
+Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `$schema` 可以省略，显式提供时必须声明 Draft 2020-12，冻结和返回时不会自动补全。工具检查元模式、安全子集、复杂度、封闭对象、字段名和 required 集合。ASCII 小写 `snake_case` 属性名最长 120 字符，Python 保留关键字以 `schema.python_keyword_property_name` 拒绝；标量字段名 `ignore` 在这里以 `schema.reserved_scalar_field_name` 拒绝，object 和 array 容器名 `ignore` 仍允许。
 
 无效候选及其 issues 留在 Schema `AgentState` 中，模型可以继续修正。第一个通过校验的 Schema 被深拷贝并永久冻结；对应的 `ToolResultEndEvent` 是安全暂停点，runner 立即结束当前 reply。若 Schema 恰好耗尽了全局轮次，请求直接失败，不启动 TTP Agent。
 
@@ -141,7 +141,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v38-multivalue-string-guidance-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v40-python-identifier-field-names-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -325,3 +325,17 @@ TUI 为这次运行启用流式模型事件；所有界面操作都不改变脚�
 总时间限制是协作式超时，而不是进程强杀，但越界被两道机制约束。剩余时长不足以完成一次模型调用（阈值取 `model_timeout_seconds`）时不再开启新轮次，请求直接以 `generation_timeout` 结束；超时后的取消清理有固定宽限期并重复投递取消，宽限期内仍未停止的阶段任务会被放弃等待而不是无限期 await。这两点共同防止被取消的阶段在截止时间之后又发起一次完整模型请求。`model_timeout_seconds` 被设置到 connect/read/write/pool 各阶段，且 OpenAI SDK 自身重试被关闭，重试只由 AgentScope 记账一层。但它**不是单次调用的总时长上限**：httpx 没有 total-request 超时，`read` 只约束两次读取之间的间隔，因此持续流式返回的慢响应不会被它切断（实测 `120` 秒配置下出现过 `599` 秒的单次调用）。单次调用的实际兜底是上面两道预算机制，不是这个值。实际墙钟仍可能略超配置值；TTP worker 的单次解析超时仍会终止独立子进程。
 
 确定性验收保证安全、结构一致、全文执行和 Schema 一致，但不判断 Schema 合法的空字符串、空根对象或空容器是否符合业务语义；该判断由模型结合独立解析结果块与原文完成。转换后的标量来源追踪暂未启用，后续方案记录在 `docs/ROADMAP.md`。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
+
+
+## v40 字段命名兼容性收紧
+
+模型生成、外部注入、WebUI 保存和重执行以及评测加载共用 Schema 命名门禁。
+属性名必须匹配 `^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$` 且不超过 120 字符，
+再由 `keyword.iskeyword()` 排除 Python 保留关键字；不使用软关键字或内置函数名黑名单。
+所有属性类型及嵌套层级一致适用；description、enum 值和 required 的既有语义不变。
+标量 `ignore` 仍为 TTP 保留名称，object/array 容器 `ignore` 允许。
+WebUI 前端同步提示并由测试核对关键字集合，后端是最终权威，不自动重命名。
+旧记录可以查看；含关键字字段的旧 Schema 保存或重执行时被拒绝，调用方须按业务语义修改字段及对应消费者。
+外部注入返回既有 `invalid_injected_schema`，不启动模板 Agent；模型提交可根据错误修正后重新提交。
+底层 TTP 词法及 parse-only 仍允许其原生合法变量名，此能力不代表 Schema 接受该名称。
+v40 仅收紧字段命名并更新必要指导，不修改解析、预算、冻结协议或评测资产，不宣称语义质量已提升。

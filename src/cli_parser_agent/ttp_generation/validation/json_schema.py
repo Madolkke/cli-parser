@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import keyword as python_keyword
 import re
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -306,6 +307,15 @@ def _walk_schema(
                     ),
                 )
                 continue
+            if python_keyword.iskeyword(name):
+                issues.append(
+                    _issue(
+                        "schema.python_keyword_property_name",
+                        "property names must not be Python reserved keywords; "
+                        "rename the field using its business meaning",
+                        path=_pointer(child_schema_path),
+                    ),
+                )
             if (
                 name == "ignore"
                 and isinstance(child, Mapping)

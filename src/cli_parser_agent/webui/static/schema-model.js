@@ -6,6 +6,7 @@
   "use strict";
   const TYPES = ["string", "integer", "number", "boolean", "object", "array"];
   const FIELD_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
+  const PYTHON_KEYWORDS = new Set("False None True and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield".split(" "));
   const COMMON = ["title", "description", "enum"];
   const TYPE_KEYS = {
     string: ["minLength", "maxLength"],
@@ -72,7 +73,9 @@
       const names = Object.keys(node.properties || {});
       for (const name of names) {
         const childPath = path + "/properties/" + escapePointer(name);
-        if (!FIELD_RE.test(name) || name.length > 120) errors.push({ path: childPath, message: "字段名必须是 ASCII snake_case，且不超过 120 个字符" });
+        if (FIELD_RE.exec(name)?.[0] !== name || name.length > 120) errors.push({ path: childPath, message: "字段名必须是 ASCII snake_case，且不超过 120 个字符" });
+        else if (PYTHON_KEYWORDS.has(name)) errors.push({ path: childPath, message: "字段名不能是 Python 保留关键字，请按业务含义改名" });
+        if (name === "ignore" && ["string", "integer", "number", "boolean"].includes(node.properties[name]?.type)) errors.push({ path: childPath, message: "标量字段名 ignore 为 TTP 保留名称" });
         walk(node.properties[name], childPath, errors);
       }
       for (const name of node.required || []) if (!names.includes(name)) errors.push({ path: path + "/required", message: "必填字段 " + name + " 不存在" });
@@ -91,5 +94,5 @@
       return null;
     }).filter(Boolean);
   }
-  return { TYPES, FIELD_RE, TYPE_KEYS, createNode, changeType, renameProperty, clone, normalise, validate, validateInputs, utf8Bytes };
+  return { TYPES, FIELD_RE, PYTHON_KEYWORDS, TYPE_KEYS, createNode, changeType, renameProperty, clone, normalise, validate, validateInputs, utf8Bytes };
 });

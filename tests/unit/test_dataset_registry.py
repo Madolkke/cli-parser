@@ -933,3 +933,21 @@ def test_round_tracer_rejects_unknown_event_classes() -> None:
     assert tracer.rows[0]["event"] == "ReplyStartEvent"
     assert "name" not in tracer.rows[0]
     assert "secret" not in json.dumps(tracer.rows)
+
+
+def test_preflight_rejects_python_keyword_schema_in_temporary_asset(tmp_path):
+    registry_path = _write_dataset(tmp_path, complete=True)
+    schema_path = tmp_path / "test_sets/demo.case/schema.json"
+    schema_path.write_text(
+        json.dumps(
+            {
+                "type": "object",
+                "properties": {"class": {"type": "string"}},
+                "additionalProperties": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    report = preflight_dataset_registry(load_dataset_registry(registry_path))[0]
+    assert report.status == "failed"
+    assert report.errors == ("dataset demo.case.schema.json is not supported",)

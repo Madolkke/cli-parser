@@ -464,3 +464,88 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         assert marker not in second_ttp_wire_text
     for usage_number in _SCHEMA_USAGE_NUMBERS:
         assert str(usage_number) not in second_ttp_wire_text
+
+
+async def test_schema_keyword_rejection_reaches_model_before_corrected_freeze(
+    monkeypatch,
+):
+    requests = []
+    invalid = {
+        "type": "object",
+        "properties": {"class": {"type": "string"}},
+        "required": ["class"],
+        "additionalProperties": False,
+    }
+    valid = {
+        "type": "object",
+        "properties": {"device_class": {"type": "string"}},
+        "required": ["device_class"],
+        "additionalProperties": False,
+    }
+
+    async def create_completion(**kwargs):
+        requests.append(deepcopy(kwargs))
+        index = len(requests)
+        if index == 1:
+            return _completion(
+                tool_name=SUBMIT_SCHEMA_TOOL_NAME,
+                tool_arguments={"result_schema": invalid},
+                tool_call_id="bad-name",
+            )
+        if index == 2:
+            messages = [
+                m for m in kwargs["messages"] if m.get("tool_call_id") == "bad-name"
+            ]
+            assert len(messages) == 1
+            content = messages[0]["content"]
+            serialized = (
+                content
+                if isinstance(content, str)
+                else "".join(b["text"] for b in content)
+            )
+            feedback = json.loads(serialized)
+            assert feedback["accepted"] is False
+            assert feedback["frozen"] is False
+            assert (
+                feedback["issues"][0]["code"] == "schema.python_keyword_property_name"
+            )
+            assert feedback["issues"][0]["path"] == "/properties/class"
+            return _completion(
+                tool_name=SUBMIT_SCHEMA_TOOL_NAME,
+                tool_arguments={"result_schema": valid},
+                tool_call_id="good-name",
+            )
+        if index == 3:
+            assert kwargs["messages"][1]["content"][0]["text"] == build_ttp_task_prompt(
+                ["Class: router"], valid
+            )
+            assert "bad-name" not in _request_text(kwargs)
+            return _completion(
+                tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+                tool_arguments={"ttp_template": "Class: {{ device_class | WORD }}"},
+                tool_call_id="template",
+            )
+        assert index == 4
+        return _completion(
+            tool_name=FINISH_GENERATION_TOOL_NAME,
+            tool_arguments={},
+            tool_call_id="finish",
+        )
+
+    monkeypatch.setattr(
+        openai,
+        "AsyncClient",
+        lambda **_: SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create_completion))
+        ),
+    )
+    generator = TtpGenerator(
+        settings=TtpGeneratorSettings(api_key="offline", model_name="offline")
+    )
+    result = await generator.generate(
+        GenerationRequest(command_outputs=["Class: router"])
+    )
+    assert result.status == "success"
+    assert result.artifact.result_schema == valid
+    assert result.artifact.records == [{"device_class": "router"}]
+    assert len(requests) == 4

@@ -300,37 +300,23 @@ def test_python_keywords_are_valid_ttp_result_fields(field_name: str) -> None:
 
 
 def test_python_keyword_field_is_parsed_without_renaming() -> None:
-    result = validate_ttp_template(
-        "Value: {{ as | WORD }}",
-        ["Value: alpha"],
-        _line_schema("as"),
-    )
-
+    result = parse_ttp_template("Value: {{ as | WORD }}", "Value: alpha")
     assert result.valid
-    assert result.records == [{"as": "alpha"}]
+    assert result.result == [{"as": "alpha"}]
+    checked = validate_ttp_template(
+        "Value: {{ as | WORD }}", ["Value: alpha"], _line_schema("as")
+    )
+    assert not checked.valid
+    assert _codes(checked.issues) == {"schema.python_keyword_property_name"}
 
 
 def test_python_keyword_field_is_preserved_in_nested_group() -> None:
-    result = validate_ttp_template(
+    result = parse_ttp_template(
         '<group name="details">Value: {{ class | WORD }}</group>',
-        ["Value: router"],
-        {
-            "type": "object",
-            "properties": {
-                "details": {
-                    "type": "object",
-                    "properties": {"class": {"type": "string"}},
-                    "required": ["class"],
-                    "additionalProperties": False,
-                },
-            },
-            "required": ["details"],
-            "additionalProperties": False,
-        },
+        "Value: router",
     )
-
     assert result.valid
-    assert result.records == [{"details": {"class": "router"}}]
+    assert result.result == [{"details": {"class": "router"}}]
 
 
 @pytest.mark.parametrize(

@@ -427,7 +427,7 @@ def test_injected_schema_still_enforces_the_closed_subset() -> None:
     assert workflow.session.frozen_schema is None
 
 
-def test_injected_schema_accepts_python_keyword_field_name() -> None:
+def test_injected_schema_rejects_python_keyword_field_name() -> None:
     schema = {
         "type": "object",
         "properties": {"as": {"type": "string"}},
@@ -436,8 +436,12 @@ def test_injected_schema_accepts_python_keyword_field_name() -> None:
     }
     workflow = _template_only_workflow(schema)
 
-    assert workflow._freeze_injected_schema(workflow.injected_schema) is None
-    assert workflow.session.frozen_schema == schema
+    result = workflow._freeze_injected_schema(workflow.injected_schema)
+    assert result.metadata.termination_reason == "invalid_injected_schema"
+    assert [issue.code for issue in result.issues] == [
+        "schema.python_keyword_property_name"
+    ]
+    assert workflow.session.frozen_schema is None
 
 
 def test_injected_schema_rejects_scalar_ignore_before_ttp_phase() -> None:

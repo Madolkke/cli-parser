@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import json
 import keyword
+import shutil
+import subprocess
+from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
@@ -58,33 +62,114 @@ def test_required_uses_draft_2020_12_semantics(required: list[str] | None) -> No
 
 
 @pytest.mark.parametrize("field_name", _PYTHON_SNAKE_CASE_KEYWORDS)
-def test_python_keywords_are_valid_schema_field_names(field_name: str) -> None:
+@pytest.mark.parametrize(
+    "child",
+    [
+        {"type": "string"},
+        {"type": "integer"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {
+            "type": "object",
+            "properties": {"value": {"type": "string"}},
+            "additionalProperties": False,
+        },
+        {"type": "array", "items": {"type": "string"}},
+    ],
+)
+def test_python_keywords_are_rejected_for_all_property_types(field_name, child):
     schema = {
         "type": "object",
-        "properties": {field_name: {"type": "string"}},
+        "properties": {field_name: child},
         "required": [field_name],
         "additionalProperties": False,
     }
+    before = deepcopy(schema)
+    issues = validate_result_schema(schema)
+    assert [issue.code for issue in issues] == ["schema.python_keyword_property_name"]
+    assert issues[0].path == f"/properties/{field_name}"
+    assert issues[0].details == {}
+    assert schema == before
 
-    assert validate_result_schema(schema) == []
 
-
-def test_python_keyword_is_valid_in_nested_object() -> None:
+@pytest.mark.parametrize("in_array", [False, True])
+def test_python_keyword_is_rejected_in_nested_object(in_array):
+    child = {
+        "type": "object",
+        "properties": {"class": {"type": "string"}},
+        "additionalProperties": False,
+    }
     schema = {
         "type": "object",
         "properties": {
-            "details": {
-                "type": "object",
-                "properties": {"class": {"type": "string"}},
-                "required": ["class"],
-                "additionalProperties": False,
-            },
+            "details": {"type": "array", "items": child} if in_array else child
         },
-        "required": ["details"],
         "additionalProperties": False,
     }
+    issues = validate_result_schema(schema)
+    assert [issue.code for issue in issues] == ["schema.python_keyword_property_name"]
+    assert (
+        issues[0].path
+        == "/properties/details/" + ("items/" if in_array else "") + "properties/class"
+    )
 
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "match",
+        "case",
+        "type",
+        "id",
+        "format",
+        "device_class",
+        "ipv4_address",
+        "port1",
+        "a" * 120,
+    ],
+)
+def test_legal_names_and_keyword_values_are_preserved(name):
+    schema = {
+        "type": "object",
+        "properties": {
+            name: {"type": "string", "description": "class for as", "enum": ["class"]}
+        },
+        "additionalProperties": False,
+    }
+    before = deepcopy(schema)
     assert validate_result_schema(schema) == []
+    assert validate_records_against_schema([{name: "class"}], schema) == []
+    assert schema == before
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "字段",
+        "1_port",
+        "_port",
+        "port_",
+        "port__name",
+        "_",
+        "Port",
+        "port-name",
+        "port name",
+        "a" * 121,
+        "True",
+        "False",
+        "None",
+    ],
+)
+def test_invalid_name_format_takes_precedence(name):
+    schema = {
+        "type": "object",
+        "properties": {name: {"type": "string"}},
+        "additionalProperties": False,
+    }
+    assert _codes(validate_result_schema(schema)) == {
+        "schema.invalid_property_name",
+        "schema.no_leaf_fields",
+    }
 
 
 @pytest.mark.parametrize("scalar_type", ["string", "integer", "number", "boolean"])
@@ -490,3 +575,21 @@ def test_record_validation_fairly_deduplicates_repeated_array_errors() -> None:
     assert len(issues) == 2
     assert {issue.output_index for issue in issues} == {0, 1}
     assert {issue.path for issue in issues} == {"/rows/*"}
+
+
+def test_frontend_python_keyword_table_matches_runtime():
+    node = shutil.which("node")
+    assert node is not None, "Node.js is required for the WebUI naming contract check"
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            node,
+            "-e",
+            "console.log(JSON.stringify([...require('./src/cli_parser_agent/webui/static/schema-model.js').PYTHON_KEYWORDS]))",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert set(json.loads(result.stdout)) == set(keyword.kwlist)

@@ -59,7 +59,7 @@ TTP 提示要求每个模型回复最多调用一个工具，并在 `submit_ttp_
 
 Schema 与 TTP 阶段分别从完整输入采样，单阶段命令输出总预算均为 `240,000` 字符。每次采样按输入均分，超限样例在完整行边界保留约 `75%` 头部和 `25%` 尾部；随后按该阶段独立系统提示、任务消息、阶段工具 Schema 和模型初始 token 估算继续收紧，TTP 阶段还将冻结 Schema 计入拟合。两阶段模型在计数副本中排除 OpenAI formatter 未发送的 Thinking，其余沿用 AgentScope 近似算法；初始输入不含 Thinking，因此本次修正不改变初始拟合。原生摘要与工具结果截断仍启用，没有保护权威输入的 middleware，摘要仍可能丢失输入或冻结 Schema。若最小样本仍无法容纳，返回带阶段信息的结构化上下文预算失败。确定性验收始终读取全文。
 
-两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v38-multivalue-string-guidance-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并明确 Python 关键字是合法字段名；TTP 提示要求原样保留这类冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。 v38 将冻结 string 的拼接分为 token 折行（空分隔符）、纵向多值列举（单个空格）和有行界语义的自由文本（换行），保留词项内部空格及符号；该约定由模型实现和复核，不增加解析后清洗或评分宽松化。
+两份中文系统提示完全独立，当前统一产物版本为 `ttp-generator-v40-python-identifier-field-names-zh-cn`。Schema 提示不包含 TTP 协议，TTP 提示不包含 Schema 提交、evidence 或 assumptions 协议；TTP 提示要求每次回复恰好调用三个工具之一并说明普通文本会被整条丢弃，说明 `test_ttp_template` 的输入限制、原始结果语义和不保存候选的行为，要求固定宽度表格在提交前建立列映射和预期数据行数、在独立解析结果块返回后按 `input_index` 逐输入核对记录数、表头与字段列语义，再在继续提交与显式 finish 之间选择。提示明确不同结果块不得拼成一个业务数组，一个结果块内部的嵌套 array 仍是该 record 的业务数据。Schema 提示要求逐实例枚举判定 `required`，并禁止 Python 保留关键字，冲突时按业务含义改名；TTP 提示要求原样保留合法冻结字段名。提示明确 WORD 匹配一个非空白 token、PHRASE 必须匹配至少两个 token、ORPHRASE 才能兼容一个或多个 token，并要求单行表格返回空对象时首先排查单 token 字段误用 PHRASE。表头多捕获一条时，提示要求优先在真实字段 pipeline 上用 `exclude` 排除表头字面量，或在所有数据行确有稳定值时使用 `equal`，并禁止把 required 字段改成模板字面量或增加全 `ignore` 的表头控制 pattern。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确禁止用不能匹配空字符串的 WORD、PHRASE 或 ORPHRASE，要求使用由右侧分隔符约束的零长度 `re`，并禁止用 group 行控制修复行内空白。当冻结 Schema 根层同时有标量和 array 时，提示要求最外层 group 省略 name 并把 array 写成其嵌套子组，并说明未命名最外层 group 对应根 object 本身；提示还要求用行首 `{{ ignore("\s*") }}` 吸收可变前导空白，而不是靠改变 group 边界。真实语料 resume 不复用其他提示版本的结果。 v38 将冻结 string 的拼接分为 token 折行（空分隔符）、纵向多值列举（单个空格）和有行界语义的自由文本（换行），保留词项内部空格及符号；该约定由模型实现和复核，不增加解析后清洗或评分宽松化。
 
 TTP 提示通过通用 assets 示例区分 string 字段的值槽缺失、字面空值和状态字符串。
 可选性不允许省略原文已有状态值；业务值内的符号保留，只有明确位于值外的标签和
@@ -329,7 +329,7 @@ GenerationRequest
     └─ GenerationResult(success | failed)
 ```
 
-Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。Python 关键字（例如 `as`、`class`、`for`）符合字段名契约并保持原名；标量 property 名 `ignore` 因与 TTP 特殊变量冲突而以 `schema.reserved_scalar_field_name` 拒绝，object 或 array 容器名 `ignore` 仍允许。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。Schema 提交不再携带逐字段 Evidence。
+Schema 只允许项目支持的 Draft 2020-12 子集：ASCII `snake_case` 字段，所有对象设置 `additionalProperties: false`，最大 `64 KiB`、深度 `16`、属性总数 `256`。所有层级属性名必须是最长 120 字符的 ASCII 小写 snake_case，且不能是运行时 Python 保留关键字；关键字以 `schema.python_keyword_property_name` 拒绝，格式错误仍使用 `schema.invalid_property_name`。软关键字与内置名称允许；标量 property 名 `ignore` 因与 TTP 特殊变量冲突而以 `schema.reserved_scalar_field_name` 拒绝，object 或 array 容器名 `ignore` 仍允许。根 `$schema` 可以省略；若显式提供则必须是 Draft 2020-12，系统不自动补全。`properties` 遵循 Draft 标准默认为可选，只有列入 `required` 的属性必填；项目不增加 `required` 集合校验。标准 Schema 回验是 records 的唯一内容合法性门禁：原文字段槽存在但字面值为空时，字符串字段可以忠实输出 `""`；字段或可选行不存在时提示模型省略键。项目不额外拒绝空字符串、空根对象或空容器；`null` 仍不属于当前允许的 Schema 类型。禁止 `$ref`、组合分支、远程内容和未列入白名单的关键字。Schema 提交不再携带逐字段 Evidence。
 
 TTP 实例化前只允许嵌套 `<group>`、受控 group 属性、内置模式、行控制、纯字符串条件、受限正则/聚合和安全数值/IP 转换。普通裸变量头按 TTP 词法标识符解析，不借用 Python AST，因此 Python 关键字可作为结果字段；特殊变量只允许裸 `ignore`、`ignore(BUILTIN)` 或单个字符串正则参数的 `ignore("regex")`，并禁止后续 pipeline。显式拒绝 macro、vars、lookup、input、output、extend、returner、DNS/GeoIP、文件/URL、自定义函数，以及属性访问、下标、运算、推导式和嵌套调用。
 
@@ -382,3 +382,10 @@ v33 增加当前 TTP 参数分词的兼容性门禁与修正提示：变量字�
 v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文的字面字符；同字段的不同章节用独立 group 和唯一标题的 `ignore(pattern)` 起点，不使用独立 `_start_`。示例代码块按输入实际行首书写，测试原样提取且不清除缩进。完整候选优先直接提交，局部实验只用于明确疑问；模型先根据结构化校验事实定位错误，再对照逐输入匹配结果、冻结 Schema 和原文复核后调用 finish。`accepted=true` 只表示本次确定性校验通过，不证明业务内容完整或忠实；保留候选编号也不表示本次提交通过。测试工具反馈只描述独立实验文本，提交反馈才对应全部完整输入。
 
 章节标题只限定分组起点；字段完整的配方不能直接外推到可选尾行，须检查当前章节缺失而后续章节有同标签时的跨章节补捕。当前 TTP 的 `_end_` 会丢弃结束行捕获，因此提示不建议把它直接附到最后必填字段；确定性测试记录此边界，不增加安全语法。
+
+
+## v40 字段命名兼容性收紧
+
+模型生成、外部注入、WebUI 编辑与评测加载统一拒绝 Python 保留关键字属性名；
+不自动重命名，软关键字与内置名称仍允许。旧 Schema 可查看，但保存或重执行需符合新规则。
+详细规则、错误码和迁移责任见 [运行时说明](agent-architecture-and-runtime.md#v40-字段命名兼容性收紧)。

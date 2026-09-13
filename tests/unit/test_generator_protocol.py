@@ -667,18 +667,18 @@ async def test_workflow_accepts_literal_empty_string_allowed_by_schema(
     assert result.artifact.records == list(expected_records)
 
 
-async def test_full_workflow_preserves_python_keyword_field_name(
+async def test_full_workflow_preserves_soft_keyword_field_name(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     command_output = "Value: alpha"
     frozen_schema = {
         "type": "object",
-        "properties": {"as": {"type": "string"}},
-        "required": ["as"],
+        "properties": {"match": {"type": "string"}},
+        "required": ["match"],
         "additionalProperties": False,
     }
-    template = "Value: {{ as | WORD }}"
-    expected_records = ({"as": "alpha"},)
+    template = "Value: {{ match | WORD }}"
+    expected_records = ({"match": "alpha"},)
 
     async def run(
         agent: Any,
@@ -720,48 +720,29 @@ async def test_full_workflow_preserves_python_keyword_field_name(
     assert result.artifact.result_schema == frozen_schema
 
 
-async def test_template_only_workflow_preserves_python_keyword_field_name(
+async def test_template_only_rejects_python_keyword_before_starting_model(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    command_output = "Value: alpha"
-    frozen_schema = {
-        "type": "object",
-        "properties": {"as": {"type": "string"}},
-        "required": ["as"],
-        "additionalProperties": False,
-    }
-    template = "Value: {{ as | WORD }}"
-
-    async def run(
-        agent: Any,
-        message: Any,
-        session: Any,
-        phase: str,
-    ) -> AgentRunOutcome:
-        del agent, message
-        assert phase == "ttp"
-        session.record_agent_round(phase)
-        session.ttp_submissions = 1
-        session.validated_ttp_template = template
-        session.records = ({"as": "alpha"},)
-        session.first_ttp_valid = True
-        session.last_issues = ()
-        session.generation_finished = True
-        session.terminal_reason = "success"
-        return AgentRunOutcome(phase_completed=True)
+    async def run(*args: Any, **kwargs: Any) -> AgentRunOutcome:
+        raise AssertionError("No model may run for an invalid injected schema")
 
     _install_agent_stubs(monkeypatch, run)
-
     result = await _generator().generate_from_schema(
         TemplateRequest(
-            command_outputs=[command_output],
-            result_schema=frozen_schema,
-        ),
+            command_outputs=["Value: alpha"],
+            result_schema={
+                "type": "object",
+                "properties": {"as": {"type": "string"}},
+                "additionalProperties": False,
+            },
+        )
     )
-
-    assert result.status == "success"
-    assert result.artifact is not None
-    assert result.artifact.records == [{"as": "alpha"}]
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == "invalid_injected_schema"
+    assert result.metadata.ttp_agent_rounds == 0
+    assert [issue.code for issue in result.issues] == [
+        "schema.python_keyword_property_name"
+    ]
 
 
 async def test_template_only_rejects_scalar_ignore_before_starting_ttp(
