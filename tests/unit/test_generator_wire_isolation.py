@@ -27,6 +27,8 @@ from cli_parser_agent.ttp_generation.agent import (
     build_ttp_task_prompt,
 )
 from cli_parser_agent.ttp_generation.agent import runner as runner_module
+from cli_parser_agent.ttp_generation.agent.prompt import SCHEMA_SYSTEM_PROMPT
+from cli_parser_agent.ttp_generation.agent.tools import SubmitResultSchemaTool
 from cli_parser_agent.ttp_generation.validation import TtpParseResult
 
 _SCHEMA_FREE_TEXT_MARKER = "schema-free-text-only-7c134b"
@@ -359,6 +361,17 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     assert len(schema_requests) == 3
     assert len(ttp_requests) == 4
     assert schema_validation_calls == 3
+
+    assert schema_requests[0]["messages"][0]["content"] == [
+        {"type": "text", "text": SCHEMA_SYSTEM_PROMPT}
+    ]
+    assert schema_requests[0]["tools"][0]["function"]["description"] == (
+        SubmitResultSchemaTool.description
+    )
+    assert "整份单次命令输出" in SubmitResultSchemaTool.description
+    for request in ttp_requests:
+        assert "Report: workshop" not in _request_text(request)
+        assert "第二个实体及其子项" not in _request_text(request)
 
     assert _SCHEMA_RETRY_MARKER in _request_text(schema_requests[1])
     final_schema_request = _request_text(schema_requests[2])
