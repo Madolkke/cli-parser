@@ -1,0 +1,4996 @@
+{
+  "run_id": "20260913T153031.599662Z",
+  "mode": "schema-only",
+  "runner_version": 5,
+  "git": {
+    "revision": "6f6d52e23528452c949e3a48e7df42f16919bd8b",
+    "dirty": true
+  },
+  "configuration": {
+    "model": {
+      "name": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "stream": false,
+      "temperature": 0.0,
+      "parallel_tool_calls": false,
+      "max_tokens": 8192,
+      "context_size": 128000,
+      "model_timeout_seconds": 120.0,
+      "model_max_retries": 2,
+      "verify_tls": true,
+      "thinking_enable": null,
+      "reasoning_effort": null,
+      "extra_body_configured": false
+    },
+    "policy": {
+      "total_timeout_seconds": 1800.0,
+      "max_agent_rounds": 26,
+      "max_ttp_submissions": 18,
+      "max_ttp_test_calls": 3,
+      "max_schema_no_tool_retries": 3,
+      "max_ttp_no_tool_retries": 3,
+      "ttp_validation_timeout_seconds": 20.0,
+      "model_input_char_budget": 240000,
+      "max_ttp_template_bytes": 65536,
+      "max_ttp_group_depth": 16,
+      "max_ttp_regex_chars": 2048,
+      "max_ttp_argument_chars": 4096,
+      "max_parse_result_bytes": 8388608,
+      "max_schema_bytes": 65536,
+      "max_schema_depth": 16,
+      "max_schema_properties": 256
+    },
+    "prompt": {
+      "version": "ttp-generator-v40-python-identifier-field-names-zh-cn"
+    }
+  },
+  "selected_inputs": [
+    {
+      "dataset": "broadcom_icos.show_version",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "fortinet.get_system_status",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_s300.show_lldp_neighbors",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "paloalto_panos.show_interface_hardware",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "hp_procurve.show_interfaces_status",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "oneaccess_oneos.show_voice_mos",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_nxos.show_interface_status",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_ios.show_sdwan_control_connections",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "mikrotik_routeros.system_resource_print",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "arista_eos.show_version",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "oneaccess_oneos.show_tacacs",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_ios.show_ip_ospf_database_router",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_nxos.show_port-channel_summary",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    },
+    {
+      "dataset": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    }
+  ],
+  "case_count": 14,
+  "trial_count": 56,
+  "generation_success_count": 56,
+  "proposal_revalidated_count": 56,
+  "first_submission_pass_count": 49,
+  "semantic_review_counts": {
+    "acceptable": 49,
+    "needs_revision": 7
+  },
+  "consistency": {
+    "broadcom_icos.show_version": {
+      "valid_proposals": 4,
+      "structure_variants": 3,
+      "dominant_structure_share": 0.5,
+      "pair_count": 6,
+      "equal_pair_count": 1,
+      "pairwise_consistency": 0.16666666666666666
+    },
+    "fortinet.get_system_status": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "cisco_s300.show_lldp_neighbors": {
+      "valid_proposals": 4,
+      "structure_variants": 3,
+      "dominant_structure_share": 0.5,
+      "pair_count": 6,
+      "equal_pair_count": 1,
+      "pairwise_consistency": 0.16666666666666666
+    },
+    "paloalto_panos.show_interface_hardware": {
+      "valid_proposals": 4,
+      "structure_variants": 3,
+      "dominant_structure_share": 0.5,
+      "pair_count": 6,
+      "equal_pair_count": 1,
+      "pairwise_consistency": 0.16666666666666666
+    },
+    "hp_procurve.show_interfaces_status": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "oneaccess_oneos.show_voice_mos": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "cisco_nxos.show_interface_status": {
+      "valid_proposals": 4,
+      "structure_variants": 1,
+      "dominant_structure_share": 1.0,
+      "pair_count": 6,
+      "equal_pair_count": 6,
+      "pairwise_consistency": 1.0
+    },
+    "cisco_ios.show_sdwan_control_connections": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "mikrotik_routeros.system_resource_print": {
+      "valid_proposals": 4,
+      "structure_variants": 2,
+      "dominant_structure_share": 0.75,
+      "pair_count": 6,
+      "equal_pair_count": 3,
+      "pairwise_consistency": 0.5
+    },
+    "arista_eos.show_version": {
+      "valid_proposals": 4,
+      "structure_variants": 3,
+      "dominant_structure_share": 0.5,
+      "pair_count": 6,
+      "equal_pair_count": 1,
+      "pairwise_consistency": 0.16666666666666666
+    },
+    "oneaccess_oneos.show_tacacs": {
+      "valid_proposals": 4,
+      "structure_variants": 2,
+      "dominant_structure_share": 0.75,
+      "pair_count": 6,
+      "equal_pair_count": 3,
+      "pairwise_consistency": 0.5
+    },
+    "cisco_ios.show_ip_ospf_database_router": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "cisco_nxos.show_port-channel_summary": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    },
+    "cisco_asa.show_vpn-sessiondb_anyconnect": {
+      "valid_proposals": 4,
+      "structure_variants": 4,
+      "dominant_structure_share": 0.25,
+      "pair_count": 6,
+      "equal_pair_count": 0,
+      "pairwise_consistency": 0.0
+    }
+  },
+  "trials": [
+    {
+      "case_id": "broadcom_icos.show_version",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/broadcom_icos.show_version/1",
+      "started_at": "2026-09-13T15:30:31.732170+00:00",
+      "finished_at": "2026-09-13T15:30:43.547149+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 11.81300000000192,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.093999999997322,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1610,
+        "output_tokens": 1450,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 12,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 1,
+          "string": 12,
+          "array": 1
+        },
+        "required_count": 12,
+        "description_count": 12,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "43eb37d5-6bdc-6094-2831-d8b1285e1c1e",
+      "review": {
+        "case_id": "broadcom_icos.show_version",
+        "trial_index": 1,
+        "trace_id": "43eb37d5-6bdc-6094-2831-d8b1285e1c1e",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-f999-d307e0bf9449"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-f999-d307e0bf9449"
+      },
+      "laminar": {
+        "trace_id": "43eb37d5-6bdc-6094-2831-d8b1285e1c1e",
+        "llm_calls": 1,
+        "input_tokens": 1610,
+        "output_tokens": 1450,
+        "reasoning_tokens": 955,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0022229999999999997,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/broadcom_icos.show_version/2",
+      "started_at": "2026-09-13T15:30:33.413918+00:00",
+      "finished_at": "2026-09-13T15:30:43.529657+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 10.10899999999674,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.06199999999808,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1610,
+        "output_tokens": 1374,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 12,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 1,
+          "string": 12,
+          "array": 1
+        },
+        "required_count": 12,
+        "description_count": 12,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "d16d060b-a62a-b74a-943d-64a676bb84e2",
+      "review": {
+        "case_id": "broadcom_icos.show_version",
+        "trial_index": 2,
+        "trace_id": "d16d060b-a62a-b74a-943d-64a676bb84e2",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-0494-15cb5eb0f133"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-0494-15cb5eb0f133"
+      },
+      "laminar": {
+        "trace_id": "d16d060b-a62a-b74a-943d-64a676bb84e2",
+        "llm_calls": 1,
+        "input_tokens": 1610,
+        "output_tokens": 1374,
+        "reasoning_tokens": 891,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0021318,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/broadcom_icos.show_version/3",
+      "started_at": "2026-09-13T15:30:33.422125+00:00",
+      "finished_at": "2026-09-13T15:30:42.542970+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 9.125,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 9.093999999997322,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1610,
+        "output_tokens": 1331,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 12,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 1,
+          "integer": 1,
+          "string": 11,
+          "array": 1
+        },
+        "required_count": 12,
+        "description_count": 12,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "641151ef-a805-de91-948b-c88609a270b3",
+      "review": {
+        "case_id": "broadcom_icos.show_version",
+        "trial_index": 3,
+        "trace_id": "641151ef-a805-de91-948b-c88609a270b3",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-799e-510ff6d9c034"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-799e-510ff6d9c034"
+      },
+      "laminar": {
+        "trace_id": "641151ef-a805-de91-948b-c88609a270b3",
+        "llm_calls": 1,
+        "input_tokens": 1610,
+        "output_tokens": 1331,
+        "reasoning_tokens": 870,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0020802,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/broadcom_icos.show_version/4",
+      "started_at": "2026-09-13T15:30:33.428885+00:00",
+      "finished_at": "2026-09-13T15:30:43.589644+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 10.156999999999243,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.125,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1610,
+        "output_tokens": 1567,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 12,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 1,
+          "integer": 1,
+          "string": 11,
+          "array": 1
+        },
+        "required_count": 12,
+        "description_count": 12,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "6ab31093-99fc-78d8-b186-67b29de18665",
+      "review": {
+        "case_id": "broadcom_icos.show_version",
+        "trial_index": 4,
+        "trace_id": "6ab31093-99fc-78d8-b186-67b29de18665",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-28b0-b6946526892c"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-28b0-b6946526892c"
+      },
+      "laminar": {
+        "trace_id": "6ab31093-99fc-78d8-b186-67b29de18665",
+        "llm_calls": 1,
+        "input_tokens": 1610,
+        "output_tokens": 1567,
+        "reasoning_tokens": 1099,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0023634,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/fortinet.get_system_status/1",
+      "started_at": "2026-09-13T15:30:42.544262+00:00",
+      "finished_at": "2026-09-13T15:30:58.441179+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 15.905999999995402,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 15.875,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 5824,
+        "output_tokens": 2887,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 29,
+        "leaf_count": 28,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 2,
+          "string": 25,
+          "integer": 3
+        },
+        "required_count": 29,
+        "description_count": 1,
+        "description_coverage": 0.034482758620689655,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "91dda327-8389-d306-7dc4-fdf91691f326",
+      "review": {
+        "case_id": "fortinet.get_system_status",
+        "trial_index": 1,
+        "trace_id": "91dda327-8389-d306-7dc4-fdf91691f326",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "issue",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "compound_values_unsplit"
+        ],
+        "paths": [
+          "/version",
+          "/virus_db"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-6b3b-87c570d03b00",
+          "00000000-0000-0000-6f91-b240d9478980"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-6f91-b240d9478980"
+      },
+      "laminar": {
+        "trace_id": "91dda327-8389-d306-7dc4-fdf91691f326",
+        "llm_calls": 2,
+        "input_tokens": 5824,
+        "output_tokens": 2887,
+        "reasoning_tokens": 1617,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.003743952,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/$id"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/fortinet.get_system_status/2",
+      "started_at": "2026-09-13T15:30:43.554882+00:00",
+      "finished_at": "2026-09-13T15:31:15.652195+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 32.09399999999732,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 32.062999999994645,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1743,
+        "output_tokens": 7192,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 50,
+        "leaf_count": 40,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 11,
+          "string": 37,
+          "integer": 3
+        },
+        "required_count": 50,
+        "description_count": 1,
+        "description_coverage": 0.02,
+        "reference_path_missing_count": 8,
+        "reference_path_added_count": 26,
+        "reference_type_difference_count": 8,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "0d0f989a-c708-24e0-12c5-bd6ff969bd8e",
+      "review": {
+        "case_id": "fortinet.get_system_status",
+        "trial_index": 2,
+        "trace_id": "0d0f989a-c708-24e0-12c5-bd6ff969bd8e",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-b6fc-6aca2735bf00"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-b6fc-6aca2735bf00"
+      },
+      "laminar": {
+        "trace_id": "0d0f989a-c708-24e0-12c5-bd6ff969bd8e",
+        "llm_calls": 1,
+        "input_tokens": 1743,
+        "output_tokens": 7192,
+        "reasoning_tokens": 6106,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.008814612,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/fortinet.get_system_status/3",
+      "started_at": "2026-09-13T15:30:43.563064+00:00",
+      "finished_at": "2026-09-13T15:31:07.746604+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 24.187999999994645,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 24.156999999999243,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1743,
+        "output_tokens": 5302,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 30,
+        "leaf_count": 27,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 4,
+          "string": 24,
+          "array": 1,
+          "integer": 3
+        },
+        "required_count": 30,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 15,
+        "reference_path_added_count": 14,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "cf17c065-1e6a-30cd-832d-17929d7df730",
+      "review": {
+        "case_id": "fortinet.get_system_status",
+        "trial_index": 3,
+        "trace_id": "cf17c065-1e6a-30cd-832d-17929d7df730",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-8b4e-9c7d39f8e051"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-8b4e-9c7d39f8e051"
+      },
+      "laminar": {
+        "trace_id": "cf17c065-1e6a-30cd-832d-17929d7df730",
+        "llm_calls": 1,
+        "input_tokens": 1743,
+        "output_tokens": 5302,
+        "reasoning_tokens": 4666,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.006546612,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/fortinet.get_system_status/4",
+      "started_at": "2026-09-13T15:30:43.600973+00:00",
+      "finished_at": "2026-09-13T15:31:00.333190+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 16.735000000000582,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 16.70300000000134,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1743,
+        "output_tokens": 3490,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 27,
+        "leaf_count": 27,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 26,
+          "integer": 1
+        },
+        "required_count": 27,
+        "description_count": 27,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 5,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "7eb59d8c-09c6-71f3-b9d1-fe6870edafd6",
+      "review": {
+        "case_id": "fortinet.get_system_status",
+        "trial_index": 4,
+        "trace_id": "7eb59d8c-09c6-71f3-b9d1-fe6870edafd6",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "issue",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "compound_values_unsplit"
+        ],
+        "paths": [
+          "/version",
+          "/virus_db",
+          "/virtual_domains_status"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-d4ec-8b48a497d9c7"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-d4ec-8b48a497d9c7"
+      },
+      "laminar": {
+        "trace_id": "7eb59d8c-09c6-71f3-b9d1-fe6870edafd6",
+        "llm_calls": 1,
+        "input_tokens": 1743,
+        "output_tokens": 3490,
+        "reasoning_tokens": 2542,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.004372212,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_s300.show_lldp_neighbors/1",
+      "started_at": "2026-09-13T15:30:58.442919+00:00",
+      "finished_at": "2026-09-13T15:31:04.929793+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 6.484000000004016,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 6.453000000001339,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1543,
+        "output_tokens": 1188,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 7,
+        "leaf_count": 6,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 5,
+          "integer": 1
+        },
+        "required_count": 7,
+        "description_count": 7,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "75ff8a95-87aa-733d-c86a-1fa825d97d9f",
+      "review": {
+        "case_id": "cisco_s300.show_lldp_neighbors",
+        "trial_index": 1,
+        "trace_id": "75ff8a95-87aa-733d-c86a-1fa825d97d9f",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-4bba-ecc9e2baf9a0"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-4bba-ecc9e2baf9a0"
+      },
+      "laminar": {
+        "trace_id": "75ff8a95-87aa-733d-c86a-1fa825d97d9f",
+        "llm_calls": 1,
+        "input_tokens": 1543,
+        "output_tokens": 1188,
+        "reasoning_tokens": 830,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001549812,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_s300.show_lldp_neighbors/2",
+      "started_at": "2026-09-13T15:31:00.335981+00:00",
+      "finished_at": "2026-09-13T15:31:17.542443+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 17.20300000000134,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 16.2809999999954,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1543,
+        "output_tokens": 3259,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 10,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 3,
+          "array": 2,
+          "string": 7,
+          "integer": 1
+        },
+        "required_count": 10,
+        "description_count": 10,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 5,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "24650285-b1c9-c8f9-30a5-f711371cfcc1",
+      "review": {
+        "case_id": "cisco_s300.show_lldp_neighbors",
+        "trial_index": 2,
+        "trace_id": "24650285-b1c9-c8f9-30a5-f711371cfcc1",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-edd9-ea37c7170850"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-edd9-ea37c7170850"
+      },
+      "laminar": {
+        "trace_id": "24650285-b1c9-c8f9-30a5-f711371cfcc1",
+        "llm_calls": 1,
+        "input_tokens": 1543,
+        "output_tokens": 3259,
+        "reasoning_tokens": 2802,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.003959748,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_s300.show_lldp_neighbors/3",
+      "started_at": "2026-09-13T15:31:04.932120+00:00",
+      "finished_at": "2026-09-13T15:31:16.592850+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 11.656999999999243,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 11.640999999995984,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1543,
+        "output_tokens": 2263,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 10,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 3,
+          "array": 2,
+          "string": 7,
+          "integer": 1
+        },
+        "required_count": 10,
+        "description_count": 10,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 5,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "9d537238-5c8d-089f-e241-1a3c2de9194e",
+      "review": {
+        "case_id": "cisco_s300.show_lldp_neighbors",
+        "trial_index": 3,
+        "trace_id": "9d537238-5c8d-089f-e241-1a3c2de9194e",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-86bd-0cd077ade5b9"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-86bd-0cd077ade5b9"
+      },
+      "laminar": {
+        "trace_id": "9d537238-5c8d-089f-e241-1a3c2de9194e",
+        "llm_calls": 1,
+        "input_tokens": 1543,
+        "output_tokens": 2263,
+        "reasoning_tokens": 1814,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.002764548,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_s300.show_lldp_neighbors/4",
+      "started_at": "2026-09-13T15:31:07.747944+00:00",
+      "finished_at": "2026-09-13T15:31:13.076213+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.328000000001339,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.312000000005355,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1543,
+        "output_tokens": 964,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 7,
+        "leaf_count": 6,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 5,
+          "integer": 1
+        },
+        "required_count": 7,
+        "description_count": 7,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 1,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "d900e3fe-afba-e8d4-e43a-c140d390f901",
+      "review": {
+        "case_id": "cisco_s300.show_lldp_neighbors",
+        "trial_index": 4,
+        "trace_id": "d900e3fe-afba-e8d4-e43a-c140d390f901",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-9ba8-730ab7b565b0"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-9ba8-730ab7b565b0"
+      },
+      "laminar": {
+        "trace_id": "d900e3fe-afba-e8d4-e43a-c140d390f901",
+        "llm_calls": 1,
+        "input_tokens": 1543,
+        "output_tokens": 964,
+        "reasoning_tokens": 628,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001205748,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/paloalto_panos.show_interface_hardware/1",
+      "started_at": "2026-09-13T15:31:13.078719+00:00",
+      "finished_at": "2026-09-13T15:31:24.411221+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 11.344000000004598,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 11.31300000000192,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 5454,
+        "output_tokens": 2282,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "integer": 2,
+          "array": 1,
+          "string": 6
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "89a7c6ab-8a57-a6f0-625a-4463f260de91",
+      "review": {
+        "case_id": "paloalto_panos.show_interface_hardware",
+        "trial_index": 1,
+        "trace_id": "89a7c6ab-8a57-a6f0-625a-4463f260de91",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-c252-3e508ab903cf",
+          "00000000-0000-0000-a599-f53499bc9c09"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-a599-f53499bc9c09"
+      },
+      "laminar": {
+        "trace_id": "89a7c6ab-8a57-a6f0-625a-4463f260de91",
+        "llm_calls": 2,
+        "input_tokens": 5454,
+        "output_tokens": 2282,
+        "reasoning_tokens": 1336,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.0030198480000000003,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/properties/interfaces/items/properties/mac_address/pattern"
+      ]
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/paloalto_panos.show_interface_hardware/2",
+      "started_at": "2026-09-13T15:31:15.654777+00:00",
+      "finished_at": "2026-09-13T15:31:35.568094+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 19.92199999999866,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 19.89100000000326,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 6767,
+        "output_tokens": 3613,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "integer": 3,
+          "array": 1,
+          "string": 5
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 3,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "7cde11ca-bfce-5c9b-267a-e5e99ecdeed6",
+      "review": {
+        "case_id": "paloalto_panos.show_interface_hardware",
+        "trial_index": 2,
+        "trace_id": "7cde11ca-bfce-5c9b-267a-e5e99ecdeed6",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-8d7e-408995bfdbdb",
+          "00000000-0000-0000-1bdc-d81b4261576f"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-1bdc-d81b4261576f"
+      },
+      "laminar": {
+        "trace_id": "7cde11ca-bfce-5c9b-267a-e5e99ecdeed6",
+        "llm_calls": 2,
+        "input_tokens": 6767,
+        "output_tokens": 3613,
+        "reasoning_tokens": 2634,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.0044840999999999995,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/properties/interfaces/items/properties/mac_address/pattern"
+      ]
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/paloalto_panos.show_interface_hardware/3",
+      "started_at": "2026-09-13T15:31:16.595120+00:00",
+      "finished_at": "2026-09-13T15:31:26.753205+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 10.171999999998661,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.139999999999418,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1766,
+        "output_tokens": 2129,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "integer": 2,
+          "array": 1,
+          "string": 6
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "091ad6e0-c660-3509-2877-f61e7cfd07b2",
+      "review": {
+        "case_id": "paloalto_panos.show_interface_hardware",
+        "trial_index": 3,
+        "trace_id": "091ad6e0-c660-3509-2877-f61e7cfd07b2",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-14ba-9e8e948a00dc"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-14ba-9e8e948a00dc"
+      },
+      "laminar": {
+        "trace_id": "091ad6e0-c660-3509-2877-f61e7cfd07b2",
+        "llm_calls": 1,
+        "input_tokens": 1766,
+        "output_tokens": 2129,
+        "reasoning_tokens": 1745,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0026330159999999997,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/paloalto_panos.show_interface_hardware/4",
+      "started_at": "2026-09-13T15:31:17.545026+00:00",
+      "finished_at": "2026-09-13T15:31:25.808770+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 8.264999999999418,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 8.23399999999674,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1766,
+        "output_tokens": 1855,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "integer": 3,
+          "array": 1,
+          "string": 5
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 3,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "5e9e67bb-6128-7a88-745a-0aeb73790477",
+      "review": {
+        "case_id": "paloalto_panos.show_interface_hardware",
+        "trial_index": 4,
+        "trace_id": "5e9e67bb-6128-7a88-745a-0aeb73790477",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-0258-80c6f2161ae7"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-0258-80c6f2161ae7"
+      },
+      "laminar": {
+        "trace_id": "5e9e67bb-6128-7a88-745a-0aeb73790477",
+        "llm_calls": 1,
+        "input_tokens": 1766,
+        "output_tokens": 1855,
+        "reasoning_tokens": 1425,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0023042159999999996,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/hp_procurve.show_interfaces_status/1",
+      "started_at": "2026-09-13T15:31:24.412305+00:00",
+      "finished_at": "2026-09-13T15:32:00.144590+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 35.73399999999674,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 35.70299999999406,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1737,
+        "output_tokens": 8637,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 8
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 10,
+        "reference_path_added_count": 10,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "f89b2ec0-613d-26ab-eeb9-0d81e6ed1370",
+      "review": {
+        "case_id": "hp_procurve.show_interfaces_status",
+        "trial_index": 1,
+        "trace_id": "f89b2ec0-613d-26ab-eeb9-0d81e6ed1370",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-c354-36f026babd42"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-c354-36f026babd42"
+      },
+      "laminar": {
+        "trace_id": "f89b2ec0-613d-26ab-eeb9-0d81e6ed1370",
+        "llm_calls": 1,
+        "input_tokens": 1737,
+        "output_tokens": 8637,
+        "reasoning_tokens": 8178,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.010546812,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/hp_procurve.show_interfaces_status/2",
+      "started_at": "2026-09-13T15:31:25.810806+00:00",
+      "finished_at": "2026-09-13T15:31:50.108527+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 24.29699999999866,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 24.281999999999243,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1737,
+        "output_tokens": 5586,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 8
+        },
+        "required_count": 5,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 10,
+        "reference_path_added_count": 10,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "c91794ed-6b91-38bd-f0ba-71e55360ffa7",
+      "review": {
+        "case_id": "hp_procurve.show_interfaces_status",
+        "trial_index": 2,
+        "trace_id": "c91794ed-6b91-38bd-f0ba-71e55360ffa7",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-380e-bde9a20136fd"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-380e-bde9a20136fd"
+      },
+      "laminar": {
+        "trace_id": "c91794ed-6b91-38bd-f0ba-71e55360ffa7",
+        "llm_calls": 1,
+        "input_tokens": 1737,
+        "output_tokens": 5586,
+        "reasoning_tokens": 5195,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.006772716000000001,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/hp_procurve.show_interfaces_status/3",
+      "started_at": "2026-09-13T15:31:26.755090+00:00",
+      "finished_at": "2026-09-13T15:31:48.603150+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 21.843000000000757,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 21.82800000000134,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1737,
+        "output_tokens": 5505,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 8
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 10,
+        "reference_path_added_count": 10,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "b95581a9-6328-c3df-f99e-2163d2fab85a",
+      "review": {
+        "case_id": "hp_procurve.show_interfaces_status",
+        "trial_index": 3,
+        "trace_id": "b95581a9-6328-c3df-f99e-2163d2fab85a",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-511f-367a735178c2"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-511f-367a735178c2"
+      },
+      "laminar": {
+        "trace_id": "b95581a9-6328-c3df-f99e-2163d2fab85a",
+        "llm_calls": 1,
+        "input_tokens": 1737,
+        "output_tokens": 5505,
+        "reasoning_tokens": 4961,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.006675516,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/hp_procurve.show_interfaces_status/4",
+      "started_at": "2026-09-13T15:31:35.569619+00:00",
+      "finished_at": "2026-09-13T15:31:42.245312+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 6.671999999998661,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 6.6560000000026776,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1737,
+        "output_tokens": 1536,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 8,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 8
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 10,
+        "reference_path_added_count": 10,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "600b639e-cc20-5281-0894-9c0decbe1a17",
+      "review": {
+        "case_id": "hp_procurve.show_interfaces_status",
+        "trial_index": 4,
+        "trace_id": "600b639e-cc20-5281-0894-9c0decbe1a17",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-cf6a-fa0671178839"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-cf6a-fa0671178839"
+      },
+      "laminar": {
+        "trace_id": "600b639e-cc20-5281-0894-9c0decbe1a17",
+        "llm_calls": 1,
+        "input_tokens": 1737,
+        "output_tokens": 1536,
+        "reasoning_tokens": 1115,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001912716,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_voice_mos/1",
+      "started_at": "2026-09-13T15:31:42.246312+00:00",
+      "finished_at": "2026-09-13T15:32:06.697849+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 24.45300000000134,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 24.437000000005355,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 7699,
+        "output_tokens": 4902,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 22,
+        "leaf_count": 20,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 3,
+          "integer": 2,
+          "number": 18
+        },
+        "required_count": 22,
+        "description_count": 22,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 14,
+        "reference_path_added_count": 14,
+        "reference_type_difference_count": 6,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "90db1d15-392a-622d-a38f-aa1907323006",
+      "review": {
+        "case_id": "oneaccess_oneos.show_voice_mos",
+        "trial_index": 1,
+        "trace_id": "90db1d15-392a-622d-a38f-aa1907323006",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-bb5b-3b57f648f7d9",
+          "00000000-0000-0000-143e-bef84a8c5e6a"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-143e-bef84a8c5e6a"
+      },
+      "laminar": {
+        "trace_id": "90db1d15-392a-622d-a38f-aa1907323006",
+        "llm_calls": 2,
+        "input_tokens": 7699,
+        "output_tokens": 4902,
+        "reasoning_tokens": 3808,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.006159971999999999,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/$defs",
+        "/properties/current_hour/type",
+        "/properties/previous_hour/type",
+        "/"
+      ]
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_voice_mos/2",
+      "started_at": "2026-09-13T15:31:48.605658+00:00",
+      "finished_at": "2026-09-13T15:32:02.393206+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 13.781999999999243,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 13.765999999995984,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1631,
+        "output_tokens": 2766,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 11,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 1,
+          "number": 9
+        },
+        "required_count": 12,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 22,
+        "reference_path_added_count": 13,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "422ad5e7-098b-9474-f113-0455d7e9d973",
+      "review": {
+        "case_id": "oneaccess_oneos.show_voice_mos",
+        "trial_index": 2,
+        "trace_id": "422ad5e7-098b-9474-f113-0455d7e9d973",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-0a37-4906cccfdc8f"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-0a37-4906cccfdc8f"
+      },
+      "laminar": {
+        "trace_id": "422ad5e7-098b-9474-f113-0455d7e9d973",
+        "llm_calls": 1,
+        "input_tokens": 1631,
+        "output_tokens": 2766,
+        "reasoning_tokens": 2474,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0033945479999999994,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_voice_mos/3",
+      "started_at": "2026-09-13T15:31:50.110529+00:00",
+      "finished_at": "2026-09-13T15:31:59.425461+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 9.328000000001339,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 9.296999999998661,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1631,
+        "output_tokens": 2139,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 12,
+        "leaf_count": 11,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 7,
+          "number": 3
+        },
+        "required_count": 12,
+        "description_count": 12,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 22,
+        "reference_path_added_count": 13,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "87131e16-e31f-0700-f3e8-9b0da87e3e87",
+      "review": {
+        "case_id": "oneaccess_oneos.show_voice_mos",
+        "trial_index": 3,
+        "trace_id": "87131e16-e31f-0700-f3e8-9b0da87e3e87",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "insufficient_evidence"
+        },
+        "overall": "acceptable",
+        "issue_categories": [
+          "unproven_min_items"
+        ],
+        "paths": [
+          "/hourly_quality"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-a976-97559638d593"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-a976-97559638d593"
+      },
+      "laminar": {
+        "trace_id": "87131e16-e31f-0700-f3e8-9b0da87e3e87",
+        "llm_calls": 1,
+        "input_tokens": 1631,
+        "output_tokens": 2139,
+        "reasoning_tokens": 1654,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.002642148,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_voice_mos/4",
+      "started_at": "2026-09-13T15:31:59.426466+00:00",
+      "finished_at": "2026-09-13T15:32:08.142706+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 8.703999999997905,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 8.687999999994645,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1631,
+        "output_tokens": 1751,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 22,
+        "leaf_count": 20,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 3,
+          "integer": 2,
+          "number": 18
+        },
+        "required_count": 22,
+        "description_count": 22,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 12,
+        "reference_path_added_count": 12,
+        "reference_type_difference_count": 8,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "977e5570-ee0e-8646-7098-936ea82bf0ce",
+      "review": {
+        "case_id": "oneaccess_oneos.show_voice_mos",
+        "trial_index": 4,
+        "trace_id": "977e5570-ee0e-8646-7098-936ea82bf0ce",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-c38d-b819b0b7a9a7"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-c38d-b819b0b7a9a7"
+      },
+      "laminar": {
+        "trace_id": "977e5570-ee0e-8646-7098-936ea82bf0ce",
+        "llm_calls": 1,
+        "input_tokens": 1631,
+        "output_tokens": 1751,
+        "reasoning_tokens": 1050,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0021765479999999995,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_interface_status/1",
+      "started_at": "2026-09-13T15:32:00.145595+00:00",
+      "finished_at": "2026-09-13T15:32:05.454492+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.296999999998661,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.2810000000026776,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2979,
+        "output_tokens": 1024,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 8,
+        "leaf_count": 7,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 7
+        },
+        "required_count": 8,
+        "description_count": 8,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "ff593fce-321a-ed71-99a2-5f980187048c",
+      "review": {
+        "case_id": "cisco_nxos.show_interface_status",
+        "trial_index": 1,
+        "trace_id": "ff593fce-321a-ed71-99a2-5f980187048c",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-ba6b-38430c8c0baa"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-ba6b-38430c8c0baa"
+      },
+      "laminar": {
+        "trace_id": "ff593fce-321a-ed71-99a2-5f980187048c",
+        "llm_calls": 1,
+        "input_tokens": 2979,
+        "output_tokens": 1024,
+        "reasoning_tokens": 577,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001783812,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_interface_status/2",
+      "started_at": "2026-09-13T15:32:02.395207+00:00",
+      "finished_at": "2026-09-13T15:32:07.408207+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.0,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.985000000000582,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2979,
+        "output_tokens": 926,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 8,
+        "leaf_count": 7,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 7
+        },
+        "required_count": 8,
+        "description_count": 8,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "4160ca02-1451-31df-50b4-ff124c1043a5",
+      "review": {
+        "case_id": "cisco_nxos.show_interface_status",
+        "trial_index": 2,
+        "trace_id": "4160ca02-1451-31df-50b4-ff124c1043a5",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-9d2f-2eb4767fc9f9"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-9d2f-2eb4767fc9f9"
+      },
+      "laminar": {
+        "trace_id": "4160ca02-1451-31df-50b4-ff124c1043a5",
+        "llm_calls": 1,
+        "input_tokens": 2979,
+        "output_tokens": 926,
+        "reasoning_tokens": 548,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0011769959999999998,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_interface_status/3",
+      "started_at": "2026-09-13T15:32:05.455507+00:00",
+      "finished_at": "2026-09-13T15:32:10.850903+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.4060000000026776,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.39100000000326,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2979,
+        "output_tokens": 1166,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 8,
+        "leaf_count": 7,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 7
+        },
+        "required_count": 8,
+        "description_count": 8,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "e8c0dd36-085e-8040-4749-d64d8cbeee8d",
+      "review": {
+        "case_id": "cisco_nxos.show_interface_status",
+        "trial_index": 3,
+        "trace_id": "e8c0dd36-085e-8040-4749-d64d8cbeee8d",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "issue",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "placeholder_rewritten_as_empty"
+        ],
+        "paths": [
+          "/interfaces/*/name",
+          "/interfaces/*/vlan",
+          "/interfaces/*/type"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-8f10-3101a205e671"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-8f10-3101a205e671"
+      },
+      "laminar": {
+        "trace_id": "e8c0dd36-085e-8040-4749-d64d8cbeee8d",
+        "llm_calls": 1,
+        "input_tokens": 2979,
+        "output_tokens": 1166,
+        "reasoning_tokens": 636,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001464996,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_interface_status/4",
+      "started_at": "2026-09-13T15:32:06.698858+00:00",
+      "finished_at": "2026-09-13T15:32:11.681413+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 4.984000000004016,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.969000000004598,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2979,
+        "output_tokens": 898,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 8,
+        "leaf_count": 7,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 7
+        },
+        "required_count": 8,
+        "description_count": 8,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "6c4aef73-ce01-67a3-f7c0-0f7e3bb41720",
+      "review": {
+        "case_id": "cisco_nxos.show_interface_status",
+        "trial_index": 4,
+        "trace_id": "6c4aef73-ce01-67a3-f7c0-0f7e3bb41720",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-d7bb-072bfe6be7f0"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-d7bb-072bfe6be7f0"
+      },
+      "laminar": {
+        "trace_id": "6c4aef73-ce01-67a3-f7c0-0f7e3bb41720",
+        "llm_calls": 1,
+        "input_tokens": 2979,
+        "output_tokens": 898,
+        "reasoning_tokens": 505,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001143396,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_sdwan_control_connections/1",
+      "started_at": "2026-09-13T15:32:07.431820+00:00",
+      "finished_at": "2026-09-13T15:34:51.143276+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 163.71899999999732,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 163.68799999999464,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1701,
+        "output_tokens": 39814,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 16,
+        "leaf_count": 15,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 15
+        },
+        "required_count": 16,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 17,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "729c80be-fe20-0ea7-7d2d-1b8ac00109a4",
+      "review": {
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trial_index": 1,
+        "trace_id": "729c80be-fe20-0ea7-7d2d-1b8ac00109a4",
+        "dimensions": {
+          "naming": "issue",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "ambiguous_identifier"
+        ],
+        "paths": [
+          "/peer_connections/*/id"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-ba09-c160b026607e"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-ba09-c160b026607e"
+      },
+      "laminar": {
+        "trace_id": "729c80be-fe20-0ea7-7d2d-1b8ac00109a4",
+        "llm_calls": 1,
+        "input_tokens": 1701,
+        "output_tokens": 39814,
+        "reasoning_tokens": 38990,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.047948412,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_sdwan_control_connections/2",
+      "started_at": "2026-09-13T15:32:08.143719+00:00",
+      "finished_at": "2026-09-13T15:32:33.177523+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 25.031000000002678,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 25.0,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1701,
+        "output_tokens": 5644,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 16,
+        "leaf_count": 15,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 13,
+          "integer": 2
+        },
+        "required_count": 16,
+        "description_count": 16,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 17,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "926a3cb6-6d56-06a1-6565-55fd10b48e89",
+      "review": {
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trial_index": 2,
+        "trace_id": "926a3cb6-6d56-06a1-6565-55fd10b48e89",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-095e-ffde91e00530"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-095e-ffde91e00530"
+      },
+      "laminar": {
+        "trace_id": "926a3cb6-6d56-06a1-6565-55fd10b48e89",
+        "llm_calls": 1,
+        "input_tokens": 1701,
+        "output_tokens": 5644,
+        "reasoning_tokens": 5006,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.006944412,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_sdwan_control_connections/3",
+      "started_at": "2026-09-13T15:32:10.852457+00:00",
+      "finished_at": "2026-09-13T15:33:25.524583+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 74.67199999999866,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 74.625,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1701,
+        "output_tokens": 17587,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 16,
+        "leaf_count": 15,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 13,
+          "integer": 2
+        },
+        "required_count": 15,
+        "description_count": 16,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 17,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "b846df5c-f397-7e5a-c526-f3893513b356",
+      "review": {
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trial_index": 3,
+        "trace_id": "b846df5c-f397-7e5a-c526-f3893513b356",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-20ba-91c0e48a202a"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-20ba-91c0e48a202a"
+      },
+      "laminar": {
+        "trace_id": "b846df5c-f397-7e5a-c526-f3893513b356",
+        "llm_calls": 1,
+        "input_tokens": 1701,
+        "output_tokens": 17587,
+        "reasoning_tokens": 17000,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.021163116,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_sdwan_control_connections/4",
+      "started_at": "2026-09-13T15:32:11.684297+00:00",
+      "finished_at": "2026-09-13T15:33:20.360663+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 68.67199999999866,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 68.65699999999924,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1701,
+        "output_tokens": 16153,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 16,
+        "leaf_count": 15,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 13,
+          "integer": 2
+        },
+        "required_count": 16,
+        "description_count": 16,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 17,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "eb9dbb8f-743d-9c68-edee-92f3b4195667",
+      "review": {
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trial_index": 4,
+        "trace_id": "eb9dbb8f-743d-9c68-edee-92f3b4195667",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-84df-3b61e41f5322"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-84df-3b61e41f5322"
+      },
+      "laminar": {
+        "trace_id": "eb9dbb8f-743d-9c68-edee-92f3b4195667",
+        "llm_calls": 1,
+        "input_tokens": 1701,
+        "output_tokens": 16153,
+        "reasoning_tokens": 15558,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.019442316,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/mikrotik_routeros.system_resource_print/1",
+      "started_at": "2026-09-13T15:32:33.178523+00:00",
+      "finished_at": "2026-09-13T15:32:46.042230+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 12.860000000000582,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 12.828999999997905,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1577,
+        "output_tokens": 2791,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 17,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14,
+          "integer": 3
+        },
+        "required_count": 17,
+        "description_count": 17,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 3,
+        "reference_required_difference_count": 2
+      },
+      "trace_id": "1fb0db95-efae-36f2-b5a5-e2825632ee89",
+      "review": {
+        "case_id": "mikrotik_routeros.system_resource_print",
+        "trial_index": 1,
+        "trace_id": "1fb0db95-efae-36f2-b5a5-e2825632ee89",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-2bb0-793d42814ea5"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-2bb0-793d42814ea5"
+      },
+      "laminar": {
+        "trace_id": "1fb0db95-efae-36f2-b5a5-e2825632ee89",
+        "llm_calls": 1,
+        "input_tokens": 1577,
+        "output_tokens": 2791,
+        "reasoning_tokens": 2065,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0034836119999999996,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/mikrotik_routeros.system_resource_print/2",
+      "started_at": "2026-09-13T15:32:46.044733+00:00",
+      "finished_at": "2026-09-13T15:32:51.366399+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.327999999994063,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.296999999998661,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1577,
+        "output_tokens": 1247,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 17,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14,
+          "integer": 3
+        },
+        "required_count": 17,
+        "description_count": 17,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 3,
+        "reference_required_difference_count": 2
+      },
+      "trace_id": "975ee21a-da8a-35cf-c8cc-3ae392acafd5",
+      "review": {
+        "case_id": "mikrotik_routeros.system_resource_print",
+        "trial_index": 2,
+        "trace_id": "975ee21a-da8a-35cf-c8cc-3ae392acafd5",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-1d6e-58b4ed416020"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-1d6e-58b4ed416020"
+      },
+      "laminar": {
+        "trace_id": "975ee21a-da8a-35cf-c8cc-3ae392acafd5",
+        "llm_calls": 1,
+        "input_tokens": 1577,
+        "output_tokens": 1247,
+        "reasoning_tokens": 567,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001555548,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/mikrotik_routeros.system_resource_print/3",
+      "started_at": "2026-09-13T15:32:51.368400+00:00",
+      "finished_at": "2026-09-13T15:32:56.376962+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.0,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.984000000004016,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1577,
+        "output_tokens": 1128,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 17,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14,
+          "integer": 3
+        },
+        "required_count": 17,
+        "description_count": 17,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 3,
+        "reference_required_difference_count": 2
+      },
+      "trace_id": "5d4e0e0c-567c-fc32-5a7c-92d942612359",
+      "review": {
+        "case_id": "mikrotik_routeros.system_resource_print",
+        "trial_index": 3,
+        "trace_id": "5d4e0e0c-567c-fc32-5a7c-92d942612359",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-49e0-b16daed997d8"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-49e0-b16daed997d8"
+      },
+      "laminar": {
+        "trace_id": "5d4e0e0c-567c-fc32-5a7c-92d942612359",
+        "llm_calls": 1,
+        "input_tokens": 1577,
+        "output_tokens": 1128,
+        "reasoning_tokens": 462,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001412748,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/mikrotik_routeros.system_resource_print/4",
+      "started_at": "2026-09-13T15:32:56.379003+00:00",
+      "finished_at": "2026-09-13T15:33:27.714472+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 31.32800000000134,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 31.31199999999808,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1577,
+        "output_tokens": 7092,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 17,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14,
+          "integer": 3
+        },
+        "required_count": 17,
+        "description_count": 17,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 4,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 2
+      },
+      "trace_id": "95e32388-fd04-50a1-c57b-76f98b72ff4f",
+      "review": {
+        "case_id": "mikrotik_routeros.system_resource_print",
+        "trial_index": 4,
+        "trace_id": "95e32388-fd04-50a1-c57b-76f98b72ff4f",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-b9b7-84e8d37be792"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-b9b7-84e8d37be792"
+      },
+      "laminar": {
+        "trace_id": "95e32388-fd04-50a1-c57b-76f98b72ff4f",
+        "llm_calls": 1,
+        "input_tokens": 1577,
+        "output_tokens": 7092,
+        "reasoning_tokens": 6428,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.008569548,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/arista_eos.show_version/1",
+      "started_at": "2026-09-13T15:33:20.365431+00:00",
+      "finished_at": "2026-09-13T15:33:29.397233+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 9.031000000002678,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 9.0,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 4733,
+        "output_tokens": 2097,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 14,
+        "leaf_count": 14,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14
+        },
+        "required_count": 14,
+        "description_count": 14,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "380ff877-70e0-0609-4b1f-fcef62021b77",
+      "review": {
+        "case_id": "arista_eos.show_version",
+        "trial_index": 1,
+        "trace_id": "380ff877-70e0-0609-4b1f-fcef62021b77",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-0ce1-a70ce6a2b040",
+          "00000000-0000-0000-8a52-76a5c6b4e26a"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-8a52-76a5c6b4e26a"
+      },
+      "laminar": {
+        "trace_id": "380ff877-70e0-0609-4b1f-fcef62021b77",
+        "llm_calls": 2,
+        "input_tokens": 4733,
+        "output_tokens": 2097,
+        "reasoning_tokens": 951,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.002732076,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/$id"
+      ]
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/arista_eos.show_version/2",
+      "started_at": "2026-09-13T15:33:25.525601+00:00",
+      "finished_at": "2026-09-13T15:33:36.857626+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 11.328000000001339,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 11.31300000000192,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1559,
+        "output_tokens": 2582,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 18,
+        "leaf_count": 17,
+        "max_depth": 2,
+        "type_counts": {
+          "object": 2,
+          "string": 13,
+          "integer": 4
+        },
+        "required_count": 18,
+        "description_count": 3,
+        "description_coverage": 0.16666666666666666,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 5,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "e03f2d24-9e86-597a-f58f-a015a4c6f45e",
+      "review": {
+        "case_id": "arista_eos.show_version",
+        "trial_index": 2,
+        "trace_id": "e03f2d24-9e86-597a-f58f-a015a4c6f45e",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-b504-492cd0115eab"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-b504-492cd0115eab"
+      },
+      "laminar": {
+        "trace_id": "e03f2d24-9e86-597a-f58f-a015a4c6f45e",
+        "llm_calls": 1,
+        "input_tokens": 1559,
+        "output_tokens": 2582,
+        "reasoning_tokens": 2137,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0031521480000000004,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/arista_eos.show_version/3",
+      "started_at": "2026-09-13T15:33:27.715882+00:00",
+      "finished_at": "2026-09-13T15:33:34.499391+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 6.780999999995402,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 6.764999999999418,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1559,
+        "output_tokens": 1570,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 14,
+        "leaf_count": 14,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14
+        },
+        "required_count": 14,
+        "description_count": 14,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 1,
+        "reference_path_added_count": 1,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "4c610f4d-439e-e21a-156c-53af2b3b10ad",
+      "review": {
+        "case_id": "arista_eos.show_version",
+        "trial_index": 3,
+        "trace_id": "4c610f4d-439e-e21a-156c-53af2b3b10ad",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-5ca6-65bcdf75bee0"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-5ca6-65bcdf75bee0"
+      },
+      "laminar": {
+        "trace_id": "4c610f4d-439e-e21a-156c-53af2b3b10ad",
+        "llm_calls": 1,
+        "input_tokens": 1559,
+        "output_tokens": 1570,
+        "reasoning_tokens": 1020,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001937748,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/arista_eos.show_version/4",
+      "started_at": "2026-09-13T15:33:29.399624+00:00",
+      "finished_at": "2026-09-13T15:33:35.315063+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.9060000000026776,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.89100000000326,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1559,
+        "output_tokens": 1079,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 14,
+        "leaf_count": 14,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 14
+        },
+        "required_count": 14,
+        "description_count": 14,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 0,
+        "reference_path_added_count": 0,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "4765b243-0221-9037-3daf-551e9bc98cfd",
+      "review": {
+        "case_id": "arista_eos.show_version",
+        "trial_index": 4,
+        "trace_id": "4765b243-0221-9037-3daf-551e9bc98cfd",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-8417-87edcc88f58c"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-8417-87edcc88f58c"
+      },
+      "laminar": {
+        "trace_id": "4765b243-0221-9037-3daf-551e9bc98cfd",
+        "llm_calls": 1,
+        "input_tokens": 1559,
+        "output_tokens": 1079,
+        "reasoning_tokens": 573,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001348548,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_tacacs/1",
+      "started_at": "2026-09-13T15:33:34.501577+00:00",
+      "finished_at": "2026-09-13T15:33:39.461213+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 4.969000000004598,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.937000000005355,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1725,
+        "output_tokens": 853,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 11,
+        "leaf_count": 10,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 9
+        },
+        "required_count": 11,
+        "description_count": 11,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 12,
+        "reference_path_added_count": 12,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "88b2520b-c14f-5225-5384-11b73d406ead",
+      "review": {
+        "case_id": "oneaccess_oneos.show_tacacs",
+        "trial_index": 1,
+        "trace_id": "88b2520b-c14f-5225-5384-11b73d406ead",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-ab08-6a23aa3eab9a"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-ab08-6a23aa3eab9a"
+      },
+      "laminar": {
+        "trace_id": "88b2520b-c14f-5225-5384-11b73d406ead",
+        "llm_calls": 1,
+        "input_tokens": 1725,
+        "output_tokens": 853,
+        "reasoning_tokens": 390,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001202412,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_tacacs/2",
+      "started_at": "2026-09-13T15:33:35.317062+00:00",
+      "finished_at": "2026-09-13T15:33:40.261552+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 4.938000000001921,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.921999999998661,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1725,
+        "output_tokens": 953,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 11,
+        "leaf_count": 10,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 9
+        },
+        "required_count": 11,
+        "description_count": 11,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 12,
+        "reference_path_added_count": 12,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "0058bfff-8b43-a033-b5a0-921e4fde24de",
+      "review": {
+        "case_id": "oneaccess_oneos.show_tacacs",
+        "trial_index": 2,
+        "trace_id": "0058bfff-8b43-a033-b5a0-921e4fde24de",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-b45d-cd49d49eafb7"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-b45d-cd49d49eafb7"
+      },
+      "laminar": {
+        "trace_id": "0058bfff-8b43-a033-b5a0-921e4fde24de",
+        "llm_calls": 1,
+        "input_tokens": 1725,
+        "output_tokens": 953,
+        "reasoning_tokens": 458,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001322412,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_tacacs/3",
+      "started_at": "2026-09-13T15:33:36.859625+00:00",
+      "finished_at": "2026-09-13T15:33:41.080332+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 4.2189999999973224,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 4.203000000001339,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1725,
+        "output_tokens": 874,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 11,
+        "leaf_count": 10,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 9
+        },
+        "required_count": 11,
+        "description_count": 11,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 12,
+        "reference_path_added_count": 12,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "2699cbbb-4361-0937-e741-93dd3c60c88f",
+      "review": {
+        "case_id": "oneaccess_oneos.show_tacacs",
+        "trial_index": 3,
+        "trace_id": "2699cbbb-4361-0937-e741-93dd3c60c88f",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-28fc-6f6ab67c3722"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-28fc-6f6ab67c3722"
+      },
+      "laminar": {
+        "trace_id": "2699cbbb-4361-0937-e741-93dd3c60c88f",
+        "llm_calls": 1,
+        "input_tokens": 1725,
+        "output_tokens": 874,
+        "reasoning_tokens": 462,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001114716,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/oneaccess_oneos.show_tacacs/4",
+      "started_at": "2026-09-13T15:33:39.463245+00:00",
+      "finished_at": "2026-09-13T15:33:44.919383+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 5.453000000001339,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 5.436999999998079,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1725,
+        "output_tokens": 956,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 11,
+        "leaf_count": 10,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 1,
+          "integer": 9
+        },
+        "required_count": 11,
+        "description_count": 11,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 2,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 8,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "52362045-c281-cfea-8980-fe28ba946cd1",
+      "review": {
+        "case_id": "oneaccess_oneos.show_tacacs",
+        "trial_index": 4,
+        "trace_id": "52362045-c281-cfea-8980-fe28ba946cd1",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-a475-8467dcd7e3fe"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-a475-8467dcd7e3fe"
+      },
+      "laminar": {
+        "trace_id": "52362045-c281-cfea-8980-fe28ba946cd1",
+        "llm_calls": 1,
+        "input_tokens": 1725,
+        "output_tokens": 956,
+        "reasoning_tokens": 486,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.001213116,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_ip_ospf_database_router/1",
+      "started_at": "2026-09-13T15:33:40.263056+00:00",
+      "finished_at": "2026-09-13T15:33:49.655377+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 9.389999999999418,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 9.375,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2729,
+        "output_tokens": 2073,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 21,
+        "leaf_count": 19,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "string": 13,
+          "integer": 6,
+          "array": 2
+        },
+        "required_count": 21,
+        "description_count": 21,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 21,
+        "reference_path_added_count": 21,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "362d69f5-0b2a-3b67-c32e-17f0d93d31c3",
+      "review": {
+        "case_id": "cisco_ios.show_ip_ospf_database_router",
+        "trial_index": 1,
+        "trace_id": "362d69f5-0b2a-3b67-c32e-17f0d93d31c3",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-d15b-d4a16fe26770"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-d15b-d4a16fe26770"
+      },
+      "laminar": {
+        "trace_id": "362d69f5-0b2a-3b67-c32e-17f0d93d31c3",
+        "llm_calls": 1,
+        "input_tokens": 2729,
+        "output_tokens": 2073,
+        "reasoning_tokens": 1156,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0029676119999999997,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_ip_ospf_database_router/2",
+      "started_at": "2026-09-13T15:33:41.082113+00:00",
+      "finished_at": "2026-09-13T15:33:48.858633+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 7.764999999999418,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 7.75,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2729,
+        "output_tokens": 1981,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 19,
+        "leaf_count": 17,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "string": 11,
+          "integer": 6,
+          "array": 2
+        },
+        "required_count": 19,
+        "description_count": 19,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 20,
+        "reference_path_added_count": 18,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "1ddc4b3e-f41f-9194-02c3-f41a65b23ded",
+      "review": {
+        "case_id": "cisco_ios.show_ip_ospf_database_router",
+        "trial_index": 2,
+        "trace_id": "1ddc4b3e-f41f-9194-02c3-f41a65b23ded",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-c5e0-6944716c45b6"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-c5e0-6944716c45b6"
+      },
+      "laminar": {
+        "trace_id": "1ddc4b3e-f41f-9194-02c3-f41a65b23ded",
+        "llm_calls": 1,
+        "input_tokens": 2729,
+        "output_tokens": 1981,
+        "reasoning_tokens": 1139,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0024432600000000005,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_ip_ospf_database_router/3",
+      "started_at": "2026-09-13T15:33:44.921664+00:00",
+      "finished_at": "2026-09-13T15:33:58.898303+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 13.98399999999674,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 13.952999999994063,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 8344,
+        "output_tokens": 3590,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 21,
+        "leaf_count": 19,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "string": 14,
+          "array": 2,
+          "integer": 5
+        },
+        "required_count": 21,
+        "description_count": 21,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 20,
+        "reference_path_added_count": 20,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "2f4794f1-7267-8a87-8e1e-6f75faec96db",
+      "review": {
+        "case_id": "cisco_ios.show_ip_ospf_database_router",
+        "trial_index": 3,
+        "trace_id": "2f4794f1-7267-8a87-8e1e-6f75faec96db",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-a421-02dadfe49880",
+          "00000000-0000-0000-fadc-09aaa2a55a1c"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-fadc-09aaa2a55a1c"
+      },
+      "laminar": {
+        "trace_id": "2f4794f1-7267-8a87-8e1e-6f75faec96db",
+        "llm_calls": 2,
+        "input_tokens": 8344,
+        "output_tokens": 3590,
+        "reasoning_tokens": 2005,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.004478016,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/$id"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_ios.show_ip_ospf_database_router/4",
+      "started_at": "2026-09-13T15:33:48.861402+00:00",
+      "finished_at": "2026-09-13T15:33:59.690754+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 10.843999999997322,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.81300000000192,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2729,
+        "output_tokens": 2536,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 21,
+        "leaf_count": 19,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "string": 14,
+          "array": 2,
+          "integer": 5
+        },
+        "required_count": 21,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 21,
+        "reference_path_added_count": 21,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "0e21b43a-2859-7cbf-a918-4a89272b59cd",
+      "review": {
+        "case_id": "cisco_ios.show_ip_ospf_database_router",
+        "trial_index": 4,
+        "trace_id": "0e21b43a-2859-7cbf-a918-4a89272b59cd",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-371f-299c36fddc6c"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-371f-299c36fddc6c"
+      },
+      "laminar": {
+        "trace_id": "0e21b43a-2859-7cbf-a918-4a89272b59cd",
+        "llm_calls": 1,
+        "input_tokens": 2729,
+        "output_tokens": 2536,
+        "reasoning_tokens": 2073,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.00310926,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_port-channel_summary/1",
+      "started_at": "2026-09-13T15:33:49.660450+00:00",
+      "finished_at": "2026-09-13T15:34:13.108462+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 23.43699999999808,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 23.42199999999866,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2136,
+        "output_tokens": 5189,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 7,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "array": 2,
+          "integer": 1,
+          "string": 6
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 7,
+        "reference_path_added_count": 11,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "432bfee3-947d-f8de-885f-d12e5f159dd9",
+      "review": {
+        "case_id": "cisco_nxos.show_port-channel_summary",
+        "trial_index": 1,
+        "trace_id": "432bfee3-947d-f8de-885f-d12e5f159dd9",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-06d0-dd0c54875363"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-06d0-dd0c54875363"
+      },
+      "laminar": {
+        "trace_id": "432bfee3-947d-f8de-885f-d12e5f159dd9",
+        "llm_calls": 1,
+        "input_tokens": 2136,
+        "output_tokens": 5189,
+        "reasoning_tokens": 4636,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.006528912,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_port-channel_summary/2",
+      "started_at": "2026-09-13T15:33:58.899303+00:00",
+      "finished_at": "2026-09-13T15:34:17.725275+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 2,
+      "schema_agent_rounds": 2,
+      "termination_reason": "success",
+      "elapsed_seconds": 18.82800000000134,
+      "observations": {
+        "observed_submissions": 2,
+        "first_submission_accepted": false,
+        "first_frozen_seconds": 18.79699999999866,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 1
+        },
+        "input_tokens": 7593,
+        "output_tokens": 3771,
+        "usage_observations": 2,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 7,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "array": 3,
+          "integer": 1,
+          "string": 6
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 3,
+        "reference_path_added_count": 8,
+        "reference_type_difference_count": 1,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "cc6f1e16-a9f3-1362-6d89-56fcafeff212",
+      "review": {
+        "case_id": "cisco_nxos.show_port-channel_summary",
+        "trial_index": 2,
+        "trace_id": "cc6f1e16-a9f3-1362-6d89-56fcafeff212",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-d0dd-c0da8553b9f6",
+          "00000000-0000-0000-5f17-4eb793865eb4"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-5f17-4eb793865eb4"
+      },
+      "laminar": {
+        "trace_id": "cc6f1e16-a9f3-1362-6d89-56fcafeff212",
+        "llm_calls": 2,
+        "input_tokens": 7593,
+        "output_tokens": 3771,
+        "reasoning_tokens": 2735,
+        "reasoning_observed_calls": 2,
+        "recorded_cost_usd": 0.004695708,
+        "context_fit_calls": 1,
+        "schema_submissions": 2,
+        "ttp_tools": 0
+      },
+      "rejection_paths": [
+        "/$id"
+      ]
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_port-channel_summary/3",
+      "started_at": "2026-09-13T15:33:59.693185+00:00",
+      "finished_at": "2026-09-13T15:34:09.024093+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 9.328000000001339,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 9.31300000000192,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2136,
+        "output_tokens": 1992,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 8,
+        "leaf_count": 7,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "integer": 1,
+          "string": 6,
+          "array": 1
+        },
+        "required_count": 8,
+        "description_count": 8,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 7,
+        "reference_path_added_count": 9,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "ab1c6980-d30b-c060-fb32-16cb2c5d7503",
+      "review": {
+        "case_id": "cisco_nxos.show_port-channel_summary",
+        "trial_index": 3,
+        "trace_id": "ab1c6980-d30b-c060-fb32-16cb2c5d7503",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "issue",
+          "decomposition": "passed",
+          "structure": "issue",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "insufficient_evidence"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "root_models_one_entity"
+        ],
+        "paths": [
+          "/"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-f601-ce0350b13a20"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-f601-ce0350b13a20"
+      },
+      "laminar": {
+        "trace_id": "ab1c6980-d30b-c060-fb32-16cb2c5d7503",
+        "llm_calls": 1,
+        "input_tokens": 2136,
+        "output_tokens": 1992,
+        "reasoning_tokens": 1617,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.00246672,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_nxos.show_port-channel_summary/4",
+      "started_at": "2026-09-13T15:34:09.025121+00:00",
+      "finished_at": "2026-09-13T15:34:16.464164+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 7.438000000001921,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 7.421999999998661,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 2136,
+        "output_tokens": 1628,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 9,
+        "leaf_count": 7,
+        "max_depth": 5,
+        "type_counts": {
+          "object": 3,
+          "array": 2,
+          "integer": 1,
+          "string": 6
+        },
+        "required_count": 9,
+        "description_count": 9,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 2,
+        "reference_path_added_count": 6,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "1bbf7102-574a-6b8d-33e1-c8a28de68a0f",
+      "review": {
+        "case_id": "cisco_nxos.show_port-channel_summary",
+        "trial_index": 4,
+        "trace_id": "1bbf7102-574a-6b8d-33e1-c8a28de68a0f",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-1e0c-77f2b5d4ba28"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-1e0c-77f2b5d4ba28"
+      },
+      "laminar": {
+        "trace_id": "1bbf7102-574a-6b8d-33e1-c8a28de68a0f",
+        "llm_calls": 1,
+        "input_tokens": 2136,
+        "output_tokens": 1628,
+        "reasoning_tokens": 1201,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0020299199999999997,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trial_index": 0,
+      "trial_id": "20260913T153031.599662Z/cisco_asa.show_vpn-sessiondb_anyconnect/1",
+      "started_at": "2026-09-13T15:34:13.109462+00:00",
+      "finished_at": "2026-09-13T15:34:23.461281+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 10.360000000000582,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 10.328000000001339,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1826,
+        "output_tokens": 2534,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 21,
+        "leaf_count": 20,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "string": 18,
+          "array": 1,
+          "integer": 2
+        },
+        "required_count": 21,
+        "description_count": 21,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 3,
+        "reference_path_added_count": 3,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "1a9a4c29-4943-4120-b65e-b0928bcb741a",
+      "review": {
+        "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+        "trial_index": 1,
+        "trace_id": "1a9a4c29-4943-4120-b65e-b0928bcb741a",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-f1d0-59473318e37c"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-f1d0-59473318e37c"
+      },
+      "laminar": {
+        "trace_id": "1a9a4c29-4943-4120-b65e-b0928bcb741a",
+        "llm_calls": 1,
+        "input_tokens": 1826,
+        "output_tokens": 2534,
+        "reasoning_tokens": 1755,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.003249912,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trial_index": 1,
+      "trial_id": "20260913T153031.599662Z/cisco_asa.show_vpn-sessiondb_anyconnect/2",
+      "started_at": "2026-09-13T15:34:16.465645+00:00",
+      "finished_at": "2026-09-13T15:34:28.273159+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 11.81199999999808,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 11.780999999995402,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1826,
+        "output_tokens": 2937,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 21,
+        "leaf_count": 20,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "string": 18,
+          "array": 1,
+          "integer": 2
+        },
+        "required_count": 21,
+        "description_count": 21,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 2,
+        "reference_path_added_count": 2,
+        "reference_type_difference_count": 2,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "32160ac5-57c4-81f7-4c5e-ee4f9127ab7b",
+      "review": {
+        "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+        "trial_index": 2,
+        "trace_id": "32160ac5-57c4-81f7-4c5e-ee4f9127ab7b",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "passed",
+          "decomposition": "passed",
+          "structure": "passed",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "acceptable",
+        "issue_categories": [],
+        "paths": [],
+        "submission_span_ids": [
+          "00000000-0000-0000-2784-ef2a1ad4a026"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-2784-ef2a1ad4a026"
+      },
+      "laminar": {
+        "trace_id": "32160ac5-57c4-81f7-4c5e-ee4f9127ab7b",
+        "llm_calls": 1,
+        "input_tokens": 1826,
+        "output_tokens": 2937,
+        "reasoning_tokens": 2226,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0035829839999999996,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trial_index": 2,
+      "trial_id": "20260913T153031.599662Z/cisco_asa.show_vpn-sessiondb_anyconnect/3",
+      "started_at": "2026-09-13T15:34:17.727274+00:00",
+      "finished_at": "2026-09-13T15:34:43.536215+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 25.81300000000192,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 25.781999999999243,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1826,
+        "output_tokens": 5906,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 20,
+        "leaf_count": 20,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 18,
+          "integer": 2
+        },
+        "required_count": 19,
+        "description_count": 20,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 21,
+        "reference_path_added_count": 19,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 1
+      },
+      "trace_id": "8b90be25-bd4c-93c2-5baf-56d26aa081a8",
+      "review": {
+        "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+        "trial_index": 3,
+        "trace_id": "8b90be25-bd4c-93c2-5baf-56d26aa081a8",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "issue",
+          "decomposition": "passed",
+          "structure": "issue",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "root_models_one_entity"
+        ],
+        "paths": [
+          "/"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-235e-104e3dd379f1"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-235e-104e3dd379f1"
+      },
+      "laminar": {
+        "trace_id": "8b90be25-bd4c-93c2-5baf-56d26aa081a8",
+        "llm_calls": 1,
+        "input_tokens": 1826,
+        "output_tokens": 5906,
+        "reasoning_tokens": 5198,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.007145784,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trial_index": 3,
+      "trial_id": "20260913T153031.599662Z/cisco_asa.show_vpn-sessiondb_anyconnect/4",
+      "started_at": "2026-09-13T15:34:23.462376+00:00",
+      "finished_at": "2026-09-13T15:34:42.693244+00:00",
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "schema_submissions": 1,
+      "schema_agent_rounds": 1,
+      "termination_reason": "success",
+      "elapsed_seconds": 19.23399999999674,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 19.20300000000134,
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 1826,
+        "output_tokens": 4404,
+        "usage_observations": 1,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "structure": {
+        "property_count": 20,
+        "leaf_count": 20,
+        "max_depth": 1,
+        "type_counts": {
+          "object": 1,
+          "string": 17,
+          "integer": 3
+        },
+        "required_count": 20,
+        "description_count": 20,
+        "description_coverage": 1.0,
+        "reference_path_missing_count": 21,
+        "reference_path_added_count": 19,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "trace_id": "aa954b3f-b1ce-20ab-7e78-b0e6e85a39ea",
+      "review": {
+        "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+        "trial_index": 4,
+        "trace_id": "aa954b3f-b1ce-20ab-7e78-b0e6e85a39ea",
+        "dimensions": {
+          "naming": "passed",
+          "coverage": "issue",
+          "decomposition": "passed",
+          "structure": "issue",
+          "types_required": "passed",
+          "value_boundaries": "passed",
+          "overconstraint": "passed"
+        },
+        "overall": "needs_revision",
+        "issue_categories": [
+          "root_models_one_entity"
+        ],
+        "paths": [
+          "/"
+        ],
+        "submission_span_ids": [
+          "00000000-0000-0000-0a87-1f256809aa74"
+        ],
+        "final_submission_span_id": "00000000-0000-0000-0a87-1f256809aa74"
+      },
+      "laminar": {
+        "trace_id": "aa954b3f-b1ce-20ab-7e78-b0e6e85a39ea",
+        "llm_calls": 1,
+        "input_tokens": 1826,
+        "output_tokens": 4404,
+        "reasoning_tokens": 3683,
+        "reasoning_observed_calls": 1,
+        "recorded_cost_usd": 0.0053433840000000005,
+        "context_fit_calls": 1,
+        "schema_submissions": 1,
+        "ttp_tools": 0
+      },
+      "rejection_paths": []
+    }
+  ]
+}
