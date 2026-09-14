@@ -61,6 +61,7 @@ class SchemaSubmissionInput(ParamsBase):
             "描述单个 record 的完整 Draft 2020-12 JSON Schema。属性名称必须是 "
             "ASCII 小写 snake_case，不超过 120 字符，不能是 Python 保留关键字；"
             "冲突时按业务含义改名，不追加尾随下划线。"
+            "有明确英文标签时保留原词序、缩写及完整列限定，不替换同义词。"
         ),
     )
 
@@ -751,6 +752,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
         "提交完整的结果 JSON Schema。Schema 一旦通过便"
         "永久冻结；被拒绝后可以修正并重新提交。属性名称必须是 ASCII 小写 "
         "snake_case，最长 120 字符，禁止 Python 保留关键字；冲突时按业务含义改名。"
+        "有明确英文标签时保留原词序、缩写及完整列限定，不因父容器而删词。"
     )
     input_schema = SchemaSubmissionInput.model_json_schema()
 

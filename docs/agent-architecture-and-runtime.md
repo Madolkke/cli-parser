@@ -141,7 +141,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v40-python-identifier-field-names-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v42-source-label-field-names-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -339,3 +339,12 @@ WebUI 前端同步提示并由测试核对关键字集合，后端是最终权�
 外部注入返回既有 `invalid_injected_schema`，不启动模板 Agent；模型提交可根据错误修正后重新提交。
 底层 TTP 词法及 parse-only 仍允许其原生合法变量名，此能力不代表 Schema 接受该名称。
 v40 仅收紧字段命名并更新必要指导，不修改解析、预算、冻结协议或评测资产，不宣称语义质量已提升。
+
+
+## v42 原文标签命名指导
+
+Schema 提示优先将明确英文标签规范为 ASCII 小写 snake_case，保留词序、缩写及完整
+多行列限定，不换同义词、不因父容器删词，也不添加标签中没有的父级前缀。冲突依原文
+最近明确限定消歧，合法性仍优先；无直接标签的字段和容器继续语义命名。
+示例仅约束局部命名，不改变拆分、层级、类型、required 或校验约束策略。
+这不是自动改名或新的确定性验收；公共 API、冻结协议、解析及预算不变。

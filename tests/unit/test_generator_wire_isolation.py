@@ -369,8 +369,14 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
         SubmitResultSchemaTool.description
     )
     for request in ttp_requests:
+        assert "Queue Snapshot" not in _request_text(request)
+        assert "cache_ttl_ms" not in _request_text(request)
         assert "Report: workshop" not in _request_text(request)
         assert "第二个实体及其子项" not in _request_text(request)
+    assert "Queue Snapshot" in _request_text(schema_requests[0])
+    assert "保留原词序、缩写及完整列限定" in json.dumps(
+        schema_requests[0]["tools"], ensure_ascii=False
+    )
 
     assert _SCHEMA_RETRY_MARKER in _request_text(schema_requests[1])
     final_schema_request = _request_text(schema_requests[2])
