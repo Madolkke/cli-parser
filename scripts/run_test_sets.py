@@ -31,6 +31,7 @@ from cli_parser_agent import (  # noqa: E402
     TtpGeneratorSettings,
 )
 from cli_parser_agent.evaluation import (  # noqa: E402
+    SCHEMA_METRICS_VERSION,
     DatasetPreflightReport,
     HarnessError,
     aggregate_trial_scores,
@@ -40,10 +41,13 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     preflight_dataset_registry,
     project_execution_facts,
     safe_trial_facts,
+    schema_consistency_overview,
+    schema_contract_consistency,
     schema_proposal_metrics,
     schema_repeat_consistency,
     score_ttp_template_output,
     select_dataset_entries,
+    summarize_schema_review,
     wilson_interval,
 )
 from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
@@ -152,6 +156,9 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="record safe per-round facts to trial-NN.rounds.jsonl for loop diagnosis",
     )
+    review = commands.add_parser("schema-review")
+    review.add_argument("--run-directory", type=Path, required=True)
+    review.add_argument("--review-file", type=Path, required=True)
     return parser
 
 
@@ -784,6 +791,7 @@ async def _run_schema(args, registry, reports):
                 {
                     "runner_version": RUNNER_VERSION,
                     "mode": "schema-only",
+                    "schema_metrics_version": SCHEMA_METRICS_VERSION,
                     "case_id": case.id,
                     "case": _case_metadata(case, args.input_scope),
                     "trial_index": index,
@@ -828,7 +836,26 @@ async def _run_schema(args, registry, reports):
         )
         for case in cases
     }
+    contracts = {
+        case.id: schema_contract_consistency(
+            [
+                (document["trial_id"], schema)
+                for document, schema in results
+                if document["case_id"] == case.id
+                and document["generation_success"]
+                and document["proposal_revalidated"] is True
+                and schema is not None
+            ]
+        )
+        for case in cases
+    }
     summary = {
+        "schema_metrics_version": SCHEMA_METRICS_VERSION,
+        "run_id": run_directory.name,
+        "planned_trials_per_case": args.trials,
+        "contract_consistency": contracts,
+        "consistency_overview": schema_consistency_overview(contracts),
+        "parseability": "not_tested",
         "runner_version": RUNNER_VERSION,
         "mode": "schema-only",
         "status": "recorded",
@@ -1178,6 +1205,37 @@ def _list_cases(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
+        if args.command == "schema-review":
+
+            def unique_review_keys(pairs):
+                node = {}
+                for key, value in pairs:
+                    if key in node:
+                        raise ScriptConfigurationError("duplicate schema review key")
+                    node[key] = value
+                return node
+
+            try:
+                summary = json.loads(
+                    (args.run_directory / "summary.json").read_text(encoding="utf-8")
+                )
+                review = json.loads(
+                    args.review_file.read_text(encoding="utf-8"),
+                    object_pairs_hook=unique_review_keys,
+                )
+            except (OSError, ValueError):
+                raise ScriptConfigurationError(
+                    "invalid schema review input file"
+                ) from None
+            output = summarize_schema_review(summary, review)
+            destination = args.run_directory / "schema-review-summary.json"
+            if destination.resolve() == args.review_file.resolve():
+                raise ScriptConfigurationError(
+                    "review source cannot be the output file"
+                )
+            _run_support.write_json(destination, output)
+            print(f"review_summary_json: {destination}")
+            return 0
         if getattr(args, "mode", None) == "schema-only" and (
             args.baseline is not None
             or args.write_baseline is not None

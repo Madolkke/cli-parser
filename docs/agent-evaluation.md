@@ -131,3 +131,61 @@ finish 或 records 分数。禁止与 `--baseline`、`--write-baseline` 或非�
 可接受/需修正/无法判断。没有可见业务错误才记为可接受，明确错误记需修正，关键证据缺失
 记无法判断。描述缺失本身不构成错误。正文、Schema、description、enum 值、结构签名和内容
 哈希均不写入本地报告；只保存受控分类、字段路径、计数和 Trace/span 标识。
+
+## Schema 契约一致性（metrics v2）
+
+Schema-only 新产物增加 `schema_metrics_version=2`，runner 仍为 5，旧结构指标含义不变。
+契约比较仅使用生成成功且复验通过的提案；失败仍进入全部计划 trial 分母。
+四份有效提案产生六对，按 trial ID 排序，不受并发完成顺序影响。
+历史缺少新指标时显示不可用，不推算或补零。所有 Schema-only 报告明确
+`parseability=not_tested`：Schema 合法不代表实际 TTP 可解析。
+
+完整结构相等要求路径、类型和相对父对象的 required 相同；完整契约相等还要求受限
+Schema 的所有校验约束相同。忽略 properties/required 顺序，省略 required 与空列表等价，
+enum 按集合比较并区分布尔与数字。除数字的 JSON 数值等价外，不推导约束写法的数学等价。
+只忽略 Schema 节点上的 title/description，不忽略同名业务属性。
+
+逐对输出只含 ID、布尔结论、数量和比率：根以外节点的路径交集/并集/差集、路径重合度，
+共同路径上的容器/标量类型差异、共同属性路径的 required 差异、同类型节点的约束差异，
+以及共同节点的说明文字变化。数组元素以 `*` 表示；类型、约束、说明比较包含根节点。
+每类差异分别保存受影响 pair 数、差异节点数和可比较节点分母；说明文字的增删也计一次
+节点变化，不推断语义变化。路径差异不自动叫作改名，下游连带差异不代表独立根因。
+每例保存契约变体数、主导占比和两两一致率；跨用例给出宏平均及按有效 pair 数加权汇总。
+少于两份有效提案时一致率不可用。完整路径清单、约束值、签名及哈希均不落盘。
+
+## 离线 Schema 审阅汇总
+
+```powershell
+uv run python scripts/run_test_sets.py schema-review --run-directory .artifacts/test-set-evaluation/RUN --review-file review.json
+```
+
+此子命令只读取数值运行产物和受限审阅文件，不读取注册表、模型配置或 Trace 正文。
+写入独立 `schema-review-summary.json`，不覆盖原 summary 或审阅源文件。
+审阅文件必须为以下精确结构，所有节点拒绝额外键，不接受自由正文：
+
+- 根：`review_version=1`、`run_id`、`trials`、`pairs`。
+- trial：`trial_id`、`case_id`、`trace_id`、`span_ids`、`dimensions`、`overall`、
+  `categories`、`paths`。Trace 必须匹配运行记录；span 最多 64 个互异标准 UUID，
+  是人工定位标识，汇总器只校验格式，不声称独立验证其 Trace 归属。
+- dimensions 必须完整包含 `naming`、`coverage`、`decomposition`、`structure`、
+  `types_required`、`value_boundaries`、`overconstraint`；值为 `passed`、`issue`、
+  `insufficient_evidence` 或 `not_applicable`。
+- overall：`acceptable`、`needs_revision` 或 `unjudgeable`。可接受必须生成及复验成功、
+  有匹配 Trace，且没有 issue 或证据不足维度；需修正至少有一个 issue。
+- pair：`case_id`、`left_trial_id`、`right_trial_id`、`annotation_semantics`、
+  `judgment`、`categories`、`paths`。仅允许同用例的两份有效提案，拒绝重复或错配。
+  annotation_semantics 为 `equivalent`、`different` 或 `unknown`；judgment 为
+  `both_reasonable`、`at_least_one_issue` 或 `insufficient_evidence`。
+- categories 为互异固定枚举：`synonym_naming`、`structure_placement`、`type`、`required`、
+  `constraint`、`split_merge`、`coverage`、`annotation_wording`、`empty_slot`、`placeholder`、
+  `unit`、`value_boundary`、`field_meaning`、`unresolved_mapping`。可同时记录多个类别。
+- paths 最多 24 个互异路径，每条最多 2048 字符，只允许 `/` 或 ASCII snake_case 字段与
+  `*` 组成的路径，每段最多 120 字符；只记录问题位置，不保存完整路径清单。
+
+逐条和逐对审阅均在 Laminar UI 进行。说明变化必须区分措辞变化与捕获语义改变；
+无法对应字段时使用 unresolved_mapping，不猜测改名。缺失项保留未完成，不默认通过。
+汇总给出可接受/需修正/无法判断/缺失数量；失败与复验失败另列，可与无法判断重叠。
+合理提案比例以全部计划 trial 为分母。两份均可接受的 pair 只有契约相等、说明语义等价且
+人工确认两者合理时才计入合理且一致；未知说明不通过。另以全部计划 pair 为分母给出
+已确认合理且一致比例，并逐例检查全部重复和全部 pair 是否都通过。两份同样错误的提案
+即使契约完全相同，也不能计入联合通过。缺失旧指标时联合一致结果为 null。

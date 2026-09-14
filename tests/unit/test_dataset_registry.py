@@ -1051,6 +1051,11 @@ async def test_schema_only_runner_concurrency_and_safe_artifacts(tmp_path, monke
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     assert summary["generation_success_count"] == 4
     assert summary["cases"]["demo.case"]["pairwise_consistency"] == 1
+    assert summary["runner_version"] == 5
+    assert summary["schema_metrics_version"] == 2
+    assert summary["parseability"] == "not_tested"
+    assert summary["contract_consistency"]["demo.case"]["pair_count"] == 6
+    assert summary["consistency_overview"]["weighted_contract_consistency"] == 1
     assert len({t["trial_id"] for t in summary["trials"]}) == 4
     content = "".join(
         p.read_text(encoding="utf-8") for p in root.rglob("*") if p.is_file()
@@ -1065,6 +1070,35 @@ async def test_schema_only_runner_concurrency_and_safe_artifacts(tmp_path, monke
         "sha256",
     ]:
         assert secret not in content
+
+
+def test_schema_review_command_is_offline_and_preserves_source(tmp_path, monkeypatch):
+    from test_schema_consistency import fixtures
+
+    runner = _load_runner()
+    summary, review = fixtures()
+    summary_path = tmp_path / "summary.json"
+    review_path = tmp_path / "review.json"
+    summary_path.write_text(json.dumps(summary), encoding="utf-8")
+    review_path.write_text(json.dumps(review), encoding="utf-8")
+    before = summary_path.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("review must not load registry, model configuration or Trace")
+
+    monkeypatch.setattr(runner, "_configuration", forbidden)
+    monkeypatch.setattr(runner, "load_dataset_registry", forbidden)
+    monkeypatch.setattr(runner, "TtpGenerator", forbidden)
+    args = ["schema-review", "--run-directory", str(tmp_path), "--review-file"]
+    assert runner.main([*args, str(review_path)]) == 0
+    result = json.loads((tmp_path / "schema-review-summary.json").read_text())
+    assert result["confirmed_reasonable_consistent_pairs"] == 6
+    assert summary_path.read_bytes() == before
+    review["trials"][0]["body"] = "PRIVATE"
+    review_path.write_text(json.dumps(review), encoding="utf-8")
+    assert runner.main([*args, str(review_path)]) == 2
+    review_path.write_text('{"PRIVATE": 1, "PRIVATE": 2}', encoding="utf-8")
+    assert runner.main([*args, str(review_path)]) == 2
 
 
 @pytest.mark.parametrize("failure", ["exception", "cancelled", "budget"])

@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from itertools import combinations
 from pathlib import Path, PurePosixPath
 from typing import Any, Literal, cast
 
@@ -2546,4 +2547,525 @@ def schema_repeat_consistency(schemas: Sequence[Mapping[str, Any]]) -> dict[str,
         "pair_count": pairs,
         "equal_pair_count": equal_pairs,
         "pairwise_consistency": equal_pairs / pairs if pairs else None,
+    }
+
+
+SCHEMA_METRICS_VERSION = 2
+_SCHEMA_CONSTRAINTS = frozenset(
+    {
+        "additionalProperties",
+        "enum",
+        "minItems",
+        "maxItems",
+        "minLength",
+        "maxLength",
+        "minimum",
+        "maximum",
+        "exclusiveMinimum",
+        "exclusiveMaximum",
+        "multipleOf",
+    }
+)
+
+
+def _schema_value_key(value):
+    """In-memory JSON equality key, preserving the boolean/number distinction."""
+    if isinstance(value, bool):
+        return ("boolean", value)
+    if isinstance(value, (int, float)):
+        return ("number", value)
+    if value is None:
+        return ("null",)
+    if isinstance(value, str):
+        return ("string", value)
+    if isinstance(value, list):
+        return ("array", tuple(_schema_value_key(v) for v in value))
+    return (
+        "object",
+        tuple(sorted((k, _schema_value_key(v)) for k, v in value.items())),
+    )
+
+
+def _schema_node_views(schema):
+    views = {}
+
+    def visit(node, path):
+        constraints = tuple(
+            sorted(
+                (
+                    k,
+                    frozenset(_schema_value_key(v) for v in value)
+                    if k == "enum"
+                    else _schema_value_key(value),
+                )
+                for k, value in node.items()
+                if k in _SCHEMA_CONSTRAINTS
+            )
+        )
+        annotations = tuple((k, node.get(k)) for k in ("title", "description"))
+        views[path] = (constraints, annotations)
+        for name, child in node.get("properties", {}).items():
+            visit(child, f"/{name}" if path == "/" else f"{path}/{name}")
+        if "items" in node:
+            visit(node["items"], f"{path}/*")
+
+    visit(schema, "/")
+    return views
+
+
+def schema_pair_metrics(left, right):
+    """Compare in memory; output only counts and decisions, never node contents."""
+    a, b = schema_signature(left), schema_signature(right)
+    av, bv = _schema_node_views(left), _schema_node_views(right)
+    common = a.keys() & b.keys()
+    ap, bp = set(a) - {"/"}, set(b) - {"/"}
+    properties = {p for p in common if p != "/" and not p.endswith("/*")}
+    same_types = {p for p in common if a[p].type == b[p].type}
+    type_changed = {p for p in common if a[p].type != b[p].type}
+    container_changed = {
+        p
+        for p in type_changed
+        if a[p].type in {"object", "array"} or b[p].type in {"object", "array"}
+    }
+    required_changed = sum(a[p].required != b[p].required for p in properties)
+    constraints_changed = sum(av[p][0] != bv[p][0] for p in same_types)
+    structure_equal = a == b
+    return {
+        "structure_equal": structure_equal,
+        "contract_equal": structure_equal and constraints_changed == 0,
+        "path_set_equal": ap == bp,
+        "path_intersection_count": len(ap & bp),
+        "path_union_count": len(ap | bp),
+        "path_difference_count": len(ap ^ bp),
+        "path_overlap": len(ap & bp) / len(ap | bp) if ap | bp else 1.0,
+        "type_comparable_nodes": len(common),
+        "container_type_difference_count": len(container_changed),
+        "scalar_type_difference_count": len(type_changed - container_changed),
+        "required_comparable_nodes": len(properties),
+        "required_difference_count": required_changed,
+        "constraint_comparable_nodes": len(same_types),
+        "constraint_difference_count": constraints_changed,
+        "annotation_comparable_nodes": len(common),
+        "annotation_difference_count": sum(av[p][1] != bv[p][1] for p in common),
+    }
+
+
+def schema_contract_consistency(proposals):
+    """Compare trial/schema pairs in stable order without serializing schemas."""
+    proposals = sorted(proposals, key=lambda item: item[0])
+    pairs = [
+        {"left_trial_id": aid, "right_trial_id": bid, **schema_pair_metrics(a, b)}
+        for (aid, a), (bid, b) in combinations(proposals, 2)
+    ]
+    signatures = []
+    for _, schema in proposals:
+        nodes = schema_signature(schema)
+        views = _schema_node_views(schema)
+        signatures.append(
+            tuple(
+                sorted((p, n.type, n.required, views[p][0]) for p, n in nodes.items())
+            )
+        )
+    counts = Counter(signatures)
+    equal = sum(p["contract_equal"] for p in pairs)
+    difference_names = (
+        "path",
+        "container_type",
+        "scalar_type",
+        "required",
+        "constraint",
+        "annotation",
+    )
+    return {
+        "schema_metrics_version": SCHEMA_METRICS_VERSION,
+        "valid_trial_ids": [trial_id for trial_id, _ in proposals],
+        "contract_variants": len(counts),
+        "dominant_contract_share": max(counts.values()) / len(proposals)
+        if proposals
+        else None,
+        "pair_count": len(pairs),
+        "contract_equal_pair_count": equal,
+        "pairwise_contract_consistency": equal / len(pairs) if pairs else None,
+        "mean_path_overlap": sum(p["path_overlap"] for p in pairs) / len(pairs)
+        if pairs
+        else None,
+        "differences": {
+            name: {
+                "affected_pairs": sum(p[name + "_difference_count"] > 0 for p in pairs),
+                "node_count": sum(p[name + "_difference_count"] for p in pairs),
+                "comparable_nodes": sum(
+                    p[
+                        "path_union_count"
+                        if name == "path"
+                        else "type_comparable_nodes"
+                        if name in {"container_type", "scalar_type"}
+                        else name + "_comparable_nodes"
+                    ]
+                    for p in pairs
+                ),
+            }
+            for name in difference_names
+        },
+        "pairs": pairs,
+    }
+
+
+def schema_consistency_overview(cases):
+    eligible = [c for c in cases.values() if c["pair_count"]]
+    pairs = sum(c["pair_count"] for c in eligible)
+    return {
+        "comparable_cases": len(eligible),
+        "pair_count": pairs,
+        "macro_contract_consistency": sum(
+            c["pairwise_contract_consistency"] for c in eligible
+        )
+        / len(eligible)
+        if eligible
+        else None,
+        "weighted_contract_consistency": sum(
+            c["contract_equal_pair_count"] for c in eligible
+        )
+        / pairs
+        if pairs
+        else None,
+        "macro_path_overlap": sum(c["mean_path_overlap"] for c in eligible)
+        / len(eligible)
+        if eligible
+        else None,
+        "weighted_path_overlap": sum(
+            c["mean_path_overlap"] * c["pair_count"] for c in eligible
+        )
+        / pairs
+        if pairs
+        else None,
+        "differences": {
+            name: {
+                "affected_pairs": sum(
+                    c["differences"][name]["affected_pairs"] for c in eligible
+                ),
+                "node_count": sum(
+                    c["differences"][name]["node_count"] for c in eligible
+                ),
+                "comparable_nodes": sum(
+                    c["differences"][name]["comparable_nodes"] for c in eligible
+                ),
+                "macro_affected_pair_rate": sum(
+                    c["differences"][name]["affected_pairs"] / c["pair_count"]
+                    for c in eligible
+                )
+                / len(eligible)
+                if eligible
+                else None,
+                "weighted_affected_pair_rate": sum(
+                    c["differences"][name]["affected_pairs"] for c in eligible
+                )
+                / pairs
+                if pairs
+                else None,
+            }
+            for name in (
+                "path",
+                "container_type",
+                "scalar_type",
+                "required",
+                "constraint",
+                "annotation",
+            )
+        },
+    }
+
+
+_SCHEMA_REVIEW_DIMENSIONS = frozenset(
+    {
+        "naming",
+        "coverage",
+        "decomposition",
+        "structure",
+        "types_required",
+        "value_boundaries",
+        "overconstraint",
+    }
+)
+_SCHEMA_REVIEW_CATEGORIES = frozenset(
+    {
+        "synonym_naming",
+        "structure_placement",
+        "type",
+        "required",
+        "constraint",
+        "split_merge",
+        "coverage",
+        "annotation_wording",
+        "empty_slot",
+        "placeholder",
+        "unit",
+        "value_boundary",
+        "field_meaning",
+        "unresolved_mapping",
+    }
+)
+
+
+def summarize_schema_review(summary, review):
+    """Validate a bounded human review and compute conservative joint rates."""
+    from uuid import UUID
+
+    def require(condition):
+        if not condition:
+            raise HarnessError("invalid schema review structure or reference")
+
+    def keys(node, expected):
+        require(isinstance(node, dict) and set(node) == set(expected))
+
+    def valid_uuid(value):
+        if value is None:
+            return
+        try:
+            require(isinstance(value, str) and str(UUID(value)) == value)
+        except (ValueError, AttributeError):
+            raise HarnessError("invalid schema review identifier") from None
+
+    def common(row):
+        require(isinstance(row["categories"], list))
+        require(
+            all(
+                isinstance(x, str) and x in _SCHEMA_REVIEW_CATEGORIES
+                for x in row["categories"]
+            )
+        )
+        require(len(row["categories"]) == len(set(row["categories"])))
+        paths = row["paths"]
+        require(isinstance(paths, list) and len(paths) <= 24)
+        require(
+            all(
+                isinstance(p, str)
+                and len(p) <= 2048
+                and all(len(segment) <= 120 for segment in p.split("/"))
+                and re.fullmatch(
+                    r"/(?:[a-z][a-z0-9]*(?:_[a-z0-9]+)*|\*)(?:/(?:[a-z][a-z0-9]*(?:_[a-z0-9]+)*|\*))*|/",
+                    p,
+                )
+                for p in paths
+            )
+        )
+        require(len(paths) == len(set(paths)))
+
+    keys(review, {"review_version", "run_id", "trials", "pairs"})
+    require(type(review["review_version"]) is int and review["review_version"] == 1)
+    require(isinstance(summary, dict) and summary.get("mode") == "schema-only")
+    run_id = summary.get("run_id")
+    if run_id is None and summary.get("trials"):
+        run_id = summary["trials"][0]["trial_id"].split("/")[0]
+    require(isinstance(run_id, str) and review["run_id"] == run_id)
+    require(isinstance(review["trials"], list) and isinstance(review["pairs"], list))
+    trials = {t["trial_id"]: t for t in summary["trials"]}
+    require(len(trials) == len(summary["trials"]))
+    require(len(review["trials"]) <= len(trials))
+    groups = {}
+    for tid, trial in trials.items():
+        require(tid.startswith(run_id + "/"))
+        groups.setdefault(trial["case_id"], []).append(tid)
+    planned_per_case = summary.get("planned_trials_per_case")
+    if planned_per_case is not None:
+        require(type(planned_per_case) is int and 1 <= planned_per_case <= 10)
+        require(all(len(ids) <= planned_per_case for ids in groups.values()))
+    expected_counts = {
+        case: planned_per_case or len(ids) for case, ids in groups.items()
+    }
+    planned_trials = sum(expected_counts.values())
+    planned_pairs = sum(n * (n - 1) // 2 for n in expected_counts.values())
+    require(len(review["pairs"]) <= planned_pairs)
+    trial_reviews = {}
+    for row in review["trials"]:
+        keys(
+            row,
+            {
+                "trial_id",
+                "case_id",
+                "trace_id",
+                "span_ids",
+                "dimensions",
+                "overall",
+                "categories",
+                "paths",
+            },
+        )
+        tid = row["trial_id"]
+        require(isinstance(tid, str) and tid in trials and tid not in trial_reviews)
+        t = trials[tid]
+        require(row["case_id"] == t["case_id"] and row["trace_id"] == t.get("trace_id"))
+        valid_uuid(row["trace_id"])
+        require(isinstance(row["span_ids"], list) and len(row["span_ids"]) <= 64)
+        for span in row["span_ids"]:
+            require(isinstance(span, str))
+            valid_uuid(span)
+        require(len(set(row["span_ids"])) == len(row["span_ids"]))
+        keys(row["dimensions"], _SCHEMA_REVIEW_DIMENSIONS)
+        require(
+            all(
+                isinstance(v, str)
+                and v in {"passed", "issue", "insufficient_evidence", "not_applicable"}
+                for v in row["dimensions"].values()
+            )
+        )
+        require(
+            isinstance(row["overall"], str)
+            and row["overall"] in {"acceptable", "needs_revision", "unjudgeable"}
+        )
+        common(row)
+        if row["overall"] == "acceptable":
+            require(
+                t["generation_success"] is True and t["proposal_revalidated"] is True
+            )
+            require(
+                row["trace_id"] is not None
+                and "issue" not in row["dimensions"].values()
+                and "insufficient_evidence" not in row["dimensions"].values()
+            )
+        if row["overall"] == "needs_revision":
+            require("issue" in row["dimensions"].values())
+        trial_reviews[tid] = row
+
+    automatic = {}
+    for case, metrics in summary.get("contract_consistency", {}).items():
+        for pair in metrics["pairs"]:
+            ids = tuple(sorted((pair["left_trial_id"], pair["right_trial_id"])))
+            require(
+                ids[0] != ids[1]
+                and ids not in automatic
+                and all(t in trials and trials[t]["case_id"] == case for t in ids)
+            )
+            automatic[ids] = pair
+    pair_reviews = {}
+    for row in review["pairs"]:
+        keys(
+            row,
+            {
+                "case_id",
+                "left_trial_id",
+                "right_trial_id",
+                "annotation_semantics",
+                "judgment",
+                "categories",
+                "paths",
+            },
+        )
+        require(
+            isinstance(row["left_trial_id"], str)
+            and isinstance(row["right_trial_id"], str)
+        )
+        ids = tuple(sorted((row["left_trial_id"], row["right_trial_id"])))
+        require(ids[0] != ids[1] and ids not in pair_reviews)
+        if summary.get("schema_metrics_version") == SCHEMA_METRICS_VERSION:
+            require(ids in automatic)
+        require(
+            all(
+                t in trials
+                and trials[t]["case_id"] == row["case_id"]
+                and trials[t]["generation_success"] is True
+                and trials[t]["proposal_revalidated"] is True
+                for t in ids
+            )
+        )
+        require(
+            isinstance(row["annotation_semantics"], str)
+            and row["annotation_semantics"] in {"equivalent", "different", "unknown"}
+        )
+        require(
+            isinstance(row["judgment"], str)
+            and row["judgment"]
+            in {"both_reasonable", "at_least_one_issue", "insufficient_evidence"}
+        )
+        common(row)
+        for tid in ids:
+            known = trial_reviews.get(tid)
+            if known and row["judgment"] == "both_reasonable":
+                require(known["overall"] == "acceptable")
+        if all(t in trial_reviews for t in ids):
+            labels = [trial_reviews[t]["overall"] for t in ids]
+            if row["judgment"] == "at_least_one_issue":
+                require("needs_revision" in labels)
+        pair_reviews[ids] = row
+
+    acceptable = {t for t, r in trial_reviews.items() if r["overall"] == "acceptable"}
+    reasonable_pairs = {
+        tuple(sorted(pair))
+        for ids in groups.values()
+        for pair in combinations(ids, 2)
+        if all(t in acceptable for t in pair)
+    }
+    confirmed = {
+        ids
+        for ids in reasonable_pairs
+        if ids in automatic
+        and automatic[ids]["contract_equal"] is True
+        and ids in pair_reviews
+        and pair_reviews[ids]["annotation_semantics"] == "equivalent"
+        and pair_reviews[ids]["judgment"] == "both_reasonable"
+    }
+    valid_pairs = {
+        tuple(sorted(pair))
+        for ids in groups.values()
+        for pair in combinations(ids, 2)
+        if all(
+            trials[t]["generation_success"] is True
+            and trials[t]["proposal_revalidated"] is True
+            for t in pair
+        )
+    }
+    metrics_available = summary.get("schema_metrics_version") == SCHEMA_METRICS_VERSION
+    complete_cases = {
+        case: (
+            len(ids) == expected_counts[case]
+            and len(ids) >= 2
+            and all(t in acceptable for t in ids)
+            and all(tuple(sorted(pair)) in confirmed for pair in combinations(ids, 2))
+        )
+        if metrics_available
+        else None
+        for case, ids in groups.items()
+    }
+    counts = Counter(r["overall"] for r in trial_reviews.values())
+    return {
+        "review_version": 1,
+        "schema_metrics_version": summary.get("schema_metrics_version"),
+        "run_id": run_id,
+        "parseability": "not_tested",
+        "planned_trials": planned_trials,
+        "planned_pairs": planned_pairs,
+        "generation_failed_trials": sum(
+            not t["generation_success"] for t in trials.values()
+        ),
+        "revalidation_failed_trials": sum(
+            t["proposal_revalidated"] is False for t in trials.values()
+        ),
+        "reviewed_trials": len(trial_reviews),
+        "missing_trial_reviews": planned_trials - len(trial_reviews),
+        "acceptable_trials": counts["acceptable"],
+        "needs_revision_trials": counts["needs_revision"],
+        "unjudgeable_trials": counts["unjudgeable"],
+        "reasonable_proposal_rate": counts["acceptable"] / planned_trials
+        if planned_trials
+        else None,
+        "valid_pairs": len(valid_pairs),
+        "reviewed_pairs": len(pair_reviews),
+        "missing_pair_reviews": len(valid_pairs - pair_reviews.keys()),
+        "unknown_annotation_pairs": sum(
+            r["annotation_semantics"] == "unknown" for r in pair_reviews.values()
+        ),
+        "reasonable_pairs": len(reasonable_pairs),
+        "confirmed_reasonable_consistent_pairs": len(confirmed)
+        if metrics_available
+        else None,
+        "reasonable_pair_consistency": len(confirmed) / len(reasonable_pairs)
+        if metrics_available and reasonable_pairs
+        else None,
+        "planned_pair_confirmed_rate": len(confirmed) / planned_pairs
+        if metrics_available and planned_pairs
+        else None,
+        "all_repeats_reasonable_consistent": complete_cases,
+        "review_complete": len(trial_reviews) == planned_trials
+        and valid_pairs <= pair_reviews.keys(),
+        "trials": list(trial_reviews.values()),
+        "pairs": list(pair_reviews.values()),
     }
