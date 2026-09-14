@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v42-source-label-field-names-zh-cn"
+PROMPT_VERSION = "ttp-generator-v40-python-identifier-field-names-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -48,38 +48,7 @@ SCHEMA_SYSTEM_PROMPT = """\
 - 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
   record；重复表格行或重复详情块应表示为根 record 内的 array。
 - 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
-  应分别成为独立字段。字段名应表达该值的真实含义，并按以下标签规则命名。
-- 有明确英文标签时，保留原词序和缩写，仅规范为 ASCII 小写 snake_case；不要主动
-  展开缩写、调换词序或替换同义词。空白、连字符及分隔词项的标点变成单下划线，
-  去除标签两端的冒号、点线等布局符号；这只处理字段标签，不清洗业务值。
-- 多行表头先根据列对齐及标题层级确定每列归属，再从上到下组合属于该列的限定词。
-  不混入邻列词项，也不机械加入整表标题。标签中的限定词即使与父容器含义重复也
-  要保留；不要额外添加原标签没有的父级前缀。
-- 规范结果不满足字符或长度限制、属于 Python 保留关键字或标量保留名时，才按明确
-  业务含义补足合法名称，不追加尾随下划线或随意数字后缀。同一父对象的独立字段
-  规范后重名时，用原文最近且明确的章节或列限定消歧；无可靠限定才采用明确语义名。
-  不得为消歧合并不同业务值、改变层级或静默覆盖字段。
-- 无直接标签的首行字段、重复实体容器继续按语义命名，不要求统一容器名称或单复数。
-  已拆分复合值的子项也不强制套用整条标签；这些例外不允许改写已有明确标签。
-
-合成命名示例（只说明局部名称，不规定整份输出的结构）：
-```text
-Cache  TTL-ms....: 17       -> cache_ttl_ms
-Origin Ref: R8             -> origin_ref（即使父对象名为 origin）
-Class: premium             -> service_class（已知属于服务类别，避开关键字）
-
-Queue Snapshot
-Ingress       Egress
-Lane Ref      Lane Ref
-A7            B9
-```
-上表两列分别是 ingress_lane_ref、egress_lane_ref；Queue Snapshot 是整表标题，
-不能拼入列名，也不能把 Ingress 拼到右列。缩写 TTL、Ref 原样保留，不改为全称。
-上述局部字段映射的合法 Schema 片段：
-```json
-{"type":"object","additionalProperties":false,"properties":{"cache_ttl_ms":{"type":"integer"},"origin":{"type":"object","additionalProperties":false,"properties":{"origin_ref":{"type":"string"}}},"service_class":{"type":"string"},"ingress_lane_ref":{"type":"string"},"egress_lane_ref":{"type":"string"}}}
-```
-
+  应分别成为独立字段。字段名应表达该值的真实含义。
 - 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
   在至少一个样例或同类记录中非空出现、含义明确且能可靠捕获的主要语义字段都应
   建模；只在部分实例出现的字段应保持可选，不能因此丢弃有效信息。

@@ -1,41 +1,29 @@
 """Synthetic naming examples; no evaluation labels or Trace content."""
 
-import json
-import re
 from copy import deepcopy
 
 from cli_parser_agent.evaluation import schema_pair_metrics
-from cli_parser_agent.ttp_generation.agent.prompt import SCHEMA_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.validation.json_schema import (
     validate_result_schema,
 )
 
 
 def example():
-    blocks = re.findall(r"```json\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)
-    return next(json.loads(b) for b in blocks if "cache_ttl_ms" in b)
-
-
-def test_displayed_label_example_is_legal_and_keeps_qualifiers():
-    schema = example()
-    before = deepcopy(schema)
-    assert not validate_result_schema(schema)
-    assert schema == before
-    assert set(schema["properties"]) == {
-        "cache_ttl_ms",
-        "origin",
-        "service_class",
-        "ingress_lane_ref",
-        "egress_lane_ref",
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "cache_ttl_ms": {"type": "string"},
+            "service_class": {"type": "string"},
+            "ingress_lane_ref": {"type": "string"},
+            "egress_lane_ref": {"type": "string"},
+            "origin": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {"origin_ref": {"type": "string"}},
+            },
+        },
     }
-    assert set(schema["properties"]["origin"]["properties"]) == {"origin_ref"}
-    table = re.search(r"Queue Snapshot\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)[
-        1
-    ].splitlines()
-    # Both lower headers share the exact column positions of their own qualifiers.
-    assert table[0].index("Ingress") == table[1].index("Lane Ref")
-    assert table[0].index("Egress") == table[1].rindex("Lane Ref")
-    assert "不能把 Ingress 拼到右列" in SCHEMA_SYSTEM_PROMPT
 
 
 def test_legal_synonym_does_not_imply_equal_contract():
