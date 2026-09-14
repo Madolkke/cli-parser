@@ -1,0 +1,2329 @@
+{
+  "review_version": 1,
+  "run_id": "20260914T162241.918583Z",
+  "trials": [
+    {
+      "trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/1",
+      "case_id": "broadcom_icos.show_version",
+      "trace_id": "e0e66c7f-182c-7b0e-3251-2c7267b0fe21",
+      "span_ids": [
+        "00000000-0000-0000-36b3-5b4558a40eff"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/2",
+      "case_id": "broadcom_icos.show_version",
+      "trace_id": "628dbd09-d82d-0f68-7bff-fde488aaca57",
+      "span_ids": [
+        "00000000-0000-0000-c2c5-92a90641ca4c"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/3",
+      "case_id": "broadcom_icos.show_version",
+      "trace_id": "d7181dbd-d45d-ad01-7c8a-dbfaca1c778e",
+      "span_ids": [
+        "00000000-0000-0000-08d3-2424cbdd30c9"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/4",
+      "case_id": "broadcom_icos.show_version",
+      "trace_id": "040b5b08-0ab3-5b4f-429d-fd027e4da311",
+      "span_ids": [
+        "00000000-0000-0000-cace-de498ee5b05a"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/fortinet.get_system_status/1",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "366d0d06-b92d-878f-d674-c1d64d768768",
+      "span_ids": [
+        "00000000-0000-0000-190d-8faa1ce3031f"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/fortinet.get_system_status/2",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "5166f8c3-9272-6f8e-408d-57681b1b2e0c",
+      "span_ids": [
+        "00000000-0000-0000-ad9e-50bc3b322f12"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version",
+        "/virus_db",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/fortinet.get_system_status/3",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "31b25ca3-3e66-5491-43c1-6dc5dee10bcb",
+      "span_ids": [
+        "00000000-0000-0000-7d96-8129b06db2ba"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/fortinet.get_system_status/4",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "43c62649-0ede-18ab-5a4a-1ddb923ed06e",
+      "span_ids": [
+        "00000000-0000-0000-537c-e57e6e725039",
+        "00000000-0000-0000-b1fd-e0d4340156c4"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/1",
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trace_id": "976d0da3-22ed-2e16-dd9e-e587d843e55b",
+      "span_ids": [
+        "00000000-0000-0000-ddb1-86eee34e165e"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/2",
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trace_id": "76196ad6-d1bd-b2bd-cadc-15970f4a8b87",
+      "span_ids": [
+        "00000000-0000-0000-261b-f7158397d5b7"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/3",
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trace_id": "db7c14dc-3131-9538-ff92-5621ce4b2a37",
+      "span_ids": [
+        "00000000-0000-0000-0b65-383c0ead16ce"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/4",
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "trace_id": "f0256750-8aa0-9211-fa84-73fbbcff4a27",
+      "span_ids": [
+        "00000000-0000-0000-d3cb-decc70034193"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/1",
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trace_id": "1aa37bd8-0ca0-78da-095e-bec73887e31a",
+      "span_ids": [
+        "00000000-0000-0000-514b-af38455410a5"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/2",
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trace_id": "322586ac-44a7-df00-b9e7-7e68b2afd850",
+      "span_ids": [
+        "00000000-0000-0000-4716-ceb278a43b24"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/3",
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trace_id": "629f28c4-b53c-d4f6-6ab2-8e757867a4df",
+      "span_ids": [
+        "00000000-0000-0000-cb9e-8ec649145d07"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/4",
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "trace_id": "d92c330d-51d5-6b3f-ccde-f99c90031446",
+      "span_ids": [
+        "00000000-0000-0000-20be-eec0454162d1"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/1",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "bf6da735-b69a-adef-a104-3d4b44a636fc",
+      "span_ids": [
+        "00000000-0000-0000-bb4b-9eafd7a6a6ed"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "issue",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "empty_slot"
+      ],
+      "paths": [
+        "/ports/*/config_mode",
+        "/ports/*/speed",
+        "/ports/*/type"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/2",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "964a3b20-376f-3ad0-5fba-e8a338264e35",
+      "span_ids": [
+        "00000000-0000-0000-9faf-2738f4629f79"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/3",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "2c404cce-571c-d608-320d-4fdf318dc785",
+      "span_ids": [
+        "00000000-0000-0000-2962-559023c88fbe"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/4",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "52ce155e-49ba-8419-4ff6-54ba8e659391",
+      "span_ids": [
+        "00000000-0000-0000-69d6-2d6a32cb586f"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/1",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "40b9a4c7-d6b5-e3ff-d59d-bd963b636203",
+      "span_ids": [
+        "00000000-0000-0000-cbfe-6f8721c44561",
+        "00000000-0000-0000-4fb0-f89a5adac0fd"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/2",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "98eb7395-e051-823f-d887-7cb2523817f6",
+      "span_ids": [
+        "00000000-0000-0000-43eb-094ee39180e8"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/3",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "7c17ab2c-f1bf-8f92-b811-f7f3559f08f0",
+      "span_ids": [
+        "00000000-0000-0000-8358-5774338905ba",
+        "00000000-0000-0000-f72d-39f4ed0c7cef"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/4",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "5122edd1-f3ea-dd06-92e7-2137531a572c",
+      "span_ids": [
+        "00000000-0000-0000-b8f3-9cbdf63f54fb"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/1",
+      "case_id": "cisco_nxos.show_interface_status",
+      "trace_id": "f8cb0424-2ebc-de90-e3ce-73ae0114f7fa",
+      "span_ids": [
+        "00000000-0000-0000-bb1d-9f353c000375"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/2",
+      "case_id": "cisco_nxos.show_interface_status",
+      "trace_id": "80fa53c1-b09b-5f0f-18f4-3c01431c1fe5",
+      "span_ids": [
+        "00000000-0000-0000-09dc-decc2bdbf1bf"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/3",
+      "case_id": "cisco_nxos.show_interface_status",
+      "trace_id": "9a8d0f8d-530a-c2d0-78bc-cc4cf2e50ea1",
+      "span_ids": [
+        "00000000-0000-0000-f263-81ad35cedf87"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/4",
+      "case_id": "cisco_nxos.show_interface_status",
+      "trace_id": "408c2946-4ac3-f8e8-3571-1c9c07dd171d",
+      "span_ids": [
+        "00000000-0000-0000-247e-b7a142f70e22"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/1",
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trace_id": "54a45a09-ffc1-c1a7-bcea-2415ae1bf3dc",
+      "span_ids": [
+        "00000000-0000-0000-a419-ca2c4939c2bf"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/2",
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trace_id": "8c150ec3-4902-144b-f63e-0dd66e47cf2d",
+      "span_ids": [
+        "00000000-0000-0000-84dc-76798bd25fc9",
+        "00000000-0000-0000-d6bd-ba69cb96e9d0"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/3",
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trace_id": "44227d9a-7a9a-3c3d-bfcc-ea723407e1eb",
+      "span_ids": [
+        "00000000-0000-0000-746e-84d826e89af8"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/4",
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "trace_id": "5ee3d8b0-f16a-7ea6-fccb-cb6bfdc003c8",
+      "span_ids": [
+        "00000000-0000-0000-803c-bba198a6f705",
+        "00000000-0000-0000-1a8b-c4320858728f"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/arista_eos.show_version/1",
+      "case_id": "arista_eos.show_version",
+      "trace_id": "dcdb18f9-3d57-8f89-3eb7-1780f3c7f47d",
+      "span_ids": [
+        "00000000-0000-0000-4c64-8e3ef69ecda6"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/arista_eos.show_version/2",
+      "case_id": "arista_eos.show_version",
+      "trace_id": "ba8bd512-eb7e-0d92-e124-6fed4bb8f4e3",
+      "span_ids": [
+        "00000000-0000-0000-ebe4-76120e378ccd"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/arista_eos.show_version/3",
+      "case_id": "arista_eos.show_version",
+      "trace_id": "d78d9d3d-f0af-9054-1446-611437e24b23",
+      "span_ids": [
+        "00000000-0000-0000-b2a2-0d8f41401f0b"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/arista_eos.show_version/4",
+      "case_id": "arista_eos.show_version",
+      "trace_id": "b3362784-e24a-8bab-1796-86c202b0edfc",
+      "span_ids": [
+        "00000000-0000-0000-8cc3-82cd6c9823b8"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/1",
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trace_id": "2eb83ac1-aa44-21a2-38d3-6445f1537b55",
+      "span_ids": [
+        "00000000-0000-0000-3708-ebfe0f2c6967"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/2",
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trace_id": "a2000035-71e0-733c-7c97-0af978b8358c",
+      "span_ids": [
+        "00000000-0000-0000-0f51-5734bcccecf3"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/3",
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trace_id": "356b2384-4d2f-7fec-1980-a2395f266efd",
+      "span_ids": [
+        "00000000-0000-0000-caf5-14db89b70a5e"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/4",
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "trace_id": "a2412f61-386f-76e2-d5ff-8922c011a782",
+      "span_ids": [
+        "00000000-0000-0000-a29f-bafe187b0173"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "b6efb182-92d9-3eae-3c9b-648806fd3cde",
+      "span_ids": [
+        "00000000-0000-0000-1af2-c0034f54caaf"
+      ],
+      "dimensions": {
+        "naming": "issue",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "field_meaning"
+      ],
+      "paths": [
+        "/control_connections/*/controller_id"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/2",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "2421595d-f322-cd82-e819-850aafa2874b",
+      "span_ids": [
+        "00000000-0000-0000-ebdc-e7a5b2f0ef1d"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/3",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "5f7b984b-555b-d334-96a9-3bdc3de98920",
+      "span_ids": [
+        "00000000-0000-0000-e8c5-62407c6725b2"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "issue",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "coverage",
+        "empty_slot"
+      ],
+      "paths": [
+        "/control_connections/*"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/4",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "fde9b3e2-9f80-f470-aa2c-30d145f820d6",
+      "span_ids": [
+        "00000000-0000-0000-851f-bc1e84b3138b"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/1",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "ce0fe2b3-a428-43e5-c6e4-13c0119620b5",
+      "span_ids": [
+        "00000000-0000-0000-94ca-aa28707d9859"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/2",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "3d53a90c-b6c6-27c0-ed91-f8429b3784b5",
+      "span_ids": [
+        "00000000-0000-0000-99b4-4af976e6af48",
+        "00000000-0000-0000-5045-2afb1726335f",
+        "00000000-0000-0000-0f55-699b2c4eb803"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/3",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "f387da5b-cce1-00d9-8bb9-f69d408e02e8",
+      "span_ids": [
+        "00000000-0000-0000-e86c-3a95cd5be332"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/4",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "9de72443-630e-2702-3ac7-605f161bbf35",
+      "span_ids": [
+        "00000000-0000-0000-72db-263cbdef5c4c"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/1",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "ed841625-8dcc-28dd-0d26-b43d47ab3c0b",
+      "span_ids": [
+        "00000000-0000-0000-89ba-11911c67882b"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/2",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "01b9f7ef-fecd-44b9-d6f2-6818379db23f",
+      "span_ids": [
+        "00000000-0000-0000-e6dd-9300ecab4cc6"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/3",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "8ee63387-5ae0-2a84-6d6f-587de9658c47",
+      "span_ids": [
+        "00000000-0000-0000-79cc-1231f8d31731"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/4",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "7bb84eac-4a58-e011-4da5-3af84b101e76",
+      "span_ids": [
+        "00000000-0000-0000-2b7f-4f2b8f6d150f"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/port_channels/*/port_channel",
+        "/port_channels/*/member_ports/*"
+      ]
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/1",
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trace_id": "b9bc1aa2-4f85-47aa-26b2-3a82fa8fac75",
+      "span_ids": [
+        "00000000-0000-0000-d894-eb1d687208f0"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/2",
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trace_id": "d8f834b1-8e19-e91a-509d-a14baed6d8af",
+      "span_ids": [
+        "00000000-0000-0000-9e48-068d6a434cf3"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/3",
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trace_id": "bd6483de-f4fc-af46-b345-00b4ee6fc33b",
+      "span_ids": [
+        "00000000-0000-0000-4c73-bc3d91ac726b",
+        "00000000-0000-0000-200e-9f81bc1ab1c1"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/4",
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "trace_id": "d84eafb7-f842-090b-e117-6303ef9b5057",
+      "span_ids": [
+        "00000000-0000-0000-2a73-807bbeb1a145"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": []
+    }
+  ],
+  "pairs": [
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/2",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/2",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "broadcom_icos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/3",
+      "right_trial_id": "20260914T162241.918583Z/broadcom_icos.show_version/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/1",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virus_db",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/1",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "structure_placement",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/1",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/2",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "structure_placement",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virus_db",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/2",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "type",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virus_db",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "left_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/3",
+      "right_trial_id": "20260914T162241.918583Z/fortinet.get_system_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "split_merge",
+        "structure_placement",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status"
+      ]
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "required",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "coverage",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "coverage",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "coverage",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "coverage",
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_s300.show_lldp_neighbors",
+      "left_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_s300.show_lldp_neighbors/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/1",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/1",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/1",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/2",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/2",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "paloalto_panos.show_interface_hardware",
+      "left_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/3",
+      "right_trial_id": "20260914T162241.918583Z/paloalto_panos.show_interface_hardware/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/1",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/2",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "required",
+        "empty_slot",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/ports/*/config_mode",
+        "/ports/*/speed",
+        "/ports/*/type"
+      ]
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/1",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/3",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "required",
+        "empty_slot",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/ports/*/config_mode",
+        "/ports/*/speed",
+        "/ports/*/type"
+      ]
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/1",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "required",
+        "empty_slot",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/ports/*/config_mode",
+        "/ports/*/speed",
+        "/ports/*/type"
+      ]
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/2",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/2",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "left_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/3",
+      "right_trial_id": "20260914T162241.918583Z/hp_procurve.show_interfaces_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/2",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/2",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/2",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/3",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_voice_mos/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_interface_status",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_interface_status/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/1",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/1",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/1",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/2",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/2",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "mikrotik_routeros.system_resource_print",
+      "left_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/3",
+      "right_trial_id": "20260914T162241.918583Z/mikrotik_routeros.system_resource_print/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "unit",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/1",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "split_merge",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/2",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "type",
+        "unit",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/2",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "split_merge",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "arista_eos.show_version",
+      "left_trial_id": "20260914T162241.918583Z/arista_eos.show_version/3",
+      "right_trial_id": "20260914T162241.918583Z/arista_eos.show_version/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "split_merge",
+        "type",
+        "unit",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/1",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/2",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/2",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "oneaccess_oneos.show_tacacs",
+      "left_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/3",
+      "right_trial_id": "20260914T162241.918583Z/oneaccess_oneos.show_tacacs/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/2",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "field_meaning",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/control_connections/*/controller_id"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/3",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "coverage",
+        "empty_slot",
+        "field_meaning",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/control_connections/*/controller_id",
+        "/control_connections/*"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "field_meaning",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/control_connections/*/controller_id"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/3",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "coverage",
+        "empty_slot",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/control_connections/*"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "coverage",
+        "empty_slot",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/control_connections/*"
+      ]
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "left_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_ios.show_ip_ospf_database_router/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "structure_placement",
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/2",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "split_merge",
+        "coverage",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "split_merge",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/port_channels/*/port_channel",
+        "/port_channels/*/member_ports/*"
+      ]
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "split_merge",
+        "coverage",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "split_merge",
+        "coverage",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/port_channels/*/port_channel",
+        "/port_channels/*/member_ports/*"
+      ]
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_nxos.show_port-channel_summary/4",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "split_merge",
+        "type",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/port_channels/*/port_channel",
+        "/port_channels/*/member_ports/*"
+      ]
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "split_merge",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/1",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "type",
+        "split_merge",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/3",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "type",
+        "split_merge",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/2",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/4",
+      "annotation_semantics": "different",
+      "judgment": "both_reasonable",
+      "categories": [
+        "type",
+        "split_merge",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    },
+    {
+      "case_id": "cisco_asa.show_vpn-sessiondb_anyconnect",
+      "left_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/3",
+      "right_trial_id": "20260914T162241.918583Z/cisco_asa.show_vpn-sessiondb_anyconnect/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "constraint",
+        "annotation_wording"
+      ],
+      "paths": []
+    }
+  ]
+}
