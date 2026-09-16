@@ -394,6 +394,6 @@ v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文
 
 SchemaPlan 预试未获采用，产品默认为 v44 直接生成路径。`schema_plan.py` 以及 `agent/schema_plan_prompt.py` 保留为独立诊断机制，不接入 generator/workflow/Toolkit；旧 B/C 工具与确认状态已移除。公共 API、外部注入、TTP 及端到端评测能力保持兼容。实验实现固定于 fc2e31a，详见 [结果](schema-plan-pretrial-regression.md)。
 
-## v47 轻量草稿实验边界
+## v47 轻量草稿诊断边界
 
-私有请求局部工厂比较 v44/direct 与 v47/draft。草稿仅表达递归字段、模型选择的类型与 required、注释/约束及标签来源；程序生成合法名称、封闭对象和完整 Schema，再经原校验器冻结。无实例枚举、字符坐标或确认轮次，不接入外部 Schema 注入。行号只进入 Schema 阶段；TTP 任务正文和冻结交接不变。默认策略须经预试及同期端到端门槛决定，详见 [协议](schema-draft-v47-protocol.md)。
+v47 预试未达到采用条件，产品仍只运行 v44。`schema_draft.py`、`schema_draft_sources.py` 和 `agent/schema_draft_prompt.py` 保留独立诊断，但不再由 generator/workflow/Toolkit 引用；工具、请求局部选择工厂与实验参数已撤下。来源合法和隐式根 object 都不证明业务判断正确；历史实现固定于 f7b9a16，见 [结果](schema-draft-v47-pretrial-regression.md)。

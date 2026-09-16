@@ -21,8 +21,6 @@ from .prompt import (
     build_schema_task_prompt,
     build_ttp_task_prompt,
 )
-from .schema_draft_prompt import SCHEMA_DRAFT_SYSTEM_PROMPT
-from .schema_strategy import current_schema_strategy
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -157,11 +155,7 @@ def build_agent(
 
     return Agent(
         name=_PHASE_AGENT_NAMES[phase],
-        system_prompt=(
-            SCHEMA_DRAFT_SYSTEM_PROMPT
-            if phase == "schema" and session.schema_strategy == "draft"
-            else _PHASE_SYSTEM_PROMPTS[phase]
-        ),
+        system_prompt=_PHASE_SYSTEM_PROMPTS[phase],
         model=model,
         toolkit=Toolkit(
             tools=build_submission_tools(
@@ -213,9 +207,6 @@ async def estimate_initial_model_tokens(
     )
     tool_names = tuple(tool.get("function", {}).get("name") for tool in tools)
     expected_tool_names = _PHASE_TOOL_NAMES[phase]
-    draft = phase == "schema" and current_schema_strategy() == "draft"
-    if draft:
-        expected_tool_names = ("submit_schema_draft",)
     if tool_names != expected_tool_names:
         raise RuntimeError(
             "The ordered tool schemas do not match the requested phase.",
@@ -224,11 +215,7 @@ async def estimate_initial_model_tokens(
         [
             SystemMsg(
                 name="system",
-                content=(
-                    SCHEMA_DRAFT_SYSTEM_PROMPT
-                    if draft
-                    else _PHASE_SYSTEM_PROMPTS[phase]
-                ),
+                content=_PHASE_SYSTEM_PROMPTS[phase],
             ),
             message,
         ],

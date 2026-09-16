@@ -1,0 +1,350 @@
+{
+  "review_version": 1,
+  "run_id": "20260916T172415.314485Z-draft",
+  "trials": [
+    {
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "65085986-60a1-6e33-931b-7553794a1b4c",
+      "span_ids": [
+        "00000000-0000-0000-3db9-2237b558ceb2"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status",
+        "/virus_db"
+      ],
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/2"
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "7d4031f4-2732-f376-a2fe-be01bc41449e",
+      "span_ids": [
+        "00000000-0000-0000-07db-01b33931fd31"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/2"
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "bfa643f8-c033-42ff-b44c-0325919d5236",
+      "span_ids": [
+        "00000000-0000-0000-fc0b-918767c5913f"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/1"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "9878b5bd-c3d3-88f3-a4b4-21c04da341c1",
+      "span_ids": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_sdwan_control_connections/2"
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "3fe0c1c1-f714-2aa2-7baa-b4bf07818905",
+      "span_ids": [
+        "00000000-0000-0000-3a34-038dba5fa362"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/1"
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "759715f1-d1c2-2405-d94a-75d95263b62c",
+      "span_ids": [
+        "00000000-0000-0000-6183-bb499acf4b1a"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/port_channels/*/port_channel",
+        "/port_channels/*/member_ports"
+      ],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/2"
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "acb68a2c-a3ae-bc3d-30d8-8080924e41a3",
+      "span_ids": [
+        "00000000-0000-0000-e067-9485f7aca754"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/1"
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "f41d823f-6b7f-6710-fa8b-54455b11c968",
+      "span_ids": [
+        "00000000-0000-0000-4c1e-cb12f3fba023"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/port_channel_groups/*/port_channel",
+        "/port_channel_groups/*/member_ports"
+      ],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/1"
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "a48ae8ff-ab62-1bfc-6ff2-341fd60f0556",
+      "span_ids": [
+        "00000000-0000-0000-6f7a-027c0cd1435b"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status",
+        "/virus_db"
+      ],
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/1"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "1edc66d8-e82a-a00c-8451-9785d013eb7e",
+      "span_ids": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_sdwan_control_connections/1"
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "20d2c0ad-2ca4-ee33-6151-b3812141ef1f",
+      "span_ids": [
+        "00000000-0000-0000-7225-7f96365ec66e"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "issue",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "field_meaning"
+      ],
+      "paths": [
+        "/ports/*/tagged",
+        "/ports/*/untagged"
+      ],
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/2"
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "f3ef9e8f-af5c-9e34-cbf7-bf4f0eb85126",
+      "span_ids": [
+        "00000000-0000-0000-ec9d-16cd9b0178ea"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/2"
+    }
+  ],
+  "pairs": [
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "coverage",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/port_channels",
+        "/port_channel_groups",
+        "/flags"
+      ],
+      "left_trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/1",
+      "right_trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/2"
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "type",
+        "coverage",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/process_id",
+        "/router_link_states/*/links/*/link_id_qualifier",
+        "/router_link_states/*/links/*/link_data_qualifier"
+      ],
+      "left_trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/1",
+      "right_trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/2"
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "field_meaning",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/ports/*/tagged",
+        "/ports/*/untagged"
+      ],
+      "left_trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/1",
+      "right_trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/2"
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/hour_statistics",
+        "/hour_sections"
+      ],
+      "left_trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/1",
+      "right_trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/2"
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "annotation_semantics": "equivalent",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "annotation_wording"
+      ],
+      "paths": [
+        "/version",
+        "/virtual_domains_status",
+        "/virus_db"
+      ],
+      "left_trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/1",
+      "right_trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/2"
+    }
+  ]
+}

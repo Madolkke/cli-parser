@@ -2,7 +2,7 @@
 
 本实验比较 v44 直接生成（A/direct）与 v47 轻量草稿编译（B/draft）。默认产品仍是
 `ttp-generator-v44-schema-runtime-contract-zh-cn`；候选版本为
-`ttp-generator-v47-lightweight-label-and-root-structure-zh-cn`。最终采用由同期评测决定。
+`ttp-generator-v47-lightweight-label-and-root-structure-zh-cn`。实验实现固定于 f7b9a16。24 次预试未达到门槛，候选运行接线已撤下；以下保留原方案与采用规则，实际结果见 [预试报告](schema-draft-v47-pretrial-regression.md)。
 
 ## 产品与实验边界
 

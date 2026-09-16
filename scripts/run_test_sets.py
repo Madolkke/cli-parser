@@ -56,11 +56,6 @@ from cli_parser_agent.evaluation_parse_review import (  # noqa: E402
     summarize_parse_review,
 )
 from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION  # noqa: E402
-from cli_parser_agent.ttp_generation.agent.schema_strategy import (  # noqa: E402
-    current_prompt_version,
-    current_schema_strategy,
-    schema_strategy_for_testing,
-)
 
 RUNNER_VERSION = 5
 BASELINE_VERSION = 1
@@ -165,12 +160,6 @@ def _build_parser() -> argparse.ArgumentParser:
         "--trace-rounds",
         action="store_true",
         help="record safe per-round facts to trial-NN.rounds.jsonl for loop diagnosis",
-    )
-    run.add_argument(
-        "--schema-experiment-arm",
-        choices=("direct", "draft"),
-        action="append",
-        help="repeat for interleaved generated-schema arms over one input snapshot",
     )
     review = commands.add_parser("schema-review")
     review.add_argument("--run-directory", type=Path, required=True)
@@ -1253,76 +1242,25 @@ def _fallback_repeat_consistency(results):
 
 
 async def _run_schema(args, registry, reports):
-    """Interleave arms on one immutable input snapshot and shared semaphore."""
+    """Run the default product over one shared in-memory input snapshot."""
     cases = tuple(report.case for report in reports if report.case is not None)
-    arms = getattr(args, "schema_experiment_arm", None) or [current_schema_strategy()]
-    if len(arms) != len(set(arms)):
-        raise ScriptConfigurationError("duplicate schema experiment arm")
     settings, policy, artifact_root, configuration = _configuration()
     git_state = _git_state()
     semaphore = asyncio.Semaphore(args.concurrency)
-    experiment_directory = (
-        _run_support.new_run_directory(artifact_root) if len(arms) > 1 else None
-    )
-    arm_state = {}
-    for arm in arms:
-        root = experiment_directory / arm if experiment_directory else artifact_root
-        directory = _write_preflight_artifacts(root, registry, reports)
-        if experiment_directory:
-            # Different arm parents can receive the same timestamp. The basename
-            # is also the public run/trial identifier, so it must include the arm.
-            directory = directory.rename(directory.with_name(f"{directory.name}-{arm}"))
-        with schema_strategy_for_testing(arm):
-            arm_configuration = deepcopy(configuration)
-            arm_configuration["prompt"] = {"version": current_prompt_version()}
-        arm_state[arm] = {"directory": directory, "configuration": arm_configuration}
-    manifest = {
-        "experiment_version": 1,
-        "mode": args.mode,
-        "git": git_state,
-        "global_concurrency": args.concurrency,
-        "planned_request_count": len(cases) * args.trials * len(arms),
-        "completed_request_count": 0,
-        "same_input_snapshot": True,
-        "selected_inputs": _selection_metadata(reports),
-        "arms": {
-            arm: {
-                "run_directory": str(state["directory"]),
-                "planned_trials": len(cases) * args.trials,
-                "prompt": state["configuration"]["prompt"],
-            }
-            for arm, state in arm_state.items()
-        },
-        "status": "running",
-    }
-    if experiment_directory:
-        _run_support.write_json(experiment_directory / "experiment.json", manifest)
+    run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
     print(
         f"running {args.mode}: cases={len(cases)} trials={args.trials} "
-        f"arms={','.join(arms)} concurrency={args.concurrency}",
+        f"concurrency={args.concurrency}",
         flush=True,
     )
-    jobs = []
-    for case_index, case in enumerate(cases):
-        for index in range(args.trials):
-            offset = (case_index + index) % len(arms)
-            for arm in [*arms[offset:], *arms[:offset]]:
-                jobs.append((arm, case, index))
     tasks = [
         asyncio.create_task(
             _execute_schema_trial(
-                args,
-                case,
-                index,
-                settings,
-                policy,
-                arm_state[arm]["directory"],
-                git_state,
-                semaphore,
-                arm,
+                args, case, index, settings, policy, run_directory, git_state, semaphore
             )
         )
-        for arm, case, index in jobs
+        for case in cases
+        for index in range(args.trials)
     ]
     try:
         results = await asyncio.gather(*tasks)
@@ -1330,55 +1268,14 @@ async def _run_schema(args, registry, reports):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        if experiment_directory:
-            manifest["status"] = "interrupted"
-            manifest["completed_request_count"] = sum(
-                task.done() and not task.cancelled() and task.exception() is None
-                for task in tasks
-            )
-            manifest["cancelled_task_count"] = sum(task.cancelled() for task in tasks)
-            manifest["exception_task_count"] = sum(
-                task.done() and not task.cancelled() and task.exception() is not None
-                for task in tasks
-            )
-            _run_support.write_json(experiment_directory / "experiment.json", manifest)
         raise
-    for arm, state in arm_state.items():
-        selected = [
-            result
-            for (job_arm, _, _), result in zip(jobs, results, strict=True)
-            if job_arm == arm
-        ]
-        _write_schema_summary(
-            args,
-            registry,
-            reports,
-            cases,
-            selected,
-            state["directory"],
-            git_state,
-            state["configuration"],
-        )
-    if experiment_directory:
-        manifest["status"] = "recorded"
-        manifest["completed_request_count"] = len(results)
-        _run_support.write_json(experiment_directory / "experiment.json", manifest)
-        print(
-            f"experiment_json: {experiment_directory / 'experiment.json'}", flush=True
-        )
+    _write_schema_summary(
+        args, registry, reports, cases, results, run_directory, git_state, configuration
+    )
     return 0
 
 
 async def _execute_schema_trial(
-    args, case, index, settings, policy, run_directory, git_state, semaphore, arm=None
-):
-    with schema_strategy_for_testing(arm or current_schema_strategy()):
-        return await _execute_schema_trial_in_context(
-            args, case, index, settings, policy, run_directory, git_state, semaphore
-        )
-
-
-async def _execute_schema_trial_in_context(
     args, case, index, settings, policy, run_directory, git_state, semaphore
 ):
     async with semaphore:
@@ -1398,8 +1295,7 @@ async def _execute_schema_trial_in_context(
             else None
         )
         document["fallback_naming"] = _fallback_trial_metrics(
-            fallback,
-            applicable=current_schema_strategy() == "draft" or fallback is not None,
+            fallback, applicable=fallback is not None
         )
         document.update(
             {
@@ -1895,16 +1791,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ScriptConfigurationError(
                 "generated-schema modes do not support TTP baseline options"
             )
-        if getattr(args, "schema_experiment_arm", None) and args.mode not in {
-            "schema-only",
-            "end-to-end",
-        }:
-            raise ScriptConfigurationError(
-                "schema experiment arms require a generated-schema mode"
-            )
-        arms = getattr(args, "schema_experiment_arm", None) or []
-        if len(arms) != len(set(arms)):
-            raise ScriptConfigurationError("duplicate schema experiment arm")
         if args.command == "list":
             return _list_cases(args)
         registry = load_dataset_registry(args.registry)

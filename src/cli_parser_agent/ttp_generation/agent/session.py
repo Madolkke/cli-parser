@@ -97,11 +97,6 @@ class GenerationSession:
     # ``0.0`` keeps the historical rounds-only behaviour.
     min_round_seconds: float = 0.0
 
-    schema_strategy: str = "direct"
-    schema_draft_sources: tuple[Any, ...] = ()
-    max_schema_bytes: int = 65_536
-    max_schema_depth: int = 16
-    max_schema_properties: int = 256
     frozen_schema: dict[str, Any] | None = None
     last_result_schema: dict[str, Any] | None = None
     schema_submissions: int = 0

@@ -22,7 +22,6 @@ BoundaryState = Literal["entered", "valid", "rejected", "execution_failed"]
 MAX_CONSECUTIVE_PROTOCOL_FAILURES = 4
 SCHEMA_PROTOCOL_TOOLS = (
     "submit_result_schema",
-    "submit_schema_draft",
     "submit_schema_plan",
     "confirm_schema_plan",
 )
@@ -92,7 +91,6 @@ def protocol_repair_text(
             ["result_schema"],
             '{"result_schema": {…完整 Schema…}}',
         ),
-        "submit_schema_draft": (["draft"], '{"draft": {…完整 SchemaDraft…}}'),
         "submit_schema_plan": (["plan"], '{"plan": {…完整 SchemaPlan…}}'),
         "confirm_schema_plan": ([], "{}"),
         "submit_ttp_template": (["ttp_template"], '{"ttp_template": "…完整模板…"}'),

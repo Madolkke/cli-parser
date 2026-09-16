@@ -1,0 +1,299 @@
+{
+  "review_provenance_version": 1,
+  "group_labels_hidden_during_initial_review": true,
+  "model_form_may_reveal_strategy": true,
+  "trial_count": 24,
+  "independently_reviewed": 24,
+  "pair_count": 9,
+  "independently_reviewed_pairs": 9,
+  "unresolved_disagreements": 0,
+  "trials": [
+    {
+      "review_id": "R001",
+      "trial_id": "20260916T172415.307882Z-direct/oneaccess_oneos.show_voice_mos/2",
+      "trace_id": "0d3816d7-a2bf-33a4-c217-b5b7550b845f",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R002",
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/2",
+      "trace_id": "65085986-60a1-6e33-931b-7553794a1b4c",
+      "case_id": "fortinet.get_system_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R003",
+      "trial_id": "20260916T172415.307882Z-direct/oneaccess_oneos.show_voice_mos/1",
+      "trace_id": "0c7eaf86-89e1-dc99-ae02-42eb1f8591e7",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R004",
+      "trial_id": "20260916T172415.307882Z-direct/hp_procurve.show_interfaces_status/2",
+      "trace_id": "7da02b96-17f5-3989-f3f1-ada4f409565c",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R005",
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/2",
+      "trace_id": "7d4031f4-2732-f376-a2fe-be01bc41449e",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": false,
+      "adjudication": "clarified",
+      "complete": true
+    },
+    {
+      "review_id": "R006",
+      "trial_id": "20260916T172415.307882Z-direct/fortinet.get_system_status/2",
+      "trace_id": "f3d28ac4-a748-a404-0742-a904c3cf1526",
+      "case_id": "fortinet.get_system_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R007",
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/1",
+      "trace_id": "bfa643f8-c033-42ff-b44c-0325919d5236",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R008",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_sdwan_control_connections/2",
+      "trace_id": "9878b5bd-c3d3-88f3-a4b4-21c04da341c1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R009",
+      "trial_id": "20260916T172415.307882Z-direct/hp_procurve.show_interfaces_status/1",
+      "trace_id": "1456438a-f103-5646-ecf6-84c567b53e4d",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R010",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_ios.show_sdwan_control_connections/1",
+      "trace_id": "d6ca8bc8-eac7-570c-bc19-f261b91a0a21",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R011",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_ios.show_ip_ospf_database_router/2",
+      "trace_id": "554e32eb-cf4f-13c9-b12b-e68c51a6103f",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R012",
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/1",
+      "trace_id": "3fe0c1c1-f714-2aa2-7baa-b4bf07818905",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R013",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/2",
+      "trace_id": "759715f1-d1c2-2405-d94a-75d95263b62c",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R014",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/1",
+      "trace_id": "acb68a2c-a3ae-bc3d-30d8-8080924e41a3",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R015",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/1",
+      "trace_id": "f41d823f-6b7f-6710-fa8b-54455b11c968",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R016",
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/1",
+      "trace_id": "a48ae8ff-ab62-1bfc-6ff2-341fd60f0556",
+      "case_id": "fortinet.get_system_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R017",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_nxos.show_port-channel_summary/1",
+      "trace_id": "923959e9-24f2-8f34-282b-33253df1e065",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R018",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_nxos.show_port-channel_summary/2",
+      "trace_id": "242c5789-40a6-e274-dc0a-d2cd6d002a6b",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R019",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_sdwan_control_connections/1",
+      "trace_id": "1edc66d8-e82a-a00c-8451-9785d013eb7e",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R020",
+      "trial_id": "20260916T172415.307882Z-direct/fortinet.get_system_status/1",
+      "trace_id": "7bd239b7-0d27-d989-d6eb-f6234d73a22a",
+      "case_id": "fortinet.get_system_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R021",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_ios.show_ip_ospf_database_router/1",
+      "trace_id": "13564d89-73e4-8b94-ca2e-228ecd0c41bf",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R022",
+      "trial_id": "20260916T172415.307882Z-direct/cisco_ios.show_sdwan_control_connections/2",
+      "trace_id": "6dfde73b-6ed2-607b-09b2-12bcd8377431",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R023",
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/2",
+      "trace_id": "20d2c0ad-2ca4-ee33-6151-b3812141ef1f",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "primary_reviewer": "two",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    },
+    {
+      "review_id": "R024",
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/2",
+      "trace_id": "f3ef9e8f-af5c-9e34-cbf7-bf4f0eb85126",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "primary_reviewer": "one",
+      "secondary_reviewer": "independent",
+      "initial_overall_agreement": true,
+      "adjudication": "agreed",
+      "complete": true
+    }
+  ],
+  "adjudications": [
+    {
+      "review_id": "R005",
+      "initial": "needs_revision",
+      "final": "acceptable",
+      "reason": "ambiguous_numeric_precision_instruction_not_explicit_lexical_preservation",
+      "reviewer_agreement": true
+    },
+    {
+      "left_review_id": "R012",
+      "right_review_id": "R005",
+      "final": "both_reasonable",
+      "annotation_semantics": "equivalent",
+      "reviewer_agreement": true
+    },
+    {
+      "left_review_id": "R017",
+      "right_review_id": "R018",
+      "category_removed": "constraint",
+      "reason": "constraint_path_change_follows_structure_change",
+      "reviewer_agreement": true
+    }
+  ]
+}

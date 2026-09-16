@@ -10,7 +10,6 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal, TypeVar
 
 import openai
-from agentscope.message import UserMsg
 from pydantic import ValidationError
 
 from ..config import GenerationPolicy, TtpGeneratorSettings
@@ -20,6 +19,7 @@ from ..observability import (
     start_laminar_span,
 )
 from .agent import (
+    PROMPT_VERSION,
     AgentRunOutcome,
     GenerationPhase,
     GenerationSession,
@@ -35,7 +35,6 @@ from .agent import (
     estimate_initial_model_tokens,
     run_generation_phase,
 )
-from .agent.schema_strategy import current_prompt_version, current_schema_strategy
 from .contracts import (
     ArtifactBundle,
     GenerationMetadata,
@@ -52,7 +51,6 @@ from .sampling import (
     SampledCommandOutput,
     sample_command_outputs,
 )
-from .schema_draft_sources import build_draft_task, prepare_draft_sources
 from .validation import (
     parse_ttp_template,
     validate_result_schema,
@@ -634,10 +632,6 @@ class _GenerationWorkflow:
         self._acceptance_trace_summary: dict[str, Any] = {}
         self.session = GenerationSession(
             command_outputs=tuple(request.command_outputs),
-            schema_strategy=current_schema_strategy(),
-            max_schema_bytes=policy.max_schema_bytes,
-            max_schema_depth=policy.max_schema_depth,
-            max_schema_properties=policy.max_schema_properties,
             schema_validator=self._schema_validator,
             template_validator=self._template_validator,
             ttp_test_validator=self._ttp_test_validator,
@@ -768,7 +762,7 @@ class _GenerationWorkflow:
         return GenerationMetadata(
             request_id=self.request_id,
             model_name=self.settings.model_name,
-            prompt_version=current_prompt_version(),
+            prompt_version=PROMPT_VERSION,
             command_output_count=len(self.request.command_outputs),
             input_char_count=sum(len(item) for item in self.request.command_outputs),
             schema_sampled_char_count=sum(
@@ -1142,10 +1136,6 @@ class _GenerationWorkflow:
             else:
                 self.ttp_sampled = candidate_sample
             texts = [item.text for item in candidate_sample]
-            if phase == "schema" and self.session.schema_strategy == "draft":
-                self.session.schema_draft_sources = prepare_draft_sources(
-                    texts, originals=self.request.command_outputs
-                )
             message = build_message(texts)
             if self.progress.enabled:
                 self.progress.custom(
@@ -1199,17 +1189,10 @@ class _GenerationWorkflow:
             )
 
     async def _run_schema_phase(self) -> _PhaseExecution:
-        def draft_prompt(texts: Sequence[str]) -> str:
-            return build_draft_task(texts, originals=self.request.command_outputs)
-
-        def draft_message(texts: Sequence[str]) -> UserMsg:
-            return UserMsg(name="user", content=draft_prompt(texts))
-
-        draft = self.session.schema_strategy == "draft"
         return await self._fit_and_run_phase(
             phase="schema",
-            serialize_prompt=draft_prompt if draft else build_schema_task_prompt,
-            build_message=draft_message if draft else build_schema_task_message,
+            serialize_prompt=build_schema_task_prompt,
+            build_message=build_schema_task_message,
             span_input={"command_output_count": len(self.request.command_outputs)},
         )
 

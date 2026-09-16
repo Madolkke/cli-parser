@@ -1,0 +1,398 @@
+{
+  "naming_review_version": 1,
+  "scope": "frozen_draft_label_and_root_adoption",
+  "trials": [
+    {
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/2",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "65085986-60a1-6e33-931b-7553794a1b4c",
+      "span_ids": [
+        "00000000-0000-0000-6b24-5af1eb1a51d3"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "not_applicable",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "not_applicable",
+      "counts": {
+        "field_count": 27,
+        "source_named_count": 27,
+        "fallback_named_count": 0,
+        "label_reference_count": 27,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 27,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 0,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 0,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/2",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "7d4031f4-2732-f376-a2fe-be01bc41449e",
+      "span_ids": [
+        "00000000-0000-0000-25ab-50234a228ba5"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 13,
+        "source_named_count": 11,
+        "fallback_named_count": 2,
+        "label_reference_count": 11,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 11,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 2,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 2,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/1",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "bfa643f8-c033-42ff-b44c-0325919d5236",
+      "span_ids": [
+        "00000000-0000-0000-741d-92cb6da8d285"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 9,
+        "source_named_count": 8,
+        "fallback_named_count": 1,
+        "label_reference_count": 8,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 8,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 1,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 1,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/1",
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "3fe0c1c1-f714-2aa2-7baa-b4bf07818905",
+      "span_ids": [
+        "00000000-0000-0000-7629-19a19051d58a"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 13,
+        "source_named_count": 11,
+        "fallback_named_count": 2,
+        "label_reference_count": 11,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 11,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 2,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 2,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/2",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "759715f1-d1c2-2405-d94a-75d95263b62c",
+      "span_ids": [
+        "00000000-0000-0000-67df-3145390bd72e"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 6,
+        "source_named_count": 5,
+        "fallback_named_count": 1,
+        "label_reference_count": 6,
+        "multiple_source_line_count": 1,
+        "source_complete_label_count": 5,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 1,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 1,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/1",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "acb68a2c-a3ae-bc3d-30d8-8080924e41a3",
+      "span_ids": [
+        "00000000-0000-0000-4090-b8fd90a756b1"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 21,
+        "source_named_count": 18,
+        "fallback_named_count": 3,
+        "label_reference_count": 18,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 16,
+        "source_split_base_label_count": 2,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 3,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 1,
+        "fallback_split_component_count": 2
+      },
+      "categories": [
+        "split_component_common_label"
+      ],
+      "paths": [
+        "/router_link_states/*/links/*/link_id",
+        "/router_link_states/*/links/*/link_data"
+      ]
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/1",
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "f41d823f-6b7f-6710-fa8b-54455b11c968",
+      "span_ids": [
+        "00000000-0000-0000-8db6-ee6d56cca18f"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 9,
+        "source_named_count": 6,
+        "fallback_named_count": 3,
+        "label_reference_count": 7,
+        "multiple_source_line_count": 1,
+        "source_complete_label_count": 6,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 3,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 3,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/fortinet.get_system_status/1",
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "a48ae8ff-ab62-1bfc-6ff2-341fd60f0556",
+      "span_ids": [
+        "00000000-0000-0000-9f4f-eefc417edf41"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "not_applicable",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "not_applicable",
+      "counts": {
+        "field_count": 27,
+        "source_named_count": 27,
+        "fallback_named_count": 0,
+        "label_reference_count": 27,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 27,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 0,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 0,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/hp_procurve.show_interfaces_status/2",
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "20d2c0ad-2ca4-ee33-6151-b3812141ef1f",
+      "span_ids": [
+        "00000000-0000-0000-312d-8bf1356abc04"
+      ],
+      "status": "passed",
+      "source_fidelity_status": "passed",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 9,
+        "source_named_count": 8,
+        "fallback_named_count": 1,
+        "label_reference_count": 8,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 8,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 0,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 1,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 1,
+        "fallback_split_component_count": 0
+      },
+      "categories": [],
+      "paths": []
+    },
+    {
+      "trial_id": "20260916T172415.314485Z-draft/cisco_ios.show_ip_ospf_database_router/2",
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "f3ef9e8f-af5c-9e34-cbf7-bf4f0eb85126",
+      "span_ids": [
+        "00000000-0000-0000-2694-db8eebc516b8"
+      ],
+      "status": "policy_deviation",
+      "source_fidelity_status": "partial_label_boundary",
+      "qualifier_ownership_status": "passed",
+      "fallback_necessity_status": "passed",
+      "root_scope_status": "passed",
+      "repeated_entities_status": "passed",
+      "counts": {
+        "field_count": 19,
+        "source_named_count": 18,
+        "fallback_named_count": 1,
+        "label_reference_count": 18,
+        "multiple_source_line_count": 0,
+        "source_complete_label_count": 16,
+        "source_split_base_label_count": 0,
+        "source_common_label_without_qualifier_count": 2,
+        "source_wrong_owner_count": 0,
+        "source_partial_word_count": 0,
+        "fallback_necessary_count": 1,
+        "fallback_unjustified_synonym_count": 0,
+        "fallback_unjudgeable_count": 0,
+        "fallback_unlabeled_count": 1,
+        "fallback_split_component_count": 0
+      },
+      "categories": [
+        "source_dynamic_qualifier_omitted"
+      ],
+      "paths": [
+        "/router_link_states/*/links/*/link_id",
+        "/router_link_states/*/links/*/link_data"
+      ]
+    }
+  ],
+  "summary": {
+    "reviewed_frozen_trials": 10,
+    "passed_trials": 9,
+    "policy_deviation_trials": 1,
+    "unknown_trials": 0,
+    "root_scope_error_trials": 0,
+    "root_scope_passed_trials": 10,
+    "repeated_entities_reviewed_trials": 8,
+    "field_count": 153,
+    "source_named_count": 139,
+    "fallback_named_count": 14,
+    "label_reference_count": 141,
+    "multiple_source_line_count": 2,
+    "source_complete_label_count": 135,
+    "source_split_base_label_count": 2,
+    "source_common_label_without_qualifier_count": 2,
+    "source_wrong_owner_count": 0,
+    "source_partial_word_count": 0,
+    "fallback_necessary_count": 14,
+    "fallback_unjustified_synonym_count": 0,
+    "fallback_unjudgeable_count": 0,
+    "fallback_unlabeled_count": 12,
+    "fallback_split_component_count": 2
+  },
+  "fallback_pair_observations": [
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "left_trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/2",
+      "right_trial_id": "20260916T172415.314485Z-draft/oneaccess_oneos.show_voice_mos/1",
+      "status": "reasonable_fallback_name_variation",
+      "counts": {
+        "different_fallback_name_count": 1
+      },
+      "paths": [
+        "/hour_sections",
+        "/hour_statistics"
+      ]
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "left_trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/2",
+      "right_trial_id": "20260916T172415.314485Z-draft/cisco_nxos.show_port-channel_summary/1",
+      "status": "reasonable_fallback_name_variation",
+      "counts": {
+        "different_fallback_name_count": 1
+      },
+      "paths": [
+        "/port_channels",
+        "/port_channel_groups"
+      ]
+    }
+  ]
+}
