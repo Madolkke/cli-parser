@@ -56,6 +56,11 @@ from cli_parser_agent.evaluation_parse_review import (  # noqa: E402
     summarize_parse_review,
 )
 from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION  # noqa: E402
+from cli_parser_agent.ttp_generation.agent.schema_strategy import (  # noqa: E402
+    current_prompt_version,
+    current_schema_strategy,
+    schema_strategy_for_testing,
+)
 
 RUNNER_VERSION = 5
 BASELINE_VERSION = 1
@@ -160,6 +165,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--trace-rounds",
         action="store_true",
         help="record safe per-round facts to trial-NN.rounds.jsonl for loop diagnosis",
+    )
+    run.add_argument(
+        "--schema-experiment-arm",
+        choices=("direct", "draft"),
+        action="append",
+        help="repeat for interleaved generated-schema arms over one input snapshot",
     )
     review = commands.add_parser("schema-review")
     review.add_argument("--run-directory", type=Path, required=True)
@@ -665,6 +676,70 @@ def _accepted_plan_fallback(value):
     return _FallbackSnapshot(frozenset(names), len(plan.nodes), len(names))
 
 
+def _accepted_draft_fallback(value):
+    """Observe final field names in memory; anonymous array items are not fields."""
+    submitted = value.get("input")
+    draft = submitted.get("draft") if isinstance(submitted, Mapping) else None
+    if not isinstance(draft, Mapping) or type(draft.get("version")) is not int:
+        return None
+    if draft["version"] != 1 or not isinstance(draft.get("fields"), list):
+        return None
+    nodes = 0
+    names = []
+    pending = [(dict(type="object", fields=draft["fields"]), 1)]
+    seen = set()
+    while pending:
+        node, depth = pending.pop()
+        if not isinstance(node, Mapping) or depth > 16 or id(node) in seen:
+            return None
+        seen.add(id(node))
+        node_type = node.get("type")
+        if node_type == "object":
+            fields = node.get("fields")
+            if not isinstance(fields, list):
+                return None
+            nodes += len(fields)
+            if nodes > 256:
+                return None
+            for item in fields:
+                if not isinstance(item, Mapping):
+                    return None
+                name = item.get("name")
+                if not isinstance(name, Mapping):
+                    return None
+                if "fallback" in name:
+                    if not isinstance(name["fallback"], str):
+                        return None
+                    names.append(name["fallback"])
+                elif not isinstance(name.get("source"), list):
+                    return None
+                pending.append((item.get("node"), depth + 1))
+        elif node_type == "array":
+            pending.append((node.get("items"), depth + 1))
+        elif node_type not in {"string", "integer", "number", "boolean"}:
+            return None
+    return _FallbackSnapshot(frozenset(names), nodes, len(names))
+
+
+_DRAFT_REJECTION_CODES = (
+    "schema_draft.invalid_shape",
+    "schema_draft.too_large",
+    "schema_draft.invalid_sources",
+    "schema_draft.invalid_reference",
+    "schema_draft.ambiguous_reference",
+    "schema_draft.partial_word",
+    "schema_draft.source_order",
+    "schema_draft.reference_limit",
+    "schema_draft.invalid_name",
+    "schema_draft.unnecessary_fallback",
+    "schema_draft.name_collision",
+    "schema_draft.invalid_attribute",
+    "schema_draft.depth_exceeded",
+    "schema_draft.property_limit",
+    "schema_draft.other_rejection",
+)
+
+
 class _SchemaTracer:
     """Project observations; optionally retain only a frozen schema in memory."""
 
@@ -680,12 +755,80 @@ class _SchemaTracer:
         self.compiler_facts = []
         self._pending_fallback = None
         self.frozen_fallback = None
+        self.sampling_observations = []
+        self.prepared_input_chars = []
+        self.protocol_categories = []
+        self.protocol_boundaries = []
+        self._last_schema_submission = 0
+
+    def _observe_source_and_protocol(self, event):
+        value = event.value
+        if not isinstance(value, Mapping):
+            return
+        if event.name == "cli_parser.phase.sampling_completed":
+            outputs = value.get("sampled_outputs")
+            if (
+                isinstance(outputs, list)
+                and outputs
+                and all(
+                    isinstance(item, Mapping)
+                    and type(item.get("original_char_count")) is int
+                    and item["original_char_count"] >= 0
+                    and type(item.get("text")) is str
+                    and type(item.get("truncated")) is bool
+                    for item in outputs
+                )
+            ):
+                self.sampling_observations.append(
+                    {
+                        "input_count": len(outputs),
+                        "original_chars": sum(
+                            item["original_char_count"] for item in outputs
+                        ),
+                        "sampled_chars": sum(len(item["text"]) for item in outputs),
+                        "truncated_inputs": sum(item["truncated"] for item in outputs),
+                        "input_fits": value.get("input_fits")
+                        if type(value.get("input_fits")) is bool
+                        else None,
+                    }
+                )
+        elif event.name == "cli_parser.phase.input_prepared":
+            message = value.get("message")
+            content = message.get("content") if isinstance(message, Mapping) else None
+            if isinstance(content, list) and all(
+                isinstance(block, Mapping)
+                and block.get("type") == "text"
+                and type(block.get("text")) is str
+                for block in content
+            ):
+                self.prepared_input_chars.append(
+                    sum(len(block["text"]) for block in content)
+                )
+        elif event.name == "cli_parser.protocol.repair":
+            category = value.get("category")
+            if isinstance(category, str) and category in {
+                "no_tool",
+                "wrong_tool",
+                "framework_arguments",
+                "product_arguments",
+            }:
+                self.protocol_categories.append(category)
+        elif event.name == "cli_parser.protocol.boundary":
+            category = value.get("category")
+            if isinstance(category, str) and category in {
+                "arguments_valid",
+                "business_rejected",
+                "execution_error",
+            }:
+                self.protocol_boundaries.append(category)
 
     def __call__(self, event):
         self.rounds(event)
         metadata = getattr(event, "metadata", None) or {}
         if metadata.get("phase") != "schema":
             return
+        if type(event) is agent_events.CustomEvent:
+            self._observe_source_and_protocol(event)
         if (
             type(event) is agent_events.ToolCallStartEvent
             and event.tool_call_name == "submit_schema_plan"
@@ -710,6 +853,7 @@ class _SchemaTracer:
         if not isinstance(value, Mapping) or value.get("tool_name") not in {
             "submit_result_schema",
             "submit_schema_plan",
+            "submit_schema_draft",
             "confirm_schema_plan",
         }:
             return
@@ -728,6 +872,13 @@ class _SchemaTracer:
             else:
                 self._pending_fallback = snapshot
         elif (
+            value["tool_name"] == "submit_schema_draft"
+            and output["accepted"]
+            and output.get("frozen") is True
+            and self.frozen_fallback is None
+        ):
+            self.frozen_fallback = _accepted_draft_fallback(value)
+        elif (
             value["tool_name"] == "confirm_schema_plan"
             and output["accepted"]
             and output.get("frozen") is True
@@ -736,9 +887,16 @@ class _SchemaTracer:
                 self.frozen_fallback = self._pending_fallback
             self._pending_fallback = None
         categories = set()
+        draft_categories = set()
         issues = output.get("issues", [])
         for issue in issues if isinstance(issues, list) else []:
             code = issue.get("code") if isinstance(issue, Mapping) else None
+            if value["tool_name"] == "submit_schema_draft":
+                draft_categories.add(
+                    code
+                    if isinstance(code, str) and code in _DRAFT_REJECTION_CODES
+                    else "schema_draft.other_rejection"
+                )
             categories.add(
                 code
                 if isinstance(code, str)
@@ -777,9 +935,10 @@ class _SchemaTracer:
             self.confirmations += 1
             return
         compiler_facts = output.get("facts")
-        if value["tool_name"] == "submit_schema_plan" and isinstance(
-            compiler_facts, Mapping
-        ):
+        if value["tool_name"] in {
+            "submit_schema_plan",
+            "submit_schema_draft",
+        } and isinstance(compiler_facts, Mapping):
             self.compiler_facts.append(
                 {
                     key: item
@@ -791,20 +950,47 @@ class _SchemaTracer:
                         "fallback_names",
                         "evidence_incomplete_nodes",
                         "required_fields",
+                        "property_count",
+                        "source_name_count",
+                        "fallback_name_count",
+                        "reference_count",
+                        "draft_bytes",
+                        "source_rejection_count",
+                        "name_conflict_count",
+                        "fallback_unlabeled_count",
+                        "fallback_ambiguous_source_count",
+                        "fallback_invalid_name_count",
+                        "fallback_conflict_count",
+                        "fallback_split_component_count",
                     }
                     and type(item) is int
                     and item >= 0
                 }
             )
+        # The counter is cumulative; argument rejection can repeat its prior
+        # value. Legacy observations lacking a counter retain their old meaning.
+        submission = output.get("schema_submission")
+        if type(submission) is int:
+            if submission <= self._last_schema_submission:
+                return
+            self._last_schema_submission = submission
+        elif value["tool_name"] == "submit_schema_draft":
+            return
         self.submissions.append(
             {
                 "accepted": output["accepted"],
                 "categories": sorted(categories),
+                "draft_categories": sorted(draft_categories),
+                "draft_submission": value["tool_name"] == "submit_schema_draft",
                 "elapsed_seconds": elapsed,
             }
         )
 
     def facts(self):
+        sampling = (
+            self.sampling_observations[-1] if self.sampling_observations else None
+        )
+        prepared = self.prepared_input_chars[-1] if self.prepared_input_chars else None
         return {
             "observed_submissions": len(self.submissions),
             "first_submission_accepted": self.submissions[0]["accepted"]
@@ -813,6 +999,46 @@ class _SchemaTracer:
             "first_frozen_seconds": self.first_frozen_seconds,
             "observed_confirmations": self.confirmations,
             "compiler_facts": self.compiler_facts,
+            "source_display": {
+                "sampling_observations": len(self.sampling_observations),
+                "input_prepared_observations": len(self.prepared_input_chars),
+                "original_chars": sampling["original_chars"] if sampling else None,
+                "sampled_chars": sampling["sampled_chars"] if sampling else None,
+                "truncated_inputs": sampling["truncated_inputs"] if sampling else None,
+                "input_count": sampling["input_count"] if sampling else None,
+                "input_fits": sampling["input_fits"] if sampling else None,
+                "prepared_message_chars": prepared,
+                # Includes task framing and source display: not a tokenizer
+                # estimate or a pure numbering-only overhead measurement.
+                "prepared_minus_sampled_chars": prepared - sampling["sampled_chars"]
+                if prepared is not None and sampling is not None
+                else None,
+            },
+            "protocol": {
+                "repair_observations": len(self.protocol_categories),
+                "category_counts": {
+                    key: self.protocol_categories.count(key)
+                    for key in sorted(set(self.protocol_categories))
+                },
+                "boundary_observations": len(self.protocol_boundaries),
+                "boundary_counts": {
+                    key: self.protocol_boundaries.count(key)
+                    for key in sorted(set(self.protocol_boundaries))
+                },
+            },
+            # AgentScope's ModelCallEndEvent is a framework finish reason;
+            # it does not expose the supplier's `length` finish_reason.
+            "provider_finish_reason_observations": 0,
+            "provider_length_count": None,
+            "draft_rejection_counts": {
+                code: sum(
+                    not s["accepted"] and code in s["draft_categories"]
+                    for s in self.submissions
+                )
+                if any(s["draft_submission"] for s in self.submissions)
+                else None
+                for code in _DRAFT_REJECTION_CODES
+            },
             "rejection_counts": {
                 code: sum(
                     not s["accepted"] and code in s["categories"]
@@ -977,7 +1203,7 @@ def _fallback_trial_metrics(snapshot, *, applicable):
         "business_nodes": snapshot.nodes if snapshot is not None else None,
         "fallback_nodes": snapshot.fallback_nodes if snapshot is not None else None,
         "fallback_ratio": snapshot.fallback_nodes / snapshot.nodes
-        if snapshot is not None
+        if snapshot is not None and snapshot.nodes
         else None,
     }
 
@@ -1027,25 +1253,76 @@ def _fallback_repeat_consistency(results):
 
 
 async def _run_schema(args, registry, reports):
-    """Run the default product over one shared in-memory input snapshot."""
+    """Interleave arms on one immutable input snapshot and shared semaphore."""
     cases = tuple(report.case for report in reports if report.case is not None)
+    arms = getattr(args, "schema_experiment_arm", None) or [current_schema_strategy()]
+    if len(arms) != len(set(arms)):
+        raise ScriptConfigurationError("duplicate schema experiment arm")
     settings, policy, artifact_root, configuration = _configuration()
     git_state = _git_state()
     semaphore = asyncio.Semaphore(args.concurrency)
-    run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
+    experiment_directory = (
+        _run_support.new_run_directory(artifact_root) if len(arms) > 1 else None
+    )
+    arm_state = {}
+    for arm in arms:
+        root = experiment_directory / arm if experiment_directory else artifact_root
+        directory = _write_preflight_artifacts(root, registry, reports)
+        if experiment_directory:
+            # Different arm parents can receive the same timestamp. The basename
+            # is also the public run/trial identifier, so it must include the arm.
+            directory = directory.rename(directory.with_name(f"{directory.name}-{arm}"))
+        with schema_strategy_for_testing(arm):
+            arm_configuration = deepcopy(configuration)
+            arm_configuration["prompt"] = {"version": current_prompt_version()}
+        arm_state[arm] = {"directory": directory, "configuration": arm_configuration}
+    manifest = {
+        "experiment_version": 1,
+        "mode": args.mode,
+        "git": git_state,
+        "global_concurrency": args.concurrency,
+        "planned_request_count": len(cases) * args.trials * len(arms),
+        "completed_request_count": 0,
+        "same_input_snapshot": True,
+        "selected_inputs": _selection_metadata(reports),
+        "arms": {
+            arm: {
+                "run_directory": str(state["directory"]),
+                "planned_trials": len(cases) * args.trials,
+                "prompt": state["configuration"]["prompt"],
+            }
+            for arm, state in arm_state.items()
+        },
+        "status": "running",
+    }
+    if experiment_directory:
+        _run_support.write_json(experiment_directory / "experiment.json", manifest)
     print(
         f"running {args.mode}: cases={len(cases)} trials={args.trials} "
-        f"concurrency={args.concurrency}",
+        f"arms={','.join(arms)} concurrency={args.concurrency}",
         flush=True,
     )
+    jobs = []
+    for case_index, case in enumerate(cases):
+        for index in range(args.trials):
+            offset = (case_index + index) % len(arms)
+            for arm in [*arms[offset:], *arms[:offset]]:
+                jobs.append((arm, case, index))
     tasks = [
         asyncio.create_task(
             _execute_schema_trial(
-                args, case, index, settings, policy, run_directory, git_state, semaphore
+                args,
+                case,
+                index,
+                settings,
+                policy,
+                arm_state[arm]["directory"],
+                git_state,
+                semaphore,
+                arm,
             )
         )
-        for case in cases
-        for index in range(args.trials)
+        for arm, case, index in jobs
     ]
     try:
         results = await asyncio.gather(*tasks)
@@ -1053,14 +1330,55 @@ async def _run_schema(args, registry, reports):
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+        if experiment_directory:
+            manifest["status"] = "interrupted"
+            manifest["completed_request_count"] = sum(
+                task.done() and not task.cancelled() and task.exception() is None
+                for task in tasks
+            )
+            manifest["cancelled_task_count"] = sum(task.cancelled() for task in tasks)
+            manifest["exception_task_count"] = sum(
+                task.done() and not task.cancelled() and task.exception() is not None
+                for task in tasks
+            )
+            _run_support.write_json(experiment_directory / "experiment.json", manifest)
         raise
-    _write_schema_summary(
-        args, registry, reports, cases, results, run_directory, git_state, configuration
-    )
+    for arm, state in arm_state.items():
+        selected = [
+            result
+            for (job_arm, _, _), result in zip(jobs, results, strict=True)
+            if job_arm == arm
+        ]
+        _write_schema_summary(
+            args,
+            registry,
+            reports,
+            cases,
+            selected,
+            state["directory"],
+            git_state,
+            state["configuration"],
+        )
+    if experiment_directory:
+        manifest["status"] = "recorded"
+        manifest["completed_request_count"] = len(results)
+        _run_support.write_json(experiment_directory / "experiment.json", manifest)
+        print(
+            f"experiment_json: {experiment_directory / 'experiment.json'}", flush=True
+        )
     return 0
 
 
 async def _execute_schema_trial(
+    args, case, index, settings, policy, run_directory, git_state, semaphore, arm=None
+):
+    with schema_strategy_for_testing(arm or current_schema_strategy()):
+        return await _execute_schema_trial_in_context(
+            args, case, index, settings, policy, run_directory, git_state, semaphore
+        )
+
+
+async def _execute_schema_trial_in_context(
     args, case, index, settings, policy, run_directory, git_state, semaphore
 ):
     async with semaphore:
@@ -1080,7 +1398,8 @@ async def _execute_schema_trial(
             else None
         )
         document["fallback_naming"] = _fallback_trial_metrics(
-            fallback, applicable=fallback is not None
+            fallback,
+            applicable=current_schema_strategy() == "draft" or fallback is not None,
         )
         document.update(
             {
@@ -1220,6 +1539,7 @@ class _RoundTracer:
         {
             "submit_result_schema",
             "submit_schema_plan",
+            "submit_schema_draft",
             "confirm_schema_plan",
             "submit_ttp_template",
             "test_ttp_template",
@@ -1575,6 +1895,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise ScriptConfigurationError(
                 "generated-schema modes do not support TTP baseline options"
             )
+        if getattr(args, "schema_experiment_arm", None) and args.mode not in {
+            "schema-only",
+            "end-to-end",
+        }:
+            raise ScriptConfigurationError(
+                "schema experiment arms require a generated-schema mode"
+            )
+        arms = getattr(args, "schema_experiment_arm", None) or []
+        if len(arms) != len(set(arms)):
+            raise ScriptConfigurationError("duplicate schema experiment arm")
         if args.command == "list":
             return _list_cases(args)
         registry = load_dataset_registry(args.registry)

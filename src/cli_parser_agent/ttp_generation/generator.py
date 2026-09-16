@@ -17,7 +17,7 @@ from ..observability import (
     initialize_laminar_from_env,
     start_laminar_span,
 )
-from .agent import PROMPT_VERSION
+from .agent.schema_strategy import current_prompt_version
 from .contracts import (
     GenerationRequest,
     GenerationResult,
@@ -137,7 +137,7 @@ class TtpGenerator:
             "request_id": request_id,
             "model_name": self.settings.model_name,
             "model_extra_body_configured": self.settings.extra_body is not None,
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": current_prompt_version(),
             "command_output_count": len(request.command_outputs),
             "input_char_count": sum(len(item) for item in request.command_outputs),
             "policy_total_timeout_seconds": self.policy.total_timeout_seconds,
@@ -155,7 +155,7 @@ class TtpGenerator:
                 {
                     "request": request.model_dump(mode="json"),
                     "model_name": self.settings.model_name,
-                    "prompt_version": PROMPT_VERSION,
+                    "prompt_version": current_prompt_version(),
                 },
                 phase="generation",
                 sensitive=True,

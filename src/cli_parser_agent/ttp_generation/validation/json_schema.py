@@ -78,6 +78,14 @@ _ALWAYS_FORBIDDEN = {
 }
 
 
+def schema_draft_attribute_keywords(node_type: str) -> frozenset[str]:
+    """Return draft attributes from the authoritative Schema declarations."""
+    if node_type not in _KEYWORDS_BY_TYPE:
+        return frozenset()
+    structural = {"type", "properties", "required", "additionalProperties", "items"}
+    return frozenset((_COMMON_KEYWORDS | _KEYWORDS_BY_TYPE[node_type]) - structural)
+
+
 def schema_capabilities_guidance() -> str:
     """Describe exactly the validator's subset without a second allowlist."""
     lines = [

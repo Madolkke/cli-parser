@@ -227,7 +227,7 @@ uv run python scripts/run_test_sets.py parse-review --run-directory RUN --review
 
 ## 历史同期 Schema 实验（fc2e31a）
 
-以下是未采用实验提交 fc2e31a 的执行方式。当前入口已撤下实验选择参数，只运行默认 v44。
+以下是未采用实验提交 fc2e31a 的执行方式；旧 plan/plan_confirm 选择已经撤下。
 
 历史评测专用 `--schema-experiment-arm` 可重复指定 direct、plan、plan_confirm，仅允许
 schema-only/end-to-end；它是内部测试工厂入口，不是产品配置开关。省略时使用当前默认策略。
@@ -244,3 +244,9 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 组数乘以用例数及重复数是实际请求计划数；runner 不自动补跑或调整采用门槛。
 
 SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数、兜底节点数及比例。C 只有确认后才使用最新待确认方案；失败、缺失观察不补零，A 标为不适用。同用例有效 pair 的 `fallback_naming_consistency` 只保存兜底名称集合是否相等、交并比和差集数量。集合仅在内存中比较，不保存名称清单或签名；集合差异不能直接解释为同一业务字段改名。
+
+## v47 同期轻量草稿实验
+
+当前实验选择只允许 direct/draft，省略时仍运行默认 v44。两组复用同一原始输入快照、全局 semaphore、模型和 policy，按用例 AB/BA 轮换，不跨组组成一致性 pair。来源展示会增加候选上下文开销，单列采样量与展示字符数。工具参数、Schema 及兜底名称集合只在内存观察；保存的 draft 指标只含字段/引用/兜底/原因/拒绝/字节数量。供应商 finish_reason 缺失不能按零截断统计。
+
+24 次预试达标后才运行 112 次端到端对照，最多 136 次，不补跑。受限 Schema/解析审阅及业务事实清单沿用现有协议，新增命名和根粒度观察不作为自动业务门禁。完整配置、采用门槛、隐私和回退见 [v47 实验协议](schema-draft-v47-protocol.md)。
