@@ -207,8 +207,6 @@ async def test_runner_persists_only_final_counts_and_pair_numbers(
             "4",
             "--concurrency",
             "4",
-            "--schema-experiment-arm",
-            "plan",
         ]
     )
     assert await runner._run_schema(args, registry, reports) == 0

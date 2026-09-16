@@ -1,0 +1,283 @@
+{
+  "review_version": 1,
+  "run_id": "20260916T154100.100514Z",
+  "trials": [
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "7bef4284-53fd-8d89-d838-6f55a47d4d57",
+      "span_ids": [
+        "00000000-0000-0000-8602-f3f3e2d6b676",
+        "00000000-0000-0000-8227-170732bb1fdd",
+        "00000000-0000-0000-1c29-6a7dce525de3",
+        "00000000-0000-0000-1256-5b4935a06aa3"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/oneaccess_oneos.show_voice_mos/2"
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "92286232-e528-e260-13ce-86a48cfe9e38",
+      "span_ids": [
+        "00000000-0000-0000-5901-aa364359bc9c",
+        "00000000-0000-0000-7872-7ae6c624b223",
+        "00000000-0000-0000-e031-5ce706a4e6d1",
+        "00000000-0000-0000-dd3e-de899029c9c2"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_nxos.show_port-channel_summary/2"
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "45404cc4-d7a6-9495-fc16-d730aacac1db",
+      "span_ids": [
+        "00000000-0000-0000-9ff1-065d4eee3d6d",
+        "00000000-0000-0000-9801-78d39509a014",
+        "00000000-0000-0000-d528-2f418eba75e9",
+        "00000000-0000-0000-e339-99616ba84ba0"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_ios.show_ip_ospf_database_router/1"
+    },
+    {
+      "case_id": "oneaccess_oneos.show_voice_mos",
+      "trace_id": "318bdd91-be08-c28b-2786-853736c7c405",
+      "span_ids": [
+        "00000000-0000-0000-2a9a-3ce541740d7e",
+        "00000000-0000-0000-c81e-597e4c26dd70",
+        "00000000-0000-0000-5280-d3595bd14a5f",
+        "00000000-0000-0000-1278-018bd3ba225e"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/oneaccess_oneos.show_voice_mos/1"
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "f960f51a-1289-20c8-be7b-5f4bcc5d07bd",
+      "span_ids": [
+        "00000000-0000-0000-932c-05dff6776390",
+        "00000000-0000-0000-9848-92da05b92810",
+        "00000000-0000-0000-643c-1cc6f8b1ed04",
+        "00000000-0000-0000-1768-0000cc06425e"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/fortinet.get_system_status/2"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "cf647ad2-dce8-eccc-fea7-4983029ca937",
+      "span_ids": [
+        "00000000-0000-0000-ec66-18f76f4f637c",
+        "00000000-0000-0000-1533-8b8d03094859",
+        "00000000-0000-0000-e21a-564d7d7a4d26",
+        "00000000-0000-0000-b3c4-799df593160f"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_ios.show_sdwan_control_connections/1"
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "9bbc08d9-19c2-8954-8053-c038810172bf",
+      "span_ids": [
+        "00000000-0000-0000-50e5-8e5ca3c80566",
+        "00000000-0000-0000-afb9-c5f2626ea11a",
+        "00000000-0000-0000-b769-4451253e5655",
+        "00000000-0000-0000-15c1-f635b7a2a612"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/hp_procurve.show_interfaces_status/2"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "30bc0031-13d4-5a0d-2692-145cd7126148",
+      "span_ids": [
+        "00000000-0000-0000-844c-d858aa364dad",
+        "00000000-0000-0000-fb40-e188b84686bb",
+        "00000000-0000-0000-1274-a204e8df3035",
+        "00000000-0000-0000-e9cb-971d2fc719fb"
+      ],
+      "dimensions": {
+        "naming": "not_applicable",
+        "coverage": "not_applicable",
+        "decomposition": "not_applicable",
+        "structure": "not_applicable",
+        "types_required": "not_applicable",
+        "value_boundaries": "not_applicable",
+        "overconstraint": "not_applicable"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_ios.show_sdwan_control_connections/2"
+    },
+    {
+      "case_id": "hp_procurve.show_interfaces_status",
+      "trace_id": "5ede7efa-4836-5e89-5967-82cffa83a4cd",
+      "span_ids": [
+        "00000000-0000-0000-df1e-75cda6b0a5de",
+        "00000000-0000-0000-7e37-e63af5310d9c",
+        "00000000-0000-0000-7021-740e59d028f7",
+        "00000000-0000-0000-ce20-c41d666f44ca"
+      ],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/hp_procurve.show_interfaces_status/1"
+    },
+    {
+      "case_id": "fortinet.get_system_status",
+      "trace_id": "49b785ce-24f1-f002-3519-3aeff6ea5abc",
+      "span_ids": [
+        "00000000-0000-0000-ad9b-14c6877c73c2"
+      ],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "issue",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "overall": "needs_revision",
+      "categories": [
+        "split_merge"
+      ],
+      "paths": [
+        "/version",
+        "/virus_db",
+        "/extended_db",
+        "/av_ai_ml_model",
+        "/ips_db",
+        "/ips_etdb",
+        "/app_db",
+        "/industrial_db",
+        "/ips_malicious_url_database",
+        "/virtual_domains_status"
+      ],
+      "trial_id": "20260916T154100.100514Z/fortinet.get_system_status/1"
+    },
+    {
+      "case_id": "cisco_ios.show_ip_ospf_database_router",
+      "trace_id": "18798c19-5de9-59fb-8e34-bebd72c065f7",
+      "span_ids": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_ios.show_ip_ospf_database_router/2"
+    },
+    {
+      "case_id": "cisco_nxos.show_port-channel_summary",
+      "trace_id": "b252f4ff-27bf-5e1e-4c6f-79dd3009ab49",
+      "span_ids": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "trial_id": "20260916T154100.100514Z/cisco_nxos.show_port-channel_summary/1"
+    }
+  ],
+  "pairs": []
+}

@@ -29,7 +29,7 @@
 ## 生成协议
 
 - 完整生成严格分为 Schema 和模板两个阶段。每阶段创建独立的 Agent、`OpenAIChatModel`、`AgentState` 和 Toolkit；对话上下文不跨阶段复用。
-- 默认 Schema 阶段只注册 `submit_result_schema`，第一个合法 Schema 永久冻结。私有实验工厂可选择 SchemaPlan 编译后冻结或编译后显式确认；未获采用前不改变默认。来源、确认与编译边界见 [SchemaPlan 编译实验](docs/schema-plan-compiler.md)。
+- Schema 阶段只注册 `submit_result_schema`。第一个通过确定性校验的 Draft 2020-12 Schema 永久冻结。SchemaPlan 预试未获采用，运行接线已撤下；独立机制测试及历史证据见 [SchemaPlan 编译实验](docs/schema-plan-compiler.md)。
 - 模板阶段固定注册 `submit_ttp_template`、可选的 `test_ttp_template` 和无参数的 `finish_generation`。测试工具只对一份独立文本执行 parse-only 实验，不保存候选，也不执行 Schema 回验。
 - 模板提交与独立测试的模型反馈先返回有界 `<validation_feedback>`，再返回完整解析结果；校验事实来自当前确定性执行的白名单投影，不读取 Trace。反馈区分本次校验与保留候选，校验通过不代表内容完整或忠实。
 - 模板提交反馈还提供基于冻结 Schema 与本次 records 的有界字段覆盖事实；可选路径缺失只提示对照原文复核，不改变验收或推断原文存在字段。独立测试不提供 Schema 覆盖事实。
@@ -39,7 +39,7 @@
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。
 - 两阶段请求都省略 `tool_choice`，并固定 `parallel_tool_calls=False`。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
 - 两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
-- 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；默认提示以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码；私有计划实验提示位于同目录 `schema_plan_prompt.py`。
+- 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；运行时提示以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码；`schema_plan_prompt.py` 仅保留未采用实验的独立诊断，不进入产品请求。
 
 ## 确定性门禁
 
@@ -63,7 +63,7 @@
 
 - `evals/test_sets/` 是唯一标准测试集来源；每个 complete 数据集包含 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`。
 - `evals/datasets.toml` 使用版本 `2`，文件条目只登记 `{ file = "..." }`。当前登记 11 个数据集、38 份输入，其中 10 个 complete 数据集覆盖 34 份输入，Huawei 的 4 份输入处于 template 阶段。
-- `scripts/run_test_sets.py` 是唯一标准评测入口。`list`、`preflight` 和 `baseline` 离线运行；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。 `schema-only` 对 complete 数据集仅传入所选原始输入并调用 `propose_schema()`，独立统计命名、结构一致性和人工语义审阅，不与 TTP 准确率 baseline 混用。 `end-to-end` 调用 `generate()` 并用受限 Schema/解析审阅计算联合通过；多实验组共享输入快照和全局并发，详情见 [评测说明](docs/agent-evaluation.md)。
+- `scripts/run_test_sets.py` 是唯一标准评测入口。`list`、`preflight` 和 `baseline` 离线运行；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。 `schema-only` 对 complete 数据集仅传入所选原始输入并调用 `propose_schema()`，独立统计命名、结构一致性和人工语义审阅，不与 TTP 准确率 baseline 混用。 `end-to-end` 调用 `generate()` 并用受限 Schema/解析审阅计算联合通过；当前入口仅运行默认策略，历史多组实验固定于其提交，详情见 [评测说明](docs/agent-evaluation.md)。
 - 标准答案只能根据输入文本人工核对，不读取被测产物、Trace、历史 artifact、上游模板或其他参考结构，也不使用被测模型生成。
 - 普通 pytest 必须离线、稳定且不依赖模型。真实模型集成测试使用 `live` marker 和显式环境配置；首版交付前至少完成一次真实模型端到端闭环。
 - 新增或修改测试资产后，运行默认及 full-scope preflight/baseline，并同步更新注册表、第三方来源说明和文档计数。

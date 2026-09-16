@@ -29,10 +29,7 @@ from cli_parser_agent.evaluation_parse_review import (
     PARSE_REVIEW_DIMENSIONS,
     summarize_parse_review,
 )
-from cli_parser_agent.ttp_generation.agent.schema_strategy import (
-    current_prompt_version,
-    current_schema_strategy,
-)
+from cli_parser_agent.ttp_generation.agent import PROMPT_VERSION
 
 
 def schema():
@@ -263,15 +260,6 @@ async def test_end_to_end_failures_do_not_export_exception_text(monkeypatch, fai
 @pytest.mark.parametrize(
     "options",
     [
-        ["--mode", "ttp-only", "--schema-experiment-arm", "plan"],
-        [
-            "--mode",
-            "schema-only",
-            "--schema-experiment-arm",
-            "plan",
-            "--schema-experiment-arm",
-            "plan",
-        ],
         ["--mode", "end-to-end", "--write-baseline", "baseline.json"],
     ],
 )
@@ -448,7 +436,7 @@ def test_parse_review_cli_is_offline_and_preserves_sources(tmp_path, monkeypatch
     assert (tmp_path / "summary.json").read_bytes() == before
 
 
-async def test_experiment_arms_share_snapshot_concurrency_and_rotate(
+async def test_default_trials_share_snapshot_and_global_concurrency(
     tmp_path, monkeypatch
 ):
     runner = _load_runner()
@@ -462,7 +450,7 @@ async def test_experiment_arms_share_snapshot_concurrency_and_rotate(
             TtpGeneratorSettings(api_key="offline", model_name="offline"),
             GenerationPolicy(),
             root,
-            {},
+            {"prompt": {"version": PROMPT_VERSION}},
         ),
     )
     active = peak = 0
@@ -471,15 +459,11 @@ async def test_experiment_arms_share_snapshot_concurrency_and_rotate(
 
     async def trial(case, settings, policy, tracer):
         nonlocal active, peak
-        arm = current_schema_strategy()
-        version = current_prompt_version()
-        started.append(arm)
+        started.append(case.id)
         input_identities.add(id(case.inputs))
         active += 1
         peak = max(peak, active)
         await asyncio.sleep(0.01)
-        assert current_schema_strategy() == arm
-        assert current_prompt_version() == version
         active -= 1
         return {"generation_success": True, "proposal_revalidated": True}, schema()
 
@@ -492,38 +476,19 @@ async def test_experiment_arms_share_snapshot_concurrency_and_rotate(
             "--mode",
             "schema-only",
             "--trials",
-            "3",
+            "4",
             "--concurrency",
             "4",
-            "--schema-experiment-arm",
-            "direct",
-            "--schema-experiment-arm",
-            "plan",
-            "--schema-experiment-arm",
-            "plan_confirm",
         ]
     )
     assert await runner._run_schema(args, registry, reports) == 0
     assert peak == 4
     assert len(input_identities) == 1
-    assert started == [
-        "direct",
-        "plan",
-        "plan_confirm",
-        "plan",
-        "plan_confirm",
-        "direct",
-        "plan_confirm",
-        "direct",
-        "plan",
-    ]
+    assert len(started) == 4
+    assert len(set(started)) == 1
     summaries = [json.loads(p.read_text()) for p in root.rglob("summary.json")]
-    assert len(summaries) == 3
-    assert {s["trial_count"] for s in summaries} == {3}
-    assert len({s["configuration"]["prompt"]["version"] for s in summaries}) == 3
-    assert len({t["trial_id"] for s in summaries for t in s["trials"]}) == 9
-    manifest = json.loads(next(root.rglob("experiment.json")).read_text())
-    assert manifest["planned_request_count"] == 9
-    assert manifest["completed_request_count"] == 9
-    assert manifest["same_input_snapshot"] is True
-    assert current_schema_strategy() == "direct"
+    assert len(summaries) == 1
+    assert summaries[0]["trial_count"] == 4
+    assert summaries[0]["configuration"]["prompt"]["version"] == PROMPT_VERSION
+    assert len({t["trial_id"] for t in summaries[0]["trials"]}) == 4
+    assert not list(root.rglob("experiment.json"))

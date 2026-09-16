@@ -21,8 +21,6 @@ from .prompt import (
     build_schema_task_prompt,
     build_ttp_task_prompt,
 )
-from .schema_plan_prompt import build_schema_plan_task, plan_system_prompt
-from .schema_strategy import current_schema_strategy
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -157,11 +155,7 @@ def build_agent(
 
     return Agent(
         name=_PHASE_AGENT_NAMES[phase],
-        system_prompt=(
-            plan_system_prompt(session.schema_strategy == "plan_confirm")
-            if phase == "schema" and session.schema_strategy != "direct"
-            else _PHASE_SYSTEM_PROMPTS[phase]
-        ),
+        system_prompt=_PHASE_SYSTEM_PROMPTS[phase],
         model=model,
         toolkit=Toolkit(
             tools=build_submission_tools(
@@ -184,11 +178,7 @@ def build_schema_task_message(command_outputs: Sequence[str]) -> UserMsg:
 
     return UserMsg(
         name="user",
-        content=(
-            build_schema_task_prompt(command_outputs)
-            if current_schema_strategy() == "direct"
-            else build_schema_plan_task(command_outputs)
-        ),
+        content=build_schema_task_prompt(command_outputs),
     )
 
 
@@ -217,11 +207,6 @@ async def estimate_initial_model_tokens(
     )
     tool_names = tuple(tool.get("function", {}).get("name") for tool in tools)
     expected_tool_names = _PHASE_TOOL_NAMES[phase]
-    strategy = current_schema_strategy()
-    if phase == "schema" and strategy != "direct":
-        expected_tool_names = ("submit_schema_plan",)
-        if strategy == "plan_confirm":
-            expected_tool_names += ("confirm_schema_plan",)
     if tool_names != expected_tool_names:
         raise RuntimeError(
             "The ordered tool schemas do not match the requested phase.",
@@ -230,11 +215,7 @@ async def estimate_initial_model_tokens(
         [
             SystemMsg(
                 name="system",
-                content=(
-                    plan_system_prompt(strategy == "plan_confirm")
-                    if phase == "schema" and strategy != "direct"
-                    else _PHASE_SYSTEM_PROMPTS[phase]
-                ),
+                content=_PHASE_SYSTEM_PROMPTS[phase],
             ),
             message,
         ],

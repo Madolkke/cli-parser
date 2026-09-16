@@ -225,9 +225,11 @@ uv run python scripts/run_test_sets.py parse-review --run-directory RUN --review
 - acceptable 需要生成成功、独立验收通过、匹配 Trace，且没有 issue 或不足证据，问题 categories/paths 必须为空。needs_revision 必须给出固定问题类别。联合通过还
   需要该 trial 的 Schema 审阅可接受。未知、失败与缺失项保留在计划 trial 分母内。
 
-## 同期 Schema 实验
+## 历史同期 Schema 实验（fc2e31a）
 
-评测专用 `--schema-experiment-arm` 可重复指定 direct、plan、plan_confirm，仅允许
+以下是未采用实验提交 fc2e31a 的执行方式。当前入口已撤下实验选择参数，只运行默认 v44。
+
+历史评测专用 `--schema-experiment-arm` 可重复指定 direct、plan、plan_confirm，仅允许
 schema-only/end-to-end；它是内部测试工厂入口，不是产品配置开关。省略时使用当前默认策略。
 多组共享同一次加载得到的输入对象、model/policy、Git 状态与全局 semaphore。按 case/trial
 循环轮换 ABC/BCA/CAB 入队，每组独立产物目录与原审阅格式，父 experiment.json 保存计划数、

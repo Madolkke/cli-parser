@@ -390,6 +390,6 @@ v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文
 不自动重命名，软关键字与内置名称仍允许。旧 Schema 可查看，但保存或重执行需符合新规则。
 详细规则、错误码和迁移责任见 [运行时说明](agent-architecture-and-runtime.md#v40-字段命名兼容性收紧)。
 
-## SchemaPlan 内部实验边界
+## SchemaPlan 诊断边界
 
-默认建模路径为 v44。私有 `schema_plan.py` 定义有界建模契约与确定性编译，不导入 AgentScope；`agent/schema_plan_tools.py` 负责提交、暂存与确认，`agent/schema_strategy.py` 仅提供请求局部测试工厂。B/C 计划来源由 workflow 对实际采样片段编号，编译结果再次经过共用校验。公共 API、外部注入及 TTP 上下文不包含计划、来源索引或确认历史。详见 [编译与确认契约](schema-plan-compiler.md)。
+SchemaPlan 预试未获采用，产品仅保留 v44 直接生成路径。`schema_plan.py` 以及 `agent/schema_plan_prompt.py` 保留为独立诊断机制，不接入 generator/workflow/Toolkit；B/C 工具、确认状态和选择工厂已移除。公共 API、外部注入、TTP 及端到端评测能力保持兼容。实验实现固定于 fc2e31a，详见 [结果](schema-plan-pretrial-regression.md)。
