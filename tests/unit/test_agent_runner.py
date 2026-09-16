@@ -31,6 +31,10 @@ from cli_parser_agent.ttp_generation.agent.prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
+from cli_parser_agent.ttp_generation.agent.protocol import (
+    mark_tool_arguments_valid,
+    mark_tool_entered,
+)
 from cli_parser_agent.ttp_generation.agent.runner import run_generation_phase
 from cli_parser_agent.ttp_generation.agent.tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -43,6 +47,7 @@ from cli_parser_agent.ttp_generation.agent.tools import (
     ValidatorOutcome,
     build_submission_tools,
 )
+from cli_parser_agent.ttp_generation.progress import ProgressEmitter
 from cli_parser_agent.ttp_generation.validation import TtpParseResult
 
 
@@ -1296,6 +1301,284 @@ async def test_malformed_finish_after_valid_candidate_is_counted_separately() ->
     assert not session.succeeded
     assert session.ttp_submissions == 1
     assert session.ttp_no_tool_responses == 0
+
+
+def _invalid_call(call_id: str = "invalid") -> ChatResponse:
+    return _response(
+        ToolCallBlock(id=call_id, name=SUBMIT_SCHEMA_TOOL_NAME, input="{}")
+    )
+
+
+async def test_fourth_invalid_call_stops_and_sanitizes_each_failed_pair() -> None:
+    secret = "do-not-repeat-argument-body"
+    malformed = _response(
+        ThinkingBlock(thinking=secret * 1000),
+        ToolCallBlock(
+            id="invalid",
+            name=SUBMIT_SCHEMA_TOOL_NAME,
+            input=json.dumps({"arguments": secret, "properties": {secret: {}}}),
+        ),
+    )
+    model = _ScriptedModel([malformed for _ in range(4)] + [_schema_call()])
+    session = _session(max_agent_rounds=26)
+    agent = _agent(model, session, "schema")
+    events: list[Any] = []
+
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="authoritative input"),
+        session,
+        "schema",
+        progress=ProgressEmitter("protocol", observer=events.append),
+    )
+
+    assert outcome.protocol_retry_limit
+    assert outcome.ended_after_invalid_tool_call
+    assert not outcome.exceeded_max_iters
+    assert len(model.calls) == 4
+    assert session.schema_submissions == 0
+    assert session.submission_tool_call_invalids == 4
+    assert secret not in agent.state.model_dump_json()
+    for call in model.calls[1:]:
+        content = repr(call["messages"])
+        assert secret not in content
+        assert "authoritative input" in content
+        assert "result_schema" in content
+        assert not any(
+            isinstance(block, ToolCallBlock | ToolResultBlock)
+            for message in call["messages"]
+            for block in message.content
+        )
+    repairs = [
+        event.value
+        for event in events
+        if getattr(event, "name", "") == "cli_parser.protocol.repair"
+    ]
+    assert [item["category"] for item in repairs] == ["framework_arguments"] * 4
+    assert [item["stopped"] for item in repairs] == [False, False, False, True]
+    assert secret not in repr(repairs)
+
+
+async def test_alternating_protocol_failures_cannot_reset_shared_guard() -> None:
+    wrong = _response(ToolCallBlock(id="wrong", name="unknown_tool", input="{}"))
+    model = _ScriptedModel(
+        [
+            _invalid_call("bad-1"),
+            _response(TextBlock(text="ordinary answer")),
+            wrong,
+            _invalid_call("bad-2"),
+            _schema_call(),
+        ]
+    )
+    session = _session(max_agent_rounds=26)
+    agent = _agent(model, session, "schema")
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="input"),
+        session,
+        "schema",
+    )
+    assert outcome.protocol_retry_limit
+    assert session.schema_no_tool_responses == 1
+    assert session.schema_no_tool_retries == 1
+    assert len(model.calls) == 4
+    assert session.schema_submissions == 0
+
+
+async def test_business_rejection_resets_guard_and_preserves_valid_evidence() -> None:
+    attempts = 0
+
+    def reject_once(_: SchemaCandidate) -> ValidatorOutcome:
+        nonlocal attempts
+        attempts += 1
+        return ValidatorOutcome(
+            valid=attempts > 1,
+            issues=({"code": "schema.required_invalid", "path": "/required"},),
+        )
+
+    model = _ScriptedModel(
+        [
+            _invalid_call("bad-1"),
+            _invalid_call("bad-2"),
+            _invalid_call("bad-3"),
+            _schema_call("business-reject"),
+            _invalid_call("bad-4"),
+            _invalid_call("bad-5"),
+            _invalid_call("bad-6"),
+            _schema_call("accepted"),
+        ]
+    )
+    session = _session(schema_validator=reject_once)
+    agent = _agent(model, session, "schema")
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="authoritative input"),
+        session,
+        "schema",
+    )
+    assert outcome.phase_completed
+    assert not outcome.protocol_retry_limit
+    assert attempts == 2
+    assert len(model.calls) == 8
+    context = repr(model.calls[-1]["messages"])
+    assert "authoritative input" in context
+    assert "business-reject" in context
+    assert "schema.required_invalid" in context
+    assert "bad-" not in context
+
+
+async def test_product_argument_rejection_is_not_a_successful_business_call() -> None:
+    model = _ScriptedModel(
+        [
+            _response(
+                ToolCallBlock(
+                    id=f"blank-{i}",
+                    name=TEST_TEMPLATE_TOOL_NAME,
+                    input=json.dumps({"text": "   ", "ttp_template": "valid"}),
+                )
+            )
+            for i in range(4)
+        ]
+        + [_template_call()]
+    )
+    session = _session(max_ttp_test_calls=8)
+    _freeze_schema(session)
+    agent = _agent(model, session, "ttp")
+    events: list[Any] = []
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="input"),
+        session,
+        "ttp",
+        progress=ProgressEmitter("protocol", observer=events.append),
+    )
+    assert outcome.protocol_retry_limit
+    assert outcome.submission_tool_call_invalids == 4
+    assert len(model.calls) == 4
+    assert session.ttp_submissions == 0
+    repairs = [
+        event.value
+        for event in events
+        if getattr(event, "name", "") == "cli_parser.protocol.repair"
+    ]
+    assert {item["category"] for item in repairs} == {"product_arguments"}
+
+
+async def test_execution_exception_never_becomes_argument_rejection() -> None:
+    from cli_parser_agent.ttp_generation.agent.tools import SubmitResultSchemaTool
+
+    class BrokenTool(SubmitResultSchemaTool):
+        async def call(self, result_schema: dict[str, Any]) -> Any:
+            mark_tool_entered(self.name)
+            raise RuntimeError("Input validation failed for tool: synthetic error text")
+
+    model = _ScriptedModel([_schema_call(f"execution-{i}") for i in range(5)])
+    session = _session(max_agent_rounds=5)
+    agent = _agent(model, session, "schema")
+    agent.toolkit = Toolkit(tools=[BrokenTool(session)])
+    events: list[Any] = []
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="input"),
+        session,
+        "schema",
+        progress=ProgressEmitter("protocol", observer=events.append),
+    )
+    assert outcome.exceeded_max_iters
+    assert not outcome.protocol_retry_limit
+    assert outcome.submission_tool_call_invalids == 0
+    assert outcome.tool_result_errors == 5
+    assert len(model.calls) == 5
+    assert not any(
+        getattr(event, "name", "") == "cli_parser.protocol.repair" for event in events
+    )
+
+
+async def test_current_schema_plan_tools_determine_retry_guidance() -> None:
+    from agentscope.tool import ToolChunk
+
+    from cli_parser_agent.ttp_generation.agent.tools import SubmitResultSchemaTool
+
+    class PlanTool(SubmitResultSchemaTool):
+        name = "submit_schema_plan"
+        input_schema = {
+            "type": "object",
+            "properties": {"plan": {"type": "object"}},
+            "required": ["plan"],
+            "additionalProperties": False,
+        }
+
+        async def call(self, plan: dict[str, Any]) -> Any:
+            mark_tool_entered(self.name)
+            mark_tool_arguments_valid(self.name)
+            self.session.frozen_schema = _schema()
+            return ToolChunk(content="accepted")
+
+    model = _ScriptedModel(
+        [
+            _response(TextBlock(text="no tool")),
+            _response(
+                ToolCallBlock(id="legacy", name=SUBMIT_SCHEMA_TOOL_NAME, input="{}")
+            ),
+            _response(
+                ToolCallBlock(id="plan", name="submit_schema_plan", input='{"plan":{}}')
+            ),
+        ]
+    )
+    session = _session()
+    agent = _agent(model, session, "schema")
+    agent.toolkit = Toolkit(tools=[PlanTool(session)])
+    outcome = await run_generation_phase(
+        agent,
+        UserMsg(name="user", content="input"),
+        session,
+        "schema",
+    )
+    assert outcome.phase_completed
+    assert len(model.calls) == 3
+    text = _message_text(model.calls[-1]["messages"])
+    assert "submit_schema_plan" in text
+    assert '"required_keys":["plan"]' in text
+    assert SUBMIT_SCHEMA_TOOL_NAME not in text
+
+
+async def test_concurrent_phases_do_not_share_protocol_boundary_state() -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def validate(_: SchemaCandidate) -> ValidatorOutcome:
+        entered.set()
+        await release.wait()
+        return ValidatorOutcome(valid=True)
+
+    valid_session = _session(schema_validator=validate)
+    invalid_session = _session(max_agent_rounds=26)
+    valid_model = _ScriptedModel([_schema_call()])
+    invalid_model = _ScriptedModel([_invalid_call(str(i)) for i in range(4)])
+    valid_task = asyncio.create_task(
+        run_generation_phase(
+            _agent(valid_model, valid_session, "schema"),
+            UserMsg(name="user", content="valid"),
+            valid_session,
+            "schema",
+        )
+    )
+    await entered.wait()
+    try:
+        invalid_outcome = await run_generation_phase(
+            _agent(invalid_model, invalid_session, "schema"),
+            UserMsg(name="user", content="invalid"),
+            invalid_session,
+            "schema",
+        )
+    finally:
+        release.set()
+    valid_outcome = await valid_task
+    assert valid_outcome.phase_completed
+    assert not valid_outcome.protocol_retry_limit
+    assert valid_outcome.submission_tool_call_invalids == 0
+    assert invalid_outcome.protocol_retry_limit
+    assert invalid_outcome.submission_tool_call_invalids == 4
 
 
 async def test_cancellation_propagates_without_becoming_no_tool_retry() -> None:

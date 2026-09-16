@@ -141,6 +141,49 @@ async def test_malformed_tool_call_uses_distinct_failure_code(
     ]
 
 
+@pytest.mark.parametrize(
+    ("invalid_arguments", "expected_reason", "expected_issue"),
+    [
+        (
+            True,
+            "model_submission_tool_call_invalid",
+            "model.submission_tool_call_invalid",
+        ),
+        (False, "model_no_tool_retry_limit", "model.submission_tool_not_called"),
+    ],
+)
+async def test_protocol_guard_preserves_public_failure_categories(
+    monkeypatch: pytest.MonkeyPatch,
+    invalid_arguments: bool,
+    expected_reason: str,
+    expected_issue: str,
+) -> None:
+    async def run(
+        agent: Any,
+        message: Any,
+        session: Any,
+        phase: str,
+    ) -> AgentRunOutcome:
+        del agent, message
+        assert phase == "schema"
+        for _ in range(4):
+            session.record_agent_round("schema")
+        return AgentRunOutcome(
+            protocol_retry_limit=True,
+            stopped_after_terminal_tool=True,
+            ended_after_invalid_tool_call=invalid_arguments,
+        )
+
+    _install_agent_stubs(monkeypatch, run)
+    result = await _generator(max_agent_rounds=26).generate(
+        GenerationRequest(command_outputs=["value: one"]),
+    )
+    assert result.status == "failed"
+    assert result.metadata.termination_reason == expected_reason
+    assert result.metadata.agent_rounds == 4
+    assert [issue.code for issue in result.issues] == [expected_issue]
+
+
 async def test_provider_parameter_rejection_is_a_generic_model_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

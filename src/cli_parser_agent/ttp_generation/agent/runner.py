@@ -43,6 +43,15 @@ from .prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
+from .protocol import (
+    MAX_CONSECUTIVE_PROTOCOL_FAILURES,
+    SCHEMA_PROTOCOL_TOOLS,
+    TTP_PROTOCOL_TOOLS,
+    ProtocolBoundaryTracker,
+    ProtocolFailure,
+    protocol_repair_text,
+    track_tool_boundaries,
+)
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -78,6 +87,7 @@ class AgentRunOutcome:
     exceeded_max_iters: bool = False
     stopped_after_terminal_tool: bool = False
     model_no_tool_retry_limit: bool = False
+    protocol_retry_limit: bool = False
     ended_after_invalid_tool_call: bool = False
     tool_call_starts: int = 0
     tool_result_errors: int = 0
@@ -220,17 +230,15 @@ def _compact_ttp_history(
         session.ttp_history_compaction_skips += 1
 
 
-def _submission_count(session: GenerationSession, tool_name: str) -> int:
-    if tool_name == SUBMIT_SCHEMA_TOOL_NAME:
-        return session.schema_submissions
-    if tool_name == SUBMIT_TEMPLATE_TOOL_NAME:
-        return session.ttp_submissions
-    return 0
-
-
-def _retry_message(phase: GenerationPhase) -> UserMsg:
+def _retry_message(
+    phase: GenerationPhase, expected_tools: tuple[str, ...] | None = None
+) -> UserMsg:
     if phase == "schema":
-        content = SCHEMA_NO_TOOL_RETRY_PROMPT
+        content = (
+            protocol_repair_text("no_tool", expected_tools)
+            if expected_tools and SUBMIT_SCHEMA_TOOL_NAME not in expected_tools
+            else SCHEMA_NO_TOOL_RETRY_PROMPT
+        )
     elif phase == "ttp":
         content = TTP_NO_TOOL_RETRY_PROMPT
     else:
@@ -248,6 +256,21 @@ def _expected_tool_names(phase: GenerationPhase) -> tuple[str, ...]:
             FINISH_GENERATION_TOOL_NAME,
         )
     raise ValueError(f"Unsupported generation phase: {phase!r}")
+
+
+async def _registered_phase_tools(
+    agent: Any, phase: GenerationPhase
+) -> tuple[str, ...]:
+    toolkit = getattr(agent, "toolkit", None)
+    if toolkit is None:
+        return _expected_tool_names(phase)
+    allowed = SCHEMA_PROTOCOL_TOOLS if phase == "schema" else TTP_PROTOCOL_TOOLS
+    schemas = await toolkit.get_tool_schemas()
+    return tuple(
+        name
+        for schema in schemas
+        if (name := schema.get("function", {}).get("name")) in allowed
+    )
 
 
 def _phase_completed(session: GenerationSession, phase: GenerationPhase) -> bool:
@@ -347,12 +370,32 @@ async def run_generation_phase(
     *,
     progress: ProgressEmitter | None = None,
 ) -> AgentRunOutcome:
-    """Run one isolated phase, retrying only sanitized no-tool completions."""
+    """Run one isolated phase with a request-local protocol boundary tracker."""
 
-    expected_tools = _expected_tool_names(phase)
+    tracker = ProtocolBoundaryTracker()
+    with track_tool_boundaries(tracker):
+        return await _run_generation_phase(
+            agent, message, session, phase, tracker=tracker, progress=progress
+        )
+
+
+async def _run_generation_phase(
+    agent: Any,
+    message: Any,
+    session: GenerationSession,
+    phase: GenerationPhase,
+    *,
+    tracker: ProtocolBoundaryTracker,
+    progress: ProgressEmitter | None = None,
+) -> AgentRunOutcome:
+    """Repair protocol failures without retaining rejected calls or outputs."""
+
+    expected_tools = await _registered_phase_tools(agent, phase)
     exceeded_max_iters = False
     stopped_after_terminal_tool = False
     model_no_tool_retry_limit = False
+    protocol_retry_limit = False
+    consecutive_protocol_failures = 0
     last_model_call_invalid = False
     last_model_call_event_id: str | None = None
     last_model_call_reply_id: str | None = None
@@ -362,6 +405,38 @@ async def run_generation_phase(
     round_tool_names: set[str] = set()
     round_finished_reason: str = ""
     round_outcome: str = "success"
+
+    def record_protocol_failure(failure: ProtocolFailure) -> bool:
+        nonlocal consecutive_protocol_failures, protocol_retry_limit
+        consecutive_protocol_failures += 1
+        protocol_retry_limit = (
+            consecutive_protocol_failures >= MAX_CONSECUTIVE_PROTOCOL_FAILURES
+        )
+        if progress is not None:
+            progress.custom(
+                "cli_parser.protocol.repair",
+                {
+                    "category": failure,
+                    "consecutive_failures": consecutive_protocol_failures,
+                    "repair_limit": MAX_CONSECUTIVE_PROTOCOL_FAILURES - 1,
+                    "stopped": protocol_retry_limit,
+                    "termination_reason": (
+                        "protocol_retry_limit" if protocol_retry_limit else None
+                    ),
+                },
+                phase=phase,
+                sensitive=False,
+            )
+        return not protocol_retry_limit
+
+    def observe_boundary(category: str) -> None:
+        if progress is not None:
+            progress.custom(
+                "cli_parser.protocol.boundary",
+                {"category": category},
+                phase=phase,
+                sensitive=False,
+            )
 
     def remaining_seconds() -> float:
         return session.remaining_seconds()
@@ -433,7 +508,7 @@ async def run_generation_phase(
         last_expected_tools: tuple[str, ...] | None = None
         last_call_had_tool = False
         last_call_interrupted = False
-        pending_tool_calls: dict[str, tuple[str, int]] = {}
+        pending_tool_calls: dict[str, str] = {}
         terminal_checkpoint: _ContextCheckpoint | None = None
         internal_cancel_task: asyncio.Task[Any] | None = None
         internal_cancel_token: object | None = None
@@ -536,6 +611,7 @@ async def run_generation_phase(
                     last_call_had_tool = False
                     last_model_call_invalid = False
                     last_call_interrupted = False
+                    tracker.reset()
 
                 elif isinstance(event, ModelCallEndEvent):
                     round_finished_reason = str(event.finished_reason)
@@ -570,14 +646,13 @@ async def run_generation_phase(
                     tool_name = event.tool_call_name
                     if tool_name == FINISH_GENERATION_TOOL_NAME:
                         session.finish_called = True
-                    round_tool_names.add(tool_name)
-                    pending_tool_calls[event.tool_call_id] = (
-                        tool_name,
-                        _submission_count(session, tool_name),
+                    round_tool_names.add(
+                        tool_name
+                        if tool_name in expected_tools
+                        else "unrecognized_tool"
                     )
-                    if last_expected_tools and tool_name in last_expected_tools:
-                        last_call_had_tool = True
-                        session.reset_no_tool_sequence(phase)
+                    pending_tool_calls[event.tool_call_id] = tool_name
+                    last_call_had_tool = True
 
                 elif isinstance(event, ExceedMaxItersEvent):
                     exceeded_max_iters = True
@@ -589,33 +664,70 @@ async def run_generation_phase(
 
                 if isinstance(event, ToolResultEndEvent):
                     pending = pending_tool_calls.pop(event.tool_call_id, None)
-                    pending_expected = (
-                        pending is not None and pending[0] in expected_tools
-                    )
+                    pending_expected = pending is not None and pending in expected_tools
                     if event.state == ToolResultState.ERROR:
                         session.tool_result_errors += 1
-                        if pending is not None:
-                            tool_name, submissions_before = pending
-                            if (
-                                tool_name
-                                in {
-                                    SUBMIT_SCHEMA_TOOL_NAME,
-                                    SUBMIT_TEMPLATE_TOOL_NAME,
-                                    TEST_TEMPLATE_TOOL_NAME,
-                                    FINISH_GENERATION_TOOL_NAME,
-                                }
-                                and _submission_count(session, tool_name)
-                                == submissions_before
-                            ):
-                                session.submission_tool_call_invalids += 1
-                                last_model_call_invalid = True
-                    elif pending_expected:
+                    boundary = tracker.boundaries.get(pending or "")
+                    failure: ProtocolFailure | None = None
+                    if event.state == ToolResultState.INTERRUPTED:
+                        last_call_interrupted = True
+                    elif pending is not None and not pending_expected:
+                        failure = "wrong_tool"
+                    elif pending_expected and boundary == "rejected":
+                        failure = "product_arguments"
+                    elif (
+                        pending_expected
+                        and boundary is None
+                        and event.state == ToolResultState.ERROR
+                    ):
+                        # AgentScope rejects an unavailable tool or invalid
+                        # arguments before entering our request-local tool.
+                        # Execution failures have an explicit boundary marker.
+                        failure = "framework_arguments"
+                    elif pending_expected and boundary in {"valid", "execution_failed"}:
+                        consecutive_protocol_failures = 0
+                        session.reset_no_tool_sequence(phase)
                         last_model_call_invalid = False
+                        observe_boundary(
+                            "execution_error"
+                            if boundary == "execution_failed"
+                            or event.state == ToolResultState.ERROR
+                            else "business_rejected"
+                            if (event.metadata or {}).get("accepted") is False
+                            else "arguments_valid"
+                        )
+                    elif pending_expected and boundary == "entered":
+                        # An unexpected failure between entry and argument
+                        # validation is infrastructure, not model input.
+                        observe_boundary("execution_error")
+
+                    if failure is not None:
+                        if failure != "wrong_tool":
+                            session.submission_tool_call_invalids += 1
+                            last_model_call_invalid = True
+                        if last_checkpoint is None:
+                            raise RuntimeError(
+                                "Protocol result has no context checkpoint."
+                            )
+                        # Remove the whole rejected completion with both call
+                        # and result. Initial input and earlier legitimate
+                        # tool evidence remain at the checkpoint unchanged.
+                        _restore_context(agent, last_checkpoint)
+                        repair_allowed = record_protocol_failure(failure)
+                        if repair_allowed:
+                            agent.state.context.append(
+                                UserMsg(
+                                    name="user",
+                                    content=protocol_repair_text(
+                                        failure, expected_tools
+                                    ),
+                                )
+                            )
 
                     if (
                         phase == "ttp"
                         and pending is not None
-                        and pending[0]
+                        and pending
                         in {SUBMIT_TEMPLATE_TOOL_NAME, TEST_TEMPLATE_TOOL_NAME}
                         and event.state == ToolResultState.SUCCESS
                     ):
@@ -645,12 +757,8 @@ async def run_generation_phase(
                             )
 
                     if (
-                        _terminal_tool_observed(
-                            session,
-                            phase,
-                        )
-                        and not stopped_after_terminal_tool
-                    ):
+                        protocol_retry_limit or _terminal_tool_observed(session, phase)
+                    ) and not stopped_after_terminal_tool:
                         stopped_after_terminal_tool = True
                         terminal_checkpoint = _checkpoint_context(agent)
                         agent.react_config.max_iters = agent.state.cur_iter + 1
@@ -739,8 +847,9 @@ async def run_generation_phase(
                 phase=phase,
                 sensitive=False,
             )
+        protocol_repair_allowed = record_protocol_failure("no_tool")
         retry_allowed = session.record_no_tool_response(phase)
-        if not retry_allowed:
+        if not retry_allowed or not protocol_repair_allowed:
             session.terminal_reason = "model_no_tool_retry_limit"
             model_no_tool_retry_limit = True
             break
@@ -769,7 +878,7 @@ async def run_generation_phase(
                 phase=phase,
                 sensitive=False,
             )
-        next_message = _retry_message(phase)
+        next_message = _retry_message(phase, expected_tools)
 
     phase_completed = _phase_completed(session, phase)
     if (
@@ -784,6 +893,7 @@ async def run_generation_phase(
         exceeded_max_iters=exceeded_max_iters,
         stopped_after_terminal_tool=stopped_after_terminal_tool,
         model_no_tool_retry_limit=model_no_tool_retry_limit,
+        protocol_retry_limit=protocol_retry_limit,
         ended_after_invalid_tool_call=last_model_call_invalid,
         tool_call_starts=session.tool_call_starts,
         tool_result_errors=session.tool_result_errors,

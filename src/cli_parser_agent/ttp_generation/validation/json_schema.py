@@ -78,6 +78,34 @@ _ALWAYS_FORBIDDEN = {
 }
 
 
+def schema_capabilities_guidance() -> str:
+    """Describe exactly the validator's subset without a second allowlist."""
+    lines = [
+        "本工具只接受受限 JSON Schema，不能使用完整 Draft 的全部能力。",
+        "根 object 可声明 $schema；所有节点通用关键字："
+        + ", ".join(sorted(_COMMON_KEYWORDS))
+        + "。",
+    ]
+    for node_type, keywords in sorted(_KEYWORDS_BY_TYPE.items()):
+        lines.append(
+            node_type + " 的额外关键字：" + (", ".join(sorted(keywords)) or "无") + "。"
+        )
+    lines.extend(
+        [
+            "每个 object 必须 additionalProperties=false；"
+            "array 的 items 是单个 Schema。",
+            "禁止关键字："
+            + ", ".join(sorted(_ALWAYS_FORBIDDEN))
+            + "；其他未列关键字也不接受。",
+            "类型只能使用单个上述类型，不能使用 null、类型数组、引用或组合分支。",
+            "工具参数只有 result_schema；required/properties/type "
+            "必须位于其内部正确节点。"
+            "不要添加 arguments 字符串包装，也不要把 Schema 关键字放在工具参数顶层。",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def _issue(
     code: str,
     message: str,

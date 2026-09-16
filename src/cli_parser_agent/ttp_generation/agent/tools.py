@@ -30,6 +30,12 @@ from ..validation import (
     parse_ttp_template,
 )
 from .feedback import submission_feedback, test_feedback
+from .protocol import (
+    mark_tool_arguments_rejected,
+    mark_tool_arguments_valid,
+    mark_tool_entered,
+    mark_tool_execution_failed,
+)
 from .session import (
     GenerationPhase,
     GenerationSession,
@@ -632,6 +638,15 @@ class TestTtpTemplateTool(_SubmissionToolBase):
         ttp_template: str | None = None,
         **unexpected_arguments: Any,
     ) -> ToolChunk:
+        mark_tool_entered(self.name)
+        try:
+            TtpTemplateTestInput.model_validate(
+                {"text": text, "ttp_template": ttp_template, **unexpected_arguments}
+            )
+        except ValidationError:
+            mark_tool_arguments_rejected(self.name)
+        else:
+            mark_tool_arguments_valid(self.name)
         if self.session.ttp_test_calls >= self.session.max_ttp_test_calls:
             # Refuse before incrementing, so ttp_test_calls stays "tests that
             # ran". A refusal is a budget fact, not a tool error: raising
@@ -717,6 +732,7 @@ class TestTtpTemplateTool(_SubmissionToolBase):
         except asyncio.CancelledError:
             raise
         except Exception:
+            mark_tool_execution_failed(self.name)
             return _ttp_test_result_chunk(
                 self.session,
                 issues=(
@@ -759,6 +775,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
         result_schema: dict[str, Any] | None = None,
         **unexpected_arguments: Any,
     ) -> ToolChunk:
+        mark_tool_entered(self.name)
         traced_input: dict[str, Any] = {
             "result_schema": result_schema,
         }
@@ -788,6 +805,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
                 },
             )
         except ValidationError:
+            mark_tool_arguments_rejected(self.name)
             issues = (_safe_boundary_issue(phase="schema", failure="input"),)
             self.session.last_issues = issues
             return _result_chunk(
@@ -799,6 +817,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
                 next_action="correct_and_resubmit_schema",
             )
 
+        mark_tool_arguments_valid(self.name)
         if self.session.schema_is_frozen:
             return _result_chunk(
                 phase="schema",
@@ -828,6 +847,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
         except asyncio.CancelledError:
             raise
         except Exception:
+            mark_tool_execution_failed(self.name)
             outcome = ValidatorOutcome(
                 valid=False,
                 issues=(
@@ -869,6 +889,13 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
     input_schema = TemplateSubmissionInput.model_json_schema()
 
     async def call(self, ttp_template: str) -> ToolChunk:
+        mark_tool_entered(self.name)
+        try:
+            TemplateSubmissionInput(ttp_template=ttp_template)
+        except ValidationError:
+            mark_tool_arguments_rejected(self.name)
+        else:
+            mark_tool_arguments_valid(self.name)
         return await _run_traced_tool_call(
             name=self.name,
             input={"ttp_template": ttp_template},
@@ -1031,6 +1058,7 @@ class SubmitTtpTemplateTool(_SubmissionToolBase):
         except asyncio.CancelledError:
             raise
         except Exception:
+            mark_tool_execution_failed(self.name)
             outcome = ValidatorOutcome(
                 valid=False,
                 issues=(
@@ -1148,6 +1176,8 @@ class FinishGenerationTool(_SubmissionToolBase):
     input_schema = FinishGenerationInput.model_json_schema()
 
     async def call(self) -> ToolChunk:
+        mark_tool_entered(self.name)
+        mark_tool_arguments_valid(self.name)
         return await _run_traced_tool_call(
             name=self.name,
             input={},

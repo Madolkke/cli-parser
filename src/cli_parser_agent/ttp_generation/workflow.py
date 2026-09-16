@@ -928,6 +928,21 @@ class _GenerationWorkflow:
                 stage="budget",
             )
             reason = "ttp_submission_limit"
+        elif run_outcome is not None and run_outcome.protocol_retry_limit:
+            if run_outcome.ended_after_invalid_tool_call:
+                reason = "model_submission_tool_call_invalid"
+                issue = _issue(
+                    "model.submission_tool_call_invalid",
+                    "The model exhausted controlled argument repair attempts.",
+                    stage="model",
+                )
+            else:
+                reason = "model_no_tool_retry_limit"
+                issue = _issue(
+                    "model.submission_tool_not_called",
+                    "The model exhausted controlled protocol repair attempts.",
+                    stage="model",
+                )
         elif self.session.terminal_reason == "model_no_tool_retry_limit":
             issue = _issue(
                 "model.submission_tool_not_called",

@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from typing import Any, TypeVar, cast
+from urllib.parse import urlsplit
 
 import openai
 from agentscope.message import Msg, ThinkingBlock
@@ -290,6 +291,18 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         tool_choice: ToolChoice | None = None,
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
+        # AgentScope 2.0 maps Parameters.max_tokens to the OpenAI-specific
+        # max_completion_tokens. DeepSeek's official API documents max_tokens
+        # instead. Suppress the incompatible SDK argument without modifying
+        # Parameters, history, or the request-local model's configured budget.
+        if urlsplit(self.credential.base_url or "").hostname == "api.deepseek.com":
+            if self.extra_body and {"max_tokens", "max_completion_tokens"}.intersection(
+                self.extra_body
+            ):
+                raise ValueError("Output limits must be configured through max_tokens")
+            kwargs["max_completion_tokens"] = openai.NOT_GIVEN
+            if self.parameters.max_tokens is not None:
+                kwargs["max_tokens"] = self.parameters.max_tokens
         return await self._attempt_recorder.call(
             lambda: super(ObservedOpenAIChatModel, self)._call_api(
                 model_name,

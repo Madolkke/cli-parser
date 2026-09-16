@@ -49,6 +49,9 @@
 - 根层同时含标量与容器时，模板使用未命名最外层 group。验证器只解包“单元素 list 且元素为 dict”的一层 TTP 外壳；真正的多根结果仍以 `ttp.multiple_root_objects` 拒绝。
 - 普通日志、公共 issues 和失败结果只保留有界结构化事实，不保存输入正文、模型文本、模板参数、解析值或 secrets。完整内容只允许进入明确启用的 Laminar、observer/TUI 或本地 WebUI 存储，并且只读观察、不得回灌模型上下文。
 
+
+- 连续工具协议失败最多三次受控修复，第四次停止；合法参数调用重置序列，业务拒绝与执行异常独立统计。官方 DeepSeek 端点以其文档规定的 `max_tokens` 发送输出预算；细节见 [v44运行契约](docs/schema-runtime-v44.md)。
+
 ## 代码与产品边界
 
 - 产品代码按 `src/cli_parser_agent/ttp_generation/` 垂直切片。`generator.py` 保留公共入口与根 Trace，`workflow.py` 负责编排，跨阶段状态位于 `agent/session.py`；领域契约、采样和 `validation/` 不导入 AgentScope。

@@ -6,7 +6,9 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v40-python-identifier-field-names-zh-cn"
+from ..validation.json_schema import schema_capabilities_guidance
+
+PROMPT_VERSION = "ttp-generator-v44-schema-runtime-contract-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -63,6 +65,8 @@ SCHEMA_SYSTEM_PROMPT = """\
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
   整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
 """
+
+SCHEMA_SYSTEM_PROMPT += "\n" + schema_capabilities_guidance() + "\n"
 
 TTP_SYSTEM_PROMPT = """\
 你负责为用户提供的冻结 JSON Schema 和多份同一命令的纯输出生成一份安全的
