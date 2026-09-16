@@ -11,7 +11,9 @@ import subprocess
 import sys
 import time
 from collections.abc import Mapping, Sequence
+from copy import deepcopy
 from datetime import UTC, datetime
+from itertools import combinations
 from pathlib import Path
 from typing import Any
 
@@ -50,8 +52,13 @@ from cli_parser_agent.evaluation import (  # noqa: E402
     summarize_schema_review,
     wilson_interval,
 )
-from cli_parser_agent.ttp_generation.agent.prompt import (  # noqa: E402
-    PROMPT_VERSION,
+from cli_parser_agent.evaluation_parse_review import (  # noqa: E402
+    summarize_parse_review,
+)
+from cli_parser_agent.ttp_generation.agent.schema_strategy import (  # noqa: E402
+    current_prompt_version,
+    current_schema_strategy,
+    schema_strategy_for_testing,
 )
 
 RUNNER_VERSION = 5
@@ -127,7 +134,9 @@ def _build_parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run")
     run.add_argument("--registry", type=Path, required=True)
     run.add_argument(
-        "--mode", choices=("baseline", "ttp-only", "schema-only"), required=True
+        "--mode",
+        choices=("baseline", "ttp-only", "schema-only", "end-to-end"),
+        required=True,
     )
     _add_selection_arguments(run)
     _add_input_scope_argument(run)
@@ -156,9 +165,19 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="record safe per-round facts to trial-NN.rounds.jsonl for loop diagnosis",
     )
+    run.add_argument(
+        "--schema-experiment-arm",
+        action="append",
+        choices=("direct", "plan", "plan_confirm"),
+        help="private evaluation arm; repeat to interleave under one global semaphore",
+    )
     review = commands.add_parser("schema-review")
     review.add_argument("--run-directory", type=Path, required=True)
     review.add_argument("--review-file", type=Path, required=True)
+    parse_review = commands.add_parser("parse-review")
+    parse_review.add_argument("--run-directory", type=Path, required=True)
+    parse_review.add_argument("--review-file", type=Path, required=True)
+    parse_review.add_argument("--schema-review-file", type=Path, required=True)
     return parser
 
 
@@ -196,7 +215,7 @@ def _configuration() -> tuple[
             "extra_body_configured": settings.extra_body is not None,
         },
         "policy": policy.model_dump(mode="json"),
-        "prompt": {"version": PROMPT_VERSION},
+        "prompt": {"version": current_prompt_version()},
     }
     return settings, policy, artifact_root, configuration
 
@@ -627,20 +646,62 @@ async def _run_ttp(
     return 1 if status == "regressed" else 0
 
 
-class _SchemaTracer:
-    """Project observations immediately; never retain candidate bodies."""
+class _FallbackSnapshot:
+    """Only this private channel retains names; never serialize the snapshot."""
 
-    def __init__(self, *, record_rows=False):
+    __slots__ = ("names", "nodes", "fallback_nodes")
+
+    def __init__(self, names, nodes, fallback_nodes):
+        self.names = names
+        self.nodes = nodes
+        self.fallback_nodes = fallback_nodes
+
+
+def _accepted_plan_fallback(value):
+    from pydantic import ValidationError
+
+    from cli_parser_agent.ttp_generation.schema_plan import SchemaPlan
+
+    submitted = value.get("input")
+    if not isinstance(submitted, Mapping):
+        return None
+    try:
+        plan = SchemaPlan.model_validate(submitted.get("plan"))
+    except ValidationError:
+        return None
+    names = [
+        node.fallback_name for node in plan.nodes if node.fallback_name is not None
+    ]
+    return _FallbackSnapshot(frozenset(names), len(plan.nodes), len(names))
+
+
+class _SchemaTracer:
+    """Project observations; optionally retain only a frozen schema in memory."""
+
+    def __init__(self, *, record_rows=False, capture_frozen=False):
         self.rounds = _RoundTracer(record_rows=record_rows)
         self.submissions = []
         self.input_tokens = []
         self.output_tokens = []
+        self.capture_frozen = capture_frozen
+        self.frozen_schema = None
+        self.first_frozen_seconds = None
+        self.confirmations = 0
+        self.compiler_facts = []
+        self._pending_fallback = None
+        self.frozen_fallback = None
 
     def __call__(self, event):
         self.rounds(event)
         metadata = getattr(event, "metadata", None) or {}
         if metadata.get("phase") != "schema":
             return
+        if (
+            type(event) is agent_events.ToolCallStartEvent
+            and event.tool_call_name == "submit_schema_plan"
+        ):
+            # Framework-rejected replacement attempts emit no product result.
+            self._pending_fallback = None
         if type(event) is agent_events.ModelCallEndEvent:
             for field in ("input_tokens", "output_tokens"):
                 value = getattr(event, field, None)
@@ -656,16 +717,34 @@ class _SchemaTracer:
         ):
             return
         value = event.value
-        if (
-            not isinstance(value, Mapping)
-            or value.get("tool_name") != "submit_result_schema"
-        ):
+        if not isinstance(value, Mapping) or value.get("tool_name") not in {
+            "submit_result_schema",
+            "submit_schema_plan",
+            "confirm_schema_plan",
+        }:
             return
+        if value["tool_name"] == "submit_schema_plan":
+            self._pending_fallback = None
         output = value.get("output")
         if not isinstance(output, Mapping) or not isinstance(
             output.get("accepted"), bool
         ):
             return
+        if value["tool_name"] == "submit_schema_plan" and output["accepted"]:
+            snapshot = _accepted_plan_fallback(value)
+            if output.get("frozen") is True:
+                if self.frozen_fallback is None:
+                    self.frozen_fallback = snapshot
+            else:
+                self._pending_fallback = snapshot
+        elif (
+            value["tool_name"] == "confirm_schema_plan"
+            and output["accepted"]
+            and output.get("frozen") is True
+        ):
+            if self.frozen_fallback is None:
+                self.frozen_fallback = self._pending_fallback
+            self._pending_fallback = None
         categories = set()
         issues = output.get("issues", [])
         for issue in issues if isinstance(issues, list) else []:
@@ -682,16 +761,56 @@ class _SchemaTracer:
                 else "schema.other_rejection"
             )
         elapsed = metadata.get("elapsed_seconds")
+        elapsed = (
+            elapsed
+            if (
+                isinstance(elapsed, (int, float))
+                and not isinstance(elapsed, bool)
+                and math.isfinite(elapsed)
+                and elapsed >= 0
+            )
+            else None
+        )
+        if output.get("frozen") is True and output["accepted"]:
+            if self.first_frozen_seconds is None:
+                self.first_frozen_seconds = elapsed
+            if self.capture_frozen and self.frozen_schema is None:
+                candidate = (
+                    value.get("input", {}).get("result_schema")
+                    if value["tool_name"] == "submit_result_schema"
+                    and isinstance(value.get("input"), Mapping)
+                    else output.get("compiled_schema")
+                )
+                if isinstance(candidate, dict):
+                    self.frozen_schema = deepcopy(candidate)
+        if value["tool_name"] == "confirm_schema_plan":
+            self.confirmations += 1
+            return
+        compiler_facts = output.get("facts")
+        if value["tool_name"] == "submit_schema_plan" and isinstance(
+            compiler_facts, Mapping
+        ):
+            self.compiler_facts.append(
+                {
+                    key: item
+                    for key, item in compiler_facts.items()
+                    if key
+                    in {
+                        "nodes",
+                        "references",
+                        "fallback_names",
+                        "evidence_incomplete_nodes",
+                        "required_fields",
+                    }
+                    and type(item) is int
+                    and item >= 0
+                }
+            )
         self.submissions.append(
             {
                 "accepted": output["accepted"],
                 "categories": sorted(categories),
-                "elapsed_seconds": elapsed
-                if isinstance(elapsed, (int, float))
-                and not isinstance(elapsed, bool)
-                and math.isfinite(elapsed)
-                and elapsed >= 0
-                else None,
+                "elapsed_seconds": elapsed,
             }
         )
 
@@ -701,9 +820,9 @@ class _SchemaTracer:
             "first_submission_accepted": self.submissions[0]["accepted"]
             if self.submissions
             else None,
-            "first_frozen_seconds": next(
-                (s["elapsed_seconds"] for s in self.submissions if s["accepted"]), None
-            ),
+            "first_frozen_seconds": self.first_frozen_seconds,
+            "observed_confirmations": self.confirmations,
+            "compiler_facts": self.compiler_facts,
             "rejection_counts": {
                 code: sum(
                     not s["accepted"] and code in s["categories"]
@@ -775,62 +894,326 @@ async def _run_schema_trial(case, settings, policy, tracer):
     return document, schema
 
 
+async def _run_end_to_end_trial(case, settings, policy, tracer):
+    """Score generated contracts without applying the reference field layout."""
+    from cli_parser_agent.ttp_generation.validation import validate_result_schema
+
+    started = time.monotonic()
+    schema = None
+    document = {
+        "generation_success": False,
+        "schema_generation_success": False,
+        "proposal_revalidated": None,
+        "independent_acceptance": None,
+        "execution_facts": {},
+        "exception_type": None,
+    }
+    try:
+        request = GenerationRequest(command_outputs=[item.text for item in case.inputs])
+        result = await TtpGenerator(settings=settings, policy=policy).generate(
+            request, observer=tracer
+        )
+        document["generation_success"] = result.status == "success"
+        metadata = result.metadata
+        for field in (
+            "schema_submissions",
+            "schema_agent_rounds",
+            "ttp_submissions",
+            "ttp_test_calls",
+            "ttp_agent_rounds",
+            "agent_rounds",
+            "termination_reason",
+            "input_tokens_total",
+            "output_tokens_total",
+            "model_calls_observed",
+        ):
+            document[field] = getattr(metadata, field, None)
+        document["trace_id"] = metadata.laminar_trace_id
+        candidate = (
+            result.artifact.result_schema
+            if result.status == "success" and result.artifact is not None
+            else tracer.frozen_schema
+        )
+        if candidate is not None:
+            document["schema_generation_success"] = True
+            issues = validate_result_schema(candidate)
+            document["proposal_revalidated"] = not issues
+            if not issues:
+                schema = candidate
+                document["structure"] = schema_proposal_metrics(schema, case.schema)
+        acceptance = await asyncio.to_thread(
+            independent_acceptance, result, request.command_outputs, policy
+        )
+        document["independent_acceptance"] = acceptance
+    except asyncio.CancelledError:
+        raise
+    except Exception as error:
+        document["exception_type"] = (
+            type(error).__name__
+            if type(error)
+            in {ValueError, TypeError, RuntimeError, OSError, TimeoutError}
+            else "Exception"
+        )
+    # A frozen contract remains evaluable even if the later TTP path raises.
+    if schema is None and tracer.frozen_schema is not None:
+        document["schema_generation_success"] = True
+        issues = validate_result_schema(tracer.frozen_schema)
+        document["proposal_revalidated"] = not issues
+        if not issues:
+            schema = tracer.frozen_schema
+            document["structure"] = schema_proposal_metrics(schema, case.schema)
+    document["elapsed_seconds"] = time.monotonic() - started
+    document["observations"] = tracer.facts()
+    document["observations"]["submission_observation_complete"] = (
+        document.get("schema_submissions") == len(tracer.submissions)
+        if "schema_submissions" in document
+        else None
+    )
+    document["execution_facts"] = tracer.rounds.execution_facts
+    return document, schema
+
+
+def _schema_succeeded(document):
+    return document.get("schema_generation_success", document["generation_success"])
+
+
+def _fallback_trial_metrics(snapshot, *, applicable):
+    return {
+        "status": "not_applicable"
+        if not applicable
+        else "observed"
+        if snapshot is not None
+        else "unobserved",
+        "business_nodes": snapshot.nodes if snapshot is not None else None,
+        "fallback_nodes": snapshot.fallback_nodes if snapshot is not None else None,
+        "fallback_ratio": snapshot.fallback_nodes / snapshot.nodes
+        if snapshot is not None
+        else None,
+    }
+
+
+def _fallback_repeat_consistency(results):
+    """Name-set differences are not evidence that the same field was renamed."""
+    valid = [
+        (document["trial_id"], snapshot)
+        for document, schema, snapshot in results
+        if _schema_succeeded(document)
+        and document["proposal_revalidated"] is True
+        and schema is not None
+    ]
+    observed = [(tid, snapshot) for tid, snapshot in valid if snapshot is not None]
+    pairs = []
+    for (left_id, left), (right_id, right) in combinations(observed, 2):
+        intersection = len(left.names & right.names)
+        union = len(left.names | right.names)
+        pairs.append(
+            {
+                "left_trial_id": left_id,
+                "right_trial_id": right_id,
+                "name_sets_equal": left.names == right.names,
+                "name_set_jaccard": intersection / union if union else 1.0,
+                "intersection_count": intersection,
+                "union_count": union,
+                "left_only_count": len(left.names - right.names),
+                "right_only_count": len(right.names - left.names),
+                "symmetric_difference_count": len(left.names ^ right.names),
+            }
+        )
+    return {
+        "valid_schema_count": len(valid),
+        "fallback_observation_count": len(observed),
+        "evaluated_pair_count": len(pairs),
+        "name_sets_equal_pair_count": sum(pair["name_sets_equal"] for pair in pairs),
+        "name_sets_equal_rate": sum(pair["name_sets_equal"] for pair in pairs)
+        / len(pairs)
+        if pairs
+        else None,
+        "name_set_jaccard_mean": sum(pair["name_set_jaccard"] for pair in pairs)
+        / len(pairs)
+        if pairs
+        else None,
+        "pairs": pairs,
+    }
+
+
 async def _run_schema(args, registry, reports):
+    """Run all evaluation arms over the same in-memory input snapshot."""
     cases = tuple(report.case for report in reports if report.case is not None)
     settings, policy, artifact_root, configuration = _configuration()
-    run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
+    arms = getattr(args, "schema_experiment_arm", None) or [current_schema_strategy()]
+    if len(arms) != len(set(arms)):
+        raise ScriptConfigurationError("duplicate schema experiment arm")
     git_state = _git_state()
     semaphore = asyncio.Semaphore(args.concurrency)
-
-    async def execute(case, index):
-        async with semaphore:
-            started_at = datetime.now(UTC).isoformat()
-            tracer = _SchemaTracer(record_rows=args.trace_rounds)
-            document, schema = await _run_schema_trial(case, settings, policy, tracer)
-            document.update(
-                {
-                    "runner_version": RUNNER_VERSION,
-                    "mode": "schema-only",
-                    "schema_metrics_version": SCHEMA_METRICS_VERSION,
-                    "case_id": case.id,
-                    "case": _case_metadata(case, args.input_scope),
-                    "trial_index": index,
-                    "trial_id": f"{run_directory.name}/{case.id}/{index + 1}",
-                    "started_at": started_at,
-                    "finished_at": datetime.now(UTC).isoformat(),
-                    "git": git_state,
-                }
-            )
-            directory = run_directory / "datasets" / case.id / "trials"
-            directory.mkdir(parents=True, exist_ok=True)
-            _run_support.write_json(directory / f"trial-{index + 1:02d}.json", document)
-            if args.trace_rounds:
-                with (directory / f"trial-{index + 1:02d}.rounds.jsonl").open(
-                    "w", encoding="utf-8"
-                ) as handle:
-                    for row in tracer.rounds.rows:
-                        handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-            print(
-                f"{case.id} trial={index + 1}: "
-                f"schema_success={document['generation_success']}",
-                flush=True,
-            )
-            return document, schema
-
+    experiment_directory = (
+        _run_support.new_run_directory(artifact_root) if len(arms) > 1 else None
+    )
+    arm_state = {}
+    for arm in arms:
+        root = experiment_directory / arm if experiment_directory else artifact_root
+        directory = _write_preflight_artifacts(root, registry, reports)
+        with schema_strategy_for_testing(arm):
+            arm_configuration = deepcopy(configuration)
+            arm_configuration["prompt"] = {"version": current_prompt_version()}
+        arm_state[arm] = {"directory": directory, "configuration": arm_configuration}
+    manifest = {
+        "experiment_version": 1,
+        "mode": args.mode,
+        "git": git_state,
+        "global_concurrency": args.concurrency,
+        "planned_request_count": len(cases) * args.trials * len(arms),
+        "same_input_snapshot": True,
+        "selected_inputs": _selection_metadata(reports),
+        "arms": {
+            arm: {
+                "run_directory": str(state["directory"]),
+                "planned_trials": len(cases) * args.trials,
+                "prompt": state["configuration"]["prompt"],
+            }
+            for arm, state in arm_state.items()
+        },
+        "status": "running",
+    }
+    if experiment_directory:
+        _run_support.write_json(experiment_directory / "experiment.json", manifest)
     print(
-        f"running Schema-only evaluation: cases={len(cases)} "
-        f"trials={args.trials} concurrency={args.concurrency}",
+        f"running {args.mode}: cases={len(cases)} trials={args.trials} "
+        f"arms={','.join(arms)} concurrency={args.concurrency}",
         flush=True,
     )
-    results = await asyncio.gather(
-        *(execute(case, i) for case in cases for i in range(args.trials))
-    )
-    trials = [document for document, _ in results]
+    jobs = []
+    for case_index, case in enumerate(cases):
+        for index in range(args.trials):
+            offset = (case_index * args.trials + index) % len(arms)
+            for arm in [*arms[offset:], *arms[:offset]]:
+                jobs.append((arm, case, index))
+    tasks = [
+        asyncio.create_task(
+            _execute_schema_trial(
+                args,
+                case,
+                index,
+                settings,
+                policy,
+                arm_state[arm]["directory"],
+                git_state,
+                semaphore,
+                arm,
+            )
+        )
+        for arm, case, index in jobs
+    ]
+    try:
+        results = await asyncio.gather(*tasks)
+    except BaseException:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        if experiment_directory:
+            manifest["status"] = "interrupted"
+            manifest["completed_request_count"] = sum(
+                task.done() and not task.cancelled() and task.exception() is None
+                for task in tasks
+            )
+            _run_support.write_json(experiment_directory / "experiment.json", manifest)
+        raise
+    for arm, state in arm_state.items():
+        selected = [
+            result
+            for (job_arm, _, _), result in zip(jobs, results, strict=True)
+            if job_arm == arm
+        ]
+        _write_schema_summary(
+            args,
+            registry,
+            reports,
+            cases,
+            selected,
+            state["directory"],
+            git_state,
+            state["configuration"],
+        )
+    if experiment_directory:
+        manifest["status"] = "recorded"
+        manifest["completed_request_count"] = len(results)
+        _run_support.write_json(experiment_directory / "experiment.json", manifest)
+        print(
+            f"experiment_json: {experiment_directory / 'experiment.json'}", flush=True
+        )
+    return 0
+
+
+async def _execute_schema_trial(
+    args, case, index, settings, policy, run_directory, git_state, semaphore, arm
+):
+    with schema_strategy_for_testing(arm):
+        return await _execute_schema_trial_in_context(
+            args, case, index, settings, policy, run_directory, git_state, semaphore
+        )
+
+
+async def _execute_schema_trial_in_context(
+    args, case, index, settings, policy, run_directory, git_state, semaphore
+):
+    async with semaphore:
+        started_at = datetime.now(UTC).isoformat()
+        tracer = _SchemaTracer(
+            record_rows=args.trace_rounds, capture_frozen=args.mode == "end-to-end"
+        )
+        trial_runner = (
+            _run_end_to_end_trial if args.mode == "end-to-end" else _run_schema_trial
+        )
+        document, schema = await trial_runner(case, settings, policy, tracer)
+        fallback = (
+            tracer.frozen_fallback
+            if _schema_succeeded(document)
+            and document["proposal_revalidated"] is True
+            and schema is not None
+            else None
+        )
+        document["fallback_naming"] = _fallback_trial_metrics(
+            fallback, applicable=current_schema_strategy() != "direct"
+        )
+        document.update(
+            {
+                "runner_version": RUNNER_VERSION,
+                "mode": args.mode,
+                "schema_metrics_version": SCHEMA_METRICS_VERSION,
+                "case_id": case.id,
+                "case": _case_metadata(case, args.input_scope),
+                "trial_index": index,
+                "trial_id": f"{run_directory.name}/{case.id}/{index + 1}",
+                "started_at": started_at,
+                "finished_at": datetime.now(UTC).isoformat(),
+                "git": git_state,
+            }
+        )
+        directory = run_directory / "datasets" / case.id / "trials"
+        directory.mkdir(parents=True, exist_ok=True)
+        _run_support.write_json(directory / f"trial-{index + 1:02d}.json", document)
+        if args.trace_rounds:
+            with (directory / f"trial-{index + 1:02d}.rounds.jsonl").open(
+                "w", encoding="utf-8"
+            ) as handle:
+                for row in tracer.rounds.rows:
+                    handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        print(
+            f"{case.id} trial={index + 1}: "
+            f"schema_success={document['generation_success']}",
+            flush=True,
+        )
+        return document, schema, fallback
+
+
+def _write_schema_summary(
+    args, registry, reports, cases, results, run_directory, git_state, configuration
+):
+    trials = [document for document, _, _ in results]
     consistency = {
         case.id: schema_repeat_consistency(
             [
                 schema
-                for document, schema in results
+                for document, schema, _ in results
                 if document["case_id"] == case.id and schema is not None
             ]
         )
@@ -840,9 +1223,9 @@ async def _run_schema(args, registry, reports):
         case.id: schema_contract_consistency(
             [
                 (document["trial_id"], schema)
-                for document, schema in results
+                for document, schema, _ in results
                 if document["case_id"] == case.id
-                and document["generation_success"]
+                and _schema_succeeded(document)
                 and document["proposal_revalidated"] is True
                 and schema is not None
             ]
@@ -854,10 +1237,18 @@ async def _run_schema(args, registry, reports):
         "run_id": run_directory.name,
         "planned_trials_per_case": args.trials,
         "contract_consistency": contracts,
+        "fallback_naming_consistency": {
+            case.id: _fallback_repeat_consistency(
+                [result for result in results if result[0]["case_id"] == case.id]
+            )
+            for case in cases
+        },
         "consistency_overview": schema_consistency_overview(contracts),
-        "parseability": "not_tested",
+        "parseability": "executed_pending_review"
+        if args.mode == "end-to-end"
+        else "not_tested",
         "runner_version": RUNNER_VERSION,
-        "mode": "schema-only",
+        "mode": args.mode,
         "status": "recorded",
         "captured_at": datetime.now(UTC).isoformat(),
         "input_scope": args.input_scope,
@@ -881,9 +1272,18 @@ async def _run_schema(args, registry, reports):
         "cases": consistency,
         "trials": trials,
     }
+    if args.mode == "end-to-end":
+        summary["schema_generation_success_count"] = sum(
+            _schema_succeeded(t) for t in trials
+        )
+        summary["independent_acceptance_count"] = sum(
+            isinstance(t["independent_acceptance"], Mapping)
+            and t["independent_acceptance"].get("valid") is True
+            for t in trials
+        )
     _run_support.write_json(run_directory / "summary.json", summary)
     print(f"summary_json: {run_directory / 'summary.json'}", flush=True)
-    return 0
+    return summary
 
 
 class _RoundTracer:
@@ -911,6 +1311,8 @@ class _RoundTracer:
     _TOOL_NAMES = frozenset(
         {
             "submit_result_schema",
+            "submit_schema_plan",
+            "confirm_schema_plan",
             "submit_ttp_template",
             "test_ttp_template",
             "finish_generation",
@@ -946,6 +1348,10 @@ class _RoundTracer:
             "outcome",
             "error_category",
             "elapsed_seconds",
+            "category",
+            "consecutive_failures",
+            "repair_limit",
+            "stopped",
         }
     )
     _EVENT_NAMES = frozenset(
@@ -962,6 +1368,8 @@ class _RoundTracer:
             "cli_parser.no_tool.retry",
             "cli_parser.ttp.submission",
             "cli_parser.model.attempt",
+            "cli_parser.protocol.repair",
+            "cli_parser.protocol.boundary",
         }
     )
 
@@ -1205,13 +1613,20 @@ def _list_cases(args: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
     try:
-        if args.command == "schema-review":
+        if getattr(args, "schema_experiment_arm", None):
+            if args.mode not in {"schema-only", "end-to-end"}:
+                raise ScriptConfigurationError(
+                    "schema arms require a generated-schema mode"
+                )
+            if len(args.schema_experiment_arm) != len(set(args.schema_experiment_arm)):
+                raise ScriptConfigurationError("duplicate schema experiment arm")
+        if args.command in {"schema-review", "parse-review"}:
 
             def unique_review_keys(pairs):
                 node = {}
                 for key, value in pairs:
                     if key in node:
-                        raise ScriptConfigurationError("duplicate schema review key")
+                        raise ScriptConfigurationError("duplicate review key")
                     node[key] = value
                 return node
 
@@ -1223,26 +1638,41 @@ def main(argv: Sequence[str] | None = None) -> int:
                     args.review_file.read_text(encoding="utf-8"),
                     object_pairs_hook=unique_review_keys,
                 )
+                schema_review = (
+                    json.loads(
+                        args.schema_review_file.read_text(encoding="utf-8"),
+                        object_pairs_hook=unique_review_keys,
+                    )
+                    if args.command == "parse-review"
+                    else None
+                )
             except (OSError, ValueError):
                 raise ScriptConfigurationError(
                     "invalid schema review input file"
                 ) from None
-            output = summarize_schema_review(summary, review)
-            destination = args.run_directory / "schema-review-summary.json"
-            if destination.resolve() == args.review_file.resolve():
+            output = (
+                summarize_parse_review(summary, review, schema_review)
+                if args.command == "parse-review"
+                else summarize_schema_review(summary, review)
+            )
+            destination = args.run_directory / f"{args.command}-summary.json"
+            sources = [args.review_file, args.run_directory / "summary.json"]
+            if args.command == "parse-review":
+                sources.append(args.schema_review_file)
+            if any(destination.resolve() == p.resolve() for p in sources):
                 raise ScriptConfigurationError(
                     "review source cannot be the output file"
                 )
             _run_support.write_json(destination, output)
             print(f"review_summary_json: {destination}")
             return 0
-        if getattr(args, "mode", None) == "schema-only" and (
+        if getattr(args, "mode", None) in {"schema-only", "end-to-end"} and (
             args.baseline is not None
             or args.write_baseline is not None
             or args.regression_tolerance
         ):
             raise ScriptConfigurationError(
-                "schema-only does not support TTP baseline options"
+                "generated-schema modes do not support TTP baseline options"
             )
         if args.command == "list":
             return _list_cases(args)
@@ -1288,7 +1718,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             run_directory = _write_preflight_artifacts(artifact_root, registry, reports)
             print(f"preflight failed; artifacts: {run_directory}", file=sys.stderr)
             return 2
-        if args.mode == "schema-only":
+        if args.mode in {"schema-only", "end-to-end"}:
             return asyncio.run(_run_schema(args, registry, reports))
         return asyncio.run(_run_ttp(args, registry, reports))
     except (HarnessError, ScriptConfigurationError) as error:
@@ -1301,6 +1731,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "run" and getattr(args, "mode", None) in {
             "ttp-only",
             "schema-only",
+            "end-to-end",
         }:
             _run_support.flush_laminar()
 

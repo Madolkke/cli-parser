@@ -2810,6 +2810,9 @@ def summarize_schema_review(summary, review):
     """Validate a bounded human review and compute conservative joint rates."""
     from uuid import UUID
 
+    def schema_success(trial):
+        return trial.get("schema_generation_success", trial["generation_success"])
+
     def require(condition):
         if not condition:
             raise HarnessError("invalid schema review structure or reference")
@@ -2852,7 +2855,10 @@ def summarize_schema_review(summary, review):
 
     keys(review, {"review_version", "run_id", "trials", "pairs"})
     require(type(review["review_version"]) is int and review["review_version"] == 1)
-    require(isinstance(summary, dict) and summary.get("mode") == "schema-only")
+    require(
+        isinstance(summary, dict)
+        and summary.get("mode") in {"schema-only", "end-to-end"}
+    )
     run_id = summary.get("run_id")
     if run_id is None and summary.get("trials"):
         run_id = summary["trials"][0]["trial_id"].split("/")[0]
@@ -2914,9 +2920,7 @@ def summarize_schema_review(summary, review):
         )
         common(row)
         if row["overall"] == "acceptable":
-            require(
-                t["generation_success"] is True and t["proposal_revalidated"] is True
-            )
+            require(schema_success(t) is True and t["proposal_revalidated"] is True)
             require(
                 row["trace_id"] is not None
                 and "issue" not in row["dimensions"].values()
@@ -2962,7 +2966,7 @@ def summarize_schema_review(summary, review):
             all(
                 t in trials
                 and trials[t]["case_id"] == row["case_id"]
-                and trials[t]["generation_success"] is True
+                and schema_success(trials[t]) is True
                 and trials[t]["proposal_revalidated"] is True
                 for t in ids
             )
@@ -3008,7 +3012,7 @@ def summarize_schema_review(summary, review):
         for ids in groups.values()
         for pair in combinations(ids, 2)
         if all(
-            trials[t]["generation_success"] is True
+            schema_success(trials[t]) is True
             and trials[t]["proposal_revalidated"] is True
             for t in pair
         )
@@ -3030,12 +3034,12 @@ def summarize_schema_review(summary, review):
         "review_version": 1,
         "schema_metrics_version": summary.get("schema_metrics_version"),
         "run_id": run_id,
-        "parseability": "not_tested",
+        "parseability": "executed_pending_review"
+        if summary.get("mode") == "end-to-end"
+        else "not_tested",
         "planned_trials": planned_trials,
         "planned_pairs": planned_pairs,
-        "generation_failed_trials": sum(
-            not t["generation_success"] for t in trials.values()
-        ),
+        "generation_failed_trials": sum(not schema_success(t) for t in trials.values()),
         "revalidation_failed_trials": sum(
             t["proposal_revalidated"] is False for t in trials.values()
         ),

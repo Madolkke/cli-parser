@@ -11,7 +11,7 @@
 默认范围内对 TOML 中显式指定的单份 `default_input` 产生与同索引
 `expected.json` record 完全一致的 records。`--input-scope full` 才验证全部输入。
 
-## 三种运行模式
+## 运行模式
 
 ```powershell
 uv run python scripts/run_test_sets.py list --registry evals/datasets.toml
@@ -41,7 +41,7 @@ uv run --env-file .env python scripts/run_test_sets.py run --registry evals/data
 结果、Trace、历史 artifact、上游模板或模型生成答案。标准 TTP 模板是可审查的确定性基线，
 用于确认四件套自身闭环；TTP-only Agent 只按 Schema 和 expected records 评估。
 
-运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、脱敏配置及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。Schema-only 只运行独立 Schema 阶段，完整两阶段评测不属于本入口。
+运行产物写入 `.artifacts/test-set-evaluation/<run-id>/`，仅保存状态、数值评分、安全 issue code、脱敏配置及 Trace ID 等脱敏投影。模板、records、capture、原始输入和模型文本只通过显式 Laminar 通道观察；完整产物仅在内存中评分，不写入 trial 文件。Schema-only 只运行独立 Schema 阶段；end-to-end 调用公共 generate 完成共享预算下的两个阶段。
 
 runner 版本 5 始终收集安全执行事实；`--trace-rounds` 仅控制逐事件明细落盘。漏斗区分有效候选、finish 调用、finish 成功及最终验收，缺少观测时省略数值指标而非填写零。候选轨迹只有可证实的时间顺序才判定有效提交发生于成功 finish 之前，否则报告未知。严格评分与遥测完整性独立，正确率 baseline 格式保持版本 1。配置记录模型重试次数、TLS 校验开关和 `extra_body` 是否配置，不包含凭据或请求扩展正文。
 
@@ -54,7 +54,7 @@ strict TTP-only 统计；缺少默认回显的完整数据集在该范围会作�
 template 阶段同样会作为 pending 或 smoke 结果单独报告。标签可用
 `--tag` 过滤，未指定过滤条件时运行 TOML 注册表中的全部数据集。
 
-逐事件明细只接受固定事件类型与项目事件名；工具名限于四个注册工具，未知值统一为 `unknown_tool`，完成原因限定为框架枚举。这个本地投影不会改变 Agent 决策或工具行为。
+逐事件明细只接受固定事件类型与项目事件名；工具名限于注册的直接 Schema、SchemaPlan、确认及三个 TTP 工具，未知值统一为 `unknown_tool`，完成原因限定为框架枚举。协议修复仅保存受控类别与次数。这个本地投影不会改变 Agent 决策或工具行为。
 
 ## 运行信息与兼容
 
@@ -126,7 +126,7 @@ finish 或 records 分数。禁止与 `--baseline`、`--write-baseline` 或非�
 两两一致率。不足两份时一致率不可用。人工 Schema 的路径、类型、required 差异只保存数量，
 作为审阅线索，不是准确率；人工 Schema 可覆盖模型本次未见的其他输入。
 
-语义审阅必须在 Laminar UI 逐条只读进行。按命名、主要字段覆盖、逻辑值拆分、结构归属、
+语义审阅逐条只读进行；本轮明确授权通过 Laminar 数据库在分析内存读取正文，仍禁止落盘或回灌产品模型。按命名、主要字段覆盖、逻辑值拆分、结构归属、
 类型及必填、业务边界和过度约束七项记录通过/有问题/证据不足/不适用，并给出
 可接受/需修正/无法判断。没有可见业务错误才记为可接受，明确错误记需修正，关键证据缺失
 记无法判断。描述缺失本身不构成错误。正文、Schema、description、enum 值、结构签名和内容
@@ -182,10 +182,63 @@ uv run python scripts/run_test_sets.py schema-review --run-directory .artifacts/
 - paths 最多 24 个互异路径，每条最多 2048 字符，只允许 `/` 或 ASCII snake_case 字段与
   `*` 组成的路径，每段最多 120 字符；只记录问题位置，不保存完整路径清单。
 
-逐条和逐对审阅均在 Laminar UI 进行。说明变化必须区分措辞变化与捕获语义改变；
+逐条和逐对审阅采用上述只读正文边界。说明变化必须区分措辞变化与捕获语义改变；
 无法对应字段时使用 unresolved_mapping，不猜测改名。缺失项保留未完成，不默认通过。
 汇总给出可接受/需修正/无法判断/缺失数量；失败与复验失败另列，可与无法判断重叠。
 合理提案比例以全部计划 trial 为分母。两份均可接受的 pair 只有契约相等、说明语义等价且
 人工确认两者合理时才计入合理且一致；未知说明不通过。另以全部计划 pair 为分母给出
 已确认合理且一致比例，并逐例检查全部重复和全部 pair 是否都通过。两份同样错误的提案
 即使契约完全相同，也不能计入联合通过。缺失旧指标时联合一致结果为 null。
+
+## 生成契约的端到端评测
+
+`run --mode end-to-end` 只将所选输入传给公共 `generate()`，Schema 与 TTP 共用产品预算；
+不向模型提供标准 Schema、模板或 expected。成功后执行既有独立验收，禁止使用人工字段布局
+进行 records 全等评分，也不自动匹配同义字段。本模式没有 `strict_pass` 或叶子准确率，
+不支持 TTP accuracy baseline 选项。
+
+`generation_success` 表示整次生成成功；`schema_generation_success` 表示有冻结契约。
+观察器仅在工具结果明确 `frozen=true`、`accepted=true` 时从提交或确认结果收集 Schema；
+待确认草稿和 last_attempt 不构成冻结证据。最终 artifact 同样可证明冻结。TTP 失败但已冻结的
+Schema 仍参与 metrics v2 和七维审阅，避免因解析失败隐藏建模结果。完整 Schema 只在内存比较。
+SchemaPlan 只附 nodes、references、fallback_names、evidence_incomplete_nodes、required_fields
+五项受控非负整数；确认调用不增加 Schema 提交分母。
+
+独立验收、候选/finish/终验事件、Schema 复验、输入输出 Token 和两阶段轮数分别保存。
+缺失执行观测不补零。自动运行完成标记 `parseability=executed_pending_review`，需要下述
+人工内容审阅才能计算端到端联合通过。
+
+```powershell
+uv run python scripts/run_test_sets.py parse-review --run-directory RUN --review-file parse-review.json --schema-review-file schema-review.json
+```
+
+该子命令只读取数值运行记录和受限审阅文件，重新验证 Schema 原始审阅文件，并单独生成
+`parse-review-summary.json`；不覆盖来源、原 summary，不调用模型、不读取 Trace。
+
+- 根为 `review_version=1`、`run_id`、`trials`；trial 的 ID、case、Trace、span、paths 约束
+  与 Schema 审阅一致，所有节点拒绝额外键，无自由正文。
+- 五维 `entities`、`coverage`、`value_fidelity`、`empty_missing`、`order` 必须齐全，取值为
+  passed/issue/insufficient_evidence/not_applicable。前三项不能以 not_applicable 通过。
+- overall 为 acceptable/needs_revision/unjudgeable。固定 categories 为 entity_count、
+  entity_placement、coverage、value_changed、value_boundary、empty_slot、missing_key、order、
+  unresolved_mapping、execution_failure。paths 最多 24 条，每条 2048 字符。
+- acceptable 需要生成成功、独立验收通过、匹配 Trace，且没有 issue 或不足证据，问题 categories/paths 必须为空。needs_revision 必须给出固定问题类别。联合通过还
+  需要该 trial 的 Schema 审阅可接受。未知、失败与缺失项保留在计划 trial 分母内。
+
+## 同期 Schema 实验
+
+评测专用 `--schema-experiment-arm` 可重复指定 direct、plan、plan_confirm，仅允许
+schema-only/end-to-end；它是内部测试工厂入口，不是产品配置开关。省略时使用当前默认策略。
+多组共享同一次加载得到的输入对象、model/policy、Git 状态与全局 semaphore。按 case/trial
+循环轮换 ABC/BCA/CAB 入队，每组独立产物目录与原审阅格式，父 experiment.json 保存计划数、
+已完成数、路径、版本及 `same_input_snapshot=true`。不保存输入指纹。
+
+```powershell
+uv run --env-file .env python scripts/run_test_sets.py run --registry evals/datasets.toml --mode schema-only --trials 2 --concurrency 4 --dataset-id 3 --schema-experiment-arm direct --schema-experiment-arm plan --schema-experiment-arm plan_confirm
+```
+
+任务局部 ContextVar 决定工具和提示版本，不同并发组互不修改默认策略。单组四份有效契约仍
+产生六对比较，不跨实验组组合 pair。正式比较使用相同入口和两个组，全局并发仍为 4。
+组数乘以用例数及重复数是实际请求计划数；runner 不自动补跑或调整采用门槛。
+
+SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数、兜底节点数及比例。C 只有确认后才使用最新待确认方案；失败、缺失观察不补零，A 标为不适用。同用例有效 pair 的 `fallback_naming_consistency` 只保存兜底名称集合是否相等、交并比和差集数量。集合仅在内存中比较，不保存名称清单或签名；集合差异不能直接解释为同一业务字段改名。
