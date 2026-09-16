@@ -644,6 +644,11 @@ async def _run_generation_phase(
                 elif isinstance(event, ToolCallStartEvent):
                     session.tool_call_starts += 1
                     tool_name = event.tool_call_name
+                    if phase == "schema" and tool_name == "submit_schema_plan":
+                        # Even a replacement rejected by framework argument
+                        # validation must revoke the previous pending draft.
+                        session.pending_schema_plan = None
+                        session.pending_schema_plan_round = None
                     if tool_name == FINISH_GENERATION_TOOL_NAME:
                         session.finish_called = True
                     round_tool_names.add(

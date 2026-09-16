@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Literal, TypeVar
 
 import openai
+from agentscope.message import UserMsg
 from pydantic import ValidationError
 
 from ..config import GenerationPolicy, TtpGeneratorSettings
@@ -19,7 +20,6 @@ from ..observability import (
     start_laminar_span,
 )
 from .agent import (
-    PROMPT_VERSION,
     AgentRunOutcome,
     GenerationPhase,
     GenerationSession,
@@ -35,6 +35,8 @@ from .agent import (
     estimate_initial_model_tokens,
     run_generation_phase,
 )
+from .agent.schema_plan_prompt import build_schema_plan_task, plan_sources
+from .agent.schema_strategy import current_prompt_version, current_schema_strategy
 from .contracts import (
     ArtifactBundle,
     GenerationMetadata,
@@ -632,6 +634,7 @@ class _GenerationWorkflow:
         self._acceptance_trace_summary: dict[str, Any] = {}
         self.session = GenerationSession(
             command_outputs=tuple(request.command_outputs),
+            schema_strategy=current_schema_strategy(),
             schema_validator=self._schema_validator,
             template_validator=self._template_validator,
             ttp_test_validator=self._ttp_test_validator,
@@ -762,7 +765,7 @@ class _GenerationWorkflow:
         return GenerationMetadata(
             request_id=self.request_id,
             model_name=self.settings.model_name,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=current_prompt_version(),
             command_output_count=len(self.request.command_outputs),
             input_char_count=sum(len(item) for item in self.request.command_outputs),
             schema_sampled_char_count=sum(
@@ -1133,6 +1136,11 @@ class _GenerationWorkflow:
 
             if phase == "schema":
                 self.schema_sampled = candidate_sample
+                if self.session.schema_strategy != "direct":
+                    self.session.schema_plan_sources = plan_sources(
+                        [item.text for item in candidate_sample],
+                        originals=self.request.command_outputs,
+                    )
             else:
                 self.ttp_sampled = candidate_sample
             texts = [item.text for item in candidate_sample]
@@ -1189,10 +1197,24 @@ class _GenerationWorkflow:
             )
 
     async def _run_schema_phase(self) -> _PhaseExecution:
+        def serialize_plan(texts: Sequence[str]) -> str:
+            return build_schema_plan_task(texts, originals=self.request.command_outputs)
+
+        def build_plan_message(texts: Sequence[str]) -> Any:
+            return UserMsg(name="user", content=serialize_plan(texts))
+
         return await self._fit_and_run_phase(
             phase="schema",
-            serialize_prompt=build_schema_task_prompt,
-            build_message=build_schema_task_message,
+            serialize_prompt=(
+                build_schema_task_prompt
+                if self.session.schema_strategy == "direct"
+                else serialize_plan
+            ),
+            build_message=(
+                build_schema_task_message
+                if self.session.schema_strategy == "direct"
+                else build_plan_message
+            ),
             span_input={"command_output_count": len(self.request.command_outputs)},
         )
 

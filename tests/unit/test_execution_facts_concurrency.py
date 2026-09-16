@@ -5,7 +5,12 @@ from typing import Any
 
 import pytest
 from agentscope.agent import ReActConfig
-from agentscope.event import ToolCallStartEvent, ToolResultEndEvent
+from agentscope.event import (
+    ModelCallEndEvent,
+    ModelCallStartEvent,
+    ToolCallStartEvent,
+    ToolResultEndEvent,
+)
 from agentscope.message import ToolResultState, UserMsg
 from agentscope.state import AgentState
 from test_generator import _closed_schema, _settings, _template_only_workflow
@@ -157,11 +162,15 @@ async def test_runner_counts_finish_start_even_when_tool_arguments_fail(
             self.react_config = ReActConfig(max_iters=1)
 
         async def reply_stream(self, message):
-            del message
+            self.state.context.append(message)
+            yield ModelCallStartEvent(reply_id="reply", model_name="offline")
             yield ToolCallStartEvent(
                 reply_id="reply", tool_call_id="call", tool_call_name=tool_name
             )
             assert workflow.session.finish_called is finish_called
+            yield ModelCallEndEvent(
+                reply_id="reply", model_name="offline", input_tokens=0, output_tokens=0
+            )
             yield ToolResultEndEvent(
                 reply_id="reply", tool_call_id="call", state=ToolResultState.ERROR
             )

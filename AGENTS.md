@@ -29,7 +29,7 @@
 ## 生成协议
 
 - 完整生成严格分为 Schema 和模板两个阶段。每阶段创建独立的 Agent、`OpenAIChatModel`、`AgentState` 和 Toolkit；对话上下文不跨阶段复用。
-- Schema 阶段只注册 `submit_result_schema`。第一个通过确定性校验的 Draft 2020-12 Schema 永久冻结。
+- 默认 Schema 阶段只注册 `submit_result_schema`，第一个合法 Schema 永久冻结。私有实验工厂可选择 SchemaPlan 编译后冻结或编译后显式确认；未获采用前不改变默认。来源、确认与编译边界见 [SchemaPlan 编译实验](docs/schema-plan-compiler.md)。
 - 模板阶段固定注册 `submit_ttp_template`、可选的 `test_ttp_template` 和无参数的 `finish_generation`。测试工具只对一份独立文本执行 parse-only 实验，不保存候选，也不执行 Schema 回验。
 - 模板提交与独立测试的模型反馈先返回有界 `<validation_feedback>`，再返回完整解析结果；校验事实来自当前确定性执行的白名单投影，不读取 Trace。反馈区分本次校验与保留候选，校验通过不代表内容完整或忠实。
 - 模板提交反馈还提供基于冻结 Schema 与本次 records 的有界字段覆盖事实；可选路径缺失只提示对照原文复核，不改变验收或推断原文存在字段。独立测试不提供 Schema 覆盖事实。
@@ -39,7 +39,7 @@
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。
 - 两阶段请求都省略 `tool_choice`，并固定 `parallel_tool_calls=False`。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
 - 两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
-- 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；提示实现以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码。
+- 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；默认提示以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码；私有计划实验提示位于同目录 `schema_plan_prompt.py`。
 
 ## 确定性门禁
 
@@ -48,7 +48,6 @@
 - 解析必须在独立 spawn 进程和临时缓存目录中完成，并限制时间、模板复杂度、嵌套、参数和结果大小。最终验收始终使用未采样的完整输入。
 - 根层同时含标量与容器时，模板使用未命名最外层 group。验证器只解包“单元素 list 且元素为 dict”的一层 TTP 外壳；真正的多根结果仍以 `ttp.multiple_root_objects` 拒绝。
 - 普通日志、公共 issues 和失败结果只保留有界结构化事实，不保存输入正文、模型文本、模板参数、解析值或 secrets。完整内容只允许进入明确启用的 Laminar、observer/TUI 或本地 WebUI 存储，并且只读观察、不得回灌模型上下文。
-
 
 - 连续工具协议失败最多三次受控修复，第四次停止；合法参数调用重置序列，业务拒绝与执行异常独立统计。官方 DeepSeek 端点以其文档规定的 `max_tokens` 发送输出预算；细节见 [v44运行契约](docs/schema-runtime-v44.md)。
 

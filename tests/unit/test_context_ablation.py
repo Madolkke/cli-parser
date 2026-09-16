@@ -376,9 +376,11 @@ async def test_parameter_rejection_does_not_shift_retained_candidate_pair(
     assert result["phase_completed"]
     assert result["stage_calls"] == 5
     assert result["retained_candidate_submission_index"] == 1
-    assert result["compacted_interactions"] == 1
+    # v44 removes the rejected protocol call/result pair before history folding.
+    # Both legitimate submissions remain protected (retained and most recent).
+    assert result["compacted_interactions"] == 0
     assert result["transport_checks"][-1]["full_submission_result_count"] == 2
-    assert result["transport_checks"][-1]["tool_result_count"] == 4
+    assert result["transport_checks"][-1]["tool_result_count"] == 3
     assert result["transport_checks"][-1]["large_result_present"]
 
 

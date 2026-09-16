@@ -1280,6 +1280,13 @@ def build_submission_tools(
     """Build the fixed tools available to an isolated generation phase."""
 
     if phase == "schema":
+        if session.schema_strategy != "direct":
+            from .schema_plan_tools import ConfirmSchemaPlanTool, SubmitSchemaPlanTool
+
+            tools = [SubmitSchemaPlanTool(session, progress)]
+            if session.schema_strategy == "plan_confirm":
+                tools.append(ConfirmSchemaPlanTool(session, progress))
+            return tools
         return [SubmitResultSchemaTool(session, progress)]
     if phase == "ttp":
         tools: list[ToolBase] = [SubmitTtpTemplateTool(session, progress)]
