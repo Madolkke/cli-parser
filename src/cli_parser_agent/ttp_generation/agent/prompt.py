@@ -6,7 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-PROMPT_VERSION = "ttp-generator-v43-semantic-value-boundaries-zh-cn"
+PROMPT_VERSION = "ttp-generator-v40-python-identifier-field-names-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -47,20 +47,13 @@ SCHEMA_SYSTEM_PROMPT = """\
   required；重复详情块中只在部分块出现的属性一定是可选。
 - 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
   record；重复表格行或重复详情块应表示为根 record 内的 array。
-- 拆分必须同时具备独立业务含义与可靠边界。同一行或同一列中的多个独立业务值也要
-  分别建模，不能因共享一个标签而合并。型号、版本、构建号、发布时间各有独立含义；
-  名称或标识符后附的独立状态应与名称分别表达；不同类别的计数要能分别读取。
-  字段名及必要的 description 应说明对应值和边界，不要求改写状态或占位字符串。
-- 一个字段表示一个逻辑值，不按分隔符数量决定粒度。完整版本号、时间戳、时长、
-  带符号名称或状态字符串默认保留整体，不机械拆成年月日、时分秒或版本号段。
-  组合状态只有各部分含义和边界均明确时才进一步拆分。边界或子项含义不可靠时，
-  保守保留原字符串，不猜测子字段、不丢弃信息。沿用实体归属，不强制同级或嵌套；
-  不默认同时增加完整原串和同一组值的拆分副本。
+- 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
+  应分别成为独立字段。字段名应表达该值的真实含义。
 - 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
   在至少一个样例或同类记录中非空出现、含义明确且能可靠捕获的主要语义字段都应
   建模；只在部分实例出现的字段应保持可选，不能因此丢弃有效信息。
 - 严禁将整条数据行、多列拼接文本或整个详情块放入 port、status、name 等具体语义
-  字段。表头、分隔线、分页标记和提示符不是业务记录。
+  字段。一个字段只能表示一个逻辑值。表头、分隔线、分页标记和提示符不是业务记录。
 - 提交前逐个样例检查表头、数据行边界、重复记录数量、列变化和空白值槽；确认每个
   array 条目的字段都能在每条对应记录中稳定得到，且没有遗漏明显的稳定业务列。
 - 保守推断类型。含义不明确的值保留为 string。只有不含前导零、单位、标识符或
@@ -68,43 +61,7 @@ SCHEMA_SYSTEM_PROMPT = """\
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
 - 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
-  整行误作单值、是否漏掉独立值或过度拆分完整值、所有 object 是否封闭、required
-  是否只包含确实稳定存在的字段。无需输出额外分析文本。
-
-值边界合成示例（以下只是局部字段，不规定整份输出的根结构或字段命名词典）：
-```text
-Package: revision=7.4.2; build=k91; published=2032-04-08 16:35:20 UTC
-Task: cedar+west [~queued~]; elapsed=3h:07m:02s
-Counts: ready=6; waiting=2
-
-Package: revision=8.0.5; published=2033-11-09 01:02:03 UTC
-Task: birch/east-2 [!held!]; elapsed=0h:00m:04s
-Counts: ready=0; waiting=9
-```
-这里 revision、build、published 是独立值；任务名与方括号内状态也独立。时间戳、
-时长、版本号和任务名内部的符号保持完整；方括号是示例中明确的状态槽边界，
-不是业务值，状态内的波浪号仍保留。下面的局部 Schema 也允许 build 整项缺失，
-缺项时不虚构空值；同一字段的实际 required 仍须依据所给实例判断。
-```json
-{
-  "type": "object",
-  "additionalProperties": false,
-  "properties": {
-    "revision": {"type": "string", "description": "完整版本号，不按点号拆段。"},
-    "build": {"type": "string", "description": "独立构建标识；整项缺失时省略。"},
-    "published": {"type": "string", "description": "完整发布时间，保留时区。"},
-    "task_name": {"type": "string", "description": "状态槽前的任务名，保留值内符号。"},
-    "task_state": {"type": "string", "description": "状态槽内的完整值，保留值内符号。"},
-    "elapsed": {"type": "string", "description": "完整时长，不按时分秒拆字段。"},
-    "ready_count": {"type": "integer"},
-    "waiting_count": {"type": "integer"}
-  },
-  "required": [
-    "revision", "published", "task_name", "task_state", "elapsed",
-    "ready_count", "waiting_count"
-  ]
-}
-```
+  整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
 """
 
 TTP_SYSTEM_PROMPT = """\

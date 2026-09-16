@@ -1,11 +1,8 @@
 """Synthetic value boundaries, independent of evaluation assets and Trace text."""
 
-import json
-import re
 from copy import deepcopy
 
 from cli_parser_agent.evaluation import schema_pair_metrics
-from cli_parser_agent.ttp_generation.agent.prompt import SCHEMA_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.validation.json_schema import (
     validate_records_against_schema,
     validate_result_schema,
@@ -13,8 +10,42 @@ from cli_parser_agent.ttp_generation.validation.json_schema import (
 
 
 def _example():
-    blocks = re.findall(r"```json\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)
-    return next(json.loads(block) for block in blocks if '"ready_count"' in block)
+    """Independent synthetic contract retained after the v43 rollback."""
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {
+            "revision": {"type": "string", "description": "完整版本号，不按点号拆段。"},
+            "build": {
+                "type": "string",
+                "description": "独立构建标识；整项缺失时省略。",
+            },
+            "published": {"type": "string", "description": "完整发布时间，保留时区。"},
+            "task_name": {
+                "type": "string",
+                "description": "状态槽前的任务名，保留值内符号。",
+            },
+            "task_state": {
+                "type": "string",
+                "description": "状态槽内的完整值，保留值内符号。",
+            },
+            "elapsed": {
+                "type": "string",
+                "description": "完整时长，不按时分秒拆字段。",
+            },
+            "ready_count": {"type": "integer"},
+            "waiting_count": {"type": "integer"},
+        },
+        "required": [
+            "revision",
+            "published",
+            "task_name",
+            "task_state",
+            "elapsed",
+            "ready_count",
+            "waiting_count",
+        ],
+    }
 
 
 def _record():
@@ -30,7 +61,7 @@ def _record():
     }
 
 
-def test_displayed_value_boundaries_support_whole_values_and_absent_component():
+def test_synthetic_value_boundaries_support_whole_values_and_absent_component():
     schema = _example()
     first = _record()
     second = {

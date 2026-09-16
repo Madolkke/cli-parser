@@ -368,15 +368,7 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     assert schema_requests[0]["tools"][0]["function"]["description"] == (
         SubmitResultSchemaTool.description
     )
-    assert "独立业务含义与可靠边界" in _request_text(schema_requests[0])
-    assert "Package: revision=7.4.2" in _request_text(schema_requests[0])
-    assert (
-        "完整逻辑值不机械拆分"
-        in schema_requests[0]["tools"][0]["function"]["description"]
-    )
     for request in ttp_requests:
-        assert "Package: revision=7.4.2" not in _request_text(request)
-        assert "独立业务含义与可靠边界" not in _request_text(request)
         assert "Report: workshop" not in _request_text(request)
         assert "第二个实体及其子项" not in _request_text(request)
 

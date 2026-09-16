@@ -748,8 +748,7 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     name = SUBMIT_SCHEMA_TOOL_NAME
     description = (
-        "提交完整的结果 JSON Schema。独立业务值且边界可靠时分别建模，"
-        "完整逻辑值不机械拆分。Schema 一旦通过便"
+        "提交完整的结果 JSON Schema。Schema 一旦通过便"
         "永久冻结；被拒绝后可以修正并重新提交。属性名称必须是 ASCII 小写 "
         "snake_case，最长 120 字符，禁止 Python 保留关键字；冲突时按业务含义改名。"
     )
