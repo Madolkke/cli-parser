@@ -35,7 +35,7 @@ _call_streams: ContextVar[list[_ObservedStream] | None] = ContextVar(
 
 @dataclass(slots=True)
 class _ProviderReplyFacts:
-    """Request-local facts only; provider bodies never enter recovery state."""
+    """Request-local facts only; provider bodies never enter guard state."""
 
     round_index: int
     attempt_index: int
@@ -320,62 +320,6 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
         self._provider_reply_facts: _ProviderReplyFacts | None = None
-        self._reasoning_length_streak = 0
-        self._last_recovery_round = -1
-        self._schema_reasoning_recovery = False
-
-    def prepare_schema_reasoning_recovery(self) -> bool:
-        """Reduce reasoning effort only within an already permitted retry."""
-
-        recorder = self._attempt_recorder
-        facts = self._provider_reply_facts
-        if (
-            self._schema_reasoning_recovery
-            or recorder.phase != "schema"
-            or urlsplit(self.credential.base_url or "").hostname != "api.deepseek.com"
-            or self.parameters.thinking_enable
-            or self.parameters.reasoning_effort is not None
-            or self.extra_body is not None
-            or facts is None
-            or not facts.completed
-            or facts.round_index != recorder.session.agent_rounds
-            or facts.attempt_index != recorder.session.model_attempts_observed
-            or facts.round_index == self._last_recovery_round
-        ):
-            return False
-        qualifies = (
-            facts.finished_reason == "length"
-            and facts.reasoning_present
-            and not facts.text_present
-        )
-        # Schema tool blocks in a provider-length reply are always discarded
-        # before execution. A truncated tool suffix therefore does not turn
-        # an exhausted reasoning reply into a completed submission.
-        if not qualifies:
-            self._reasoning_length_streak = 0
-        elif facts.round_index == self._last_recovery_round + 1:
-            self._reasoning_length_streak += 1
-        else:
-            self._reasoning_length_streak = 1
-        self._last_recovery_round = facts.round_index
-        if self._reasoning_length_streak < 3:
-            return False
-        self._schema_reasoning_recovery = True
-        if recorder.progress is not None:
-            recorder.progress.custom(
-                "cli_parser.schema.reasoning_recovery",
-                {
-                    "reason": "consecutive_reasoning_length",
-                    "consecutive_responses": self._reasoning_length_streak,
-                    "after_round_index": facts.round_index,
-                    "after_attempt_index": facts.attempt_index,
-                    "mode": "reasoning_low",
-                    "runtime_policy": "schema-reasoning-recovery-v2",
-                },
-                phase="schema",
-                sensitive=False,
-            )
-        return True
 
     def _parse_completion_response(
         self, start_datetime: datetime, response: Any, audio_format: str = "wav"
@@ -512,8 +456,6 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             kwargs["max_completion_tokens"] = openai.NOT_GIVEN
             if self.parameters.max_tokens is not None:
                 kwargs["max_tokens"] = self.parameters.max_tokens
-            if self._schema_reasoning_recovery:
-                kwargs["reasoning_effort"] = "low"
         return await self._attempt_recorder.call(
             lambda: super(ObservedOpenAIChatModel, self)._call_api(
                 model_name,

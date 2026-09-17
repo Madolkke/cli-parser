@@ -367,12 +367,12 @@ v45 计划编译与 v46 显式确认均未达到预试资格，运行接线已�
 Schema 合法不能证明遵循建模规则；规则、业务合理性和重复一致性由审阅分别统计。
 本轮仅运行 56 次 Schema-only，可解析性未测，详见 [实施与评测协议](schema-policy-v48-protocol.md)。
 
-## Schema 推理截断恢复
+## Schema 截断提交防护
 
-提示仍为 v48。候选运行时 `schema-reasoning-recovery-v2` 只在官方 DeepSeek、默认推理配置、
-Schema 连续三次含推理、无正文的 length 后，使用最后一次既有修复设置 reasoning_effort=low；前三轮请求原样保留。
-事实直接来自当前供应商响应，只有枚举与布尔进入请求局部状态，不读取 Trace 或保留草稿。
-调用者显式配置、TTP、外部注入及其他供应商不变，既有计数、deadline、冻结和错误分类不变。
-安全事件 `cli_parser.schema.reasoning_recovery` 标明激活轮次；缺失观测不补零。
-Schema 原始 length 回复中的工具调用在执行前全部丢弃，不能经 JSON 修复后冻结；流式工具片段在结束原因已知前不交给 Agent。
-完整边界和验证见 [恢复协议](schema-reasoning-recovery-v2.md)；关闭 thinking 的 v1 已因业务失败撤下。
+Schema 原始供应商回复以 `length` 结束时，所有工具调用在框架 JSON 修复及执行前丢弃，
+即使参数碰巧合法也不能冻结。流式工具片段在适配器内存缓冲，完成后按结束原因决定
+是否释放；取消/异常不释放。TTP、外部注入与调用者显式配置不变。
+安全事件 `cli_parser.schema.truncated_submission_discarded` 只记录数量与轮次。
+
+提示仍为 v48，默认推理参数没有自动覆盖。连续截断后关闭 thinking 的 v1 与设置 low 的
+v2 均未达到真实业务门槛，已撤下；保留截断防护与独立诊断。见 [结果](schema-reasoning-recovery-v2-results.md)。

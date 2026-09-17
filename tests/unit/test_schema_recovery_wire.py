@@ -1,4 +1,4 @@
-"""Exercise bounded reasoning recovery through the public API and actual wire."""
+"""Observe truncation without altering generation parameters or TTP requests."""
 
 import json
 
@@ -52,7 +52,7 @@ def completion(*, length=False, tool=None, args=None):
 
 @pytest.mark.parametrize("failed_rounds", [0, 1, 2, 3])
 @pytest.mark.parametrize("truncated_submission", [False, True])
-async def test_recovery_changes_only_fourth_schema_request_and_never_ttp(
+async def test_schema_retries_preserve_parameters_and_ttp_isolation(
     monkeypatch, failed_rounds, truncated_submission
 ):
     schema = {
@@ -107,15 +107,12 @@ async def test_recovery_changes_only_fourth_schema_request_and_never_ttp(
     assert result.artifact.result_schema == schema
     assert result.artifact.records == [{"value": "one"}]
     assert len(requests) == failed_rounds + 3
-    for index, request in enumerate(requests):
+    for request in requests:
         assert request["max_tokens"] == 8192
         assert "max_completion_tokens" not in request
         assert "tool_choice" not in request
         assert request["parallel_tool_calls"] is False
-        if failed_rounds == 3 and index == 3:
-            assert request["reasoning_effort"] == "low"
-        else:
-            assert "reasoning_effort" not in request
+        assert "reasoning_effort" not in request
         assert "thinking" not in request
         assert "private-unfinished-analysis" not in json.dumps(request)
     initial = requests[0]

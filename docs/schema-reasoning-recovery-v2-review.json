@@ -1,0 +1,182 @@
+{
+  "review_version": 2,
+  "run_id": "20260917T173615.316453Z",
+  "trials": [
+    {
+      "trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "4a262f8b-ec7a-838f-8878-99eba03f3e35",
+      "span_ids": [
+        "00000000-0000-0000-8a77-070c2e9e0600"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/2",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "b1d49a3b-3b60-0ef6-0bba-a50cdaf23ef9",
+      "span_ids": [
+        "00000000-0000-0000-ba76-80059d31ea8d",
+        "00000000-0000-0000-818e-5bc553ddb302"
+      ],
+      "overall": "needs_revision",
+      "categories": [
+        "field_meaning"
+      ],
+      "paths": [
+        "/peer/*/organization"
+      ],
+      "dimensions": {
+        "naming": "issue",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "fixed_role_sections": "not_applicable",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "issue",
+        "qualifier_ownership": "issue",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed"
+      },
+      "policy_paths": [
+        "/peer/*/organization",
+        "/peer/*/peer_private_port",
+        "/peer/*/peer_public_port"
+      ]
+    },
+    {
+      "trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/3",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "ab7371bd-0f6f-328c-bd44-68da58b99649",
+      "span_ids": [
+        "00000000-0000-0000-b65a-8f843fa9ba9b",
+        "00000000-0000-0000-85a2-a6a59c2aa7bf"
+      ],
+      "overall": "needs_revision",
+      "categories": [
+        "field_meaning"
+      ],
+      "paths": [
+        "/peer/*/controller_local_color",
+        "/peer/*/controller_proxy",
+        "/peer/*/controller_state",
+        "/peer/*/controller_uptime"
+      ],
+      "dimensions": {
+        "naming": "issue",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "fixed_role_sections": "not_applicable",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "issue",
+        "qualifier_ownership": "issue",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed"
+      },
+      "policy_paths": [
+        "/peer/*/controller_local_color",
+        "/peer/*/controller_proxy",
+        "/peer/*/controller_state",
+        "/peer/*/controller_uptime"
+      ]
+    },
+    {
+      "trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/4",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "d43245a6-cca1-8fff-a36d-27c0ecae063b",
+      "span_ids": [
+        "00000000-0000-0000-c0c9-de8f9ef9be20"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    }
+  ],
+  "pairs": [
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/2",
+      "right_trial_id": "20260917T173615.316453Z/cisco_ios.show_sdwan_control_connections/3",
+      "annotation_semantics": "different",
+      "judgment": "at_least_one_issue",
+      "categories": [
+        "synonym_naming",
+        "field_meaning",
+        "type",
+        "annotation_wording"
+      ],
+      "paths": [
+        "/peer/*/organization",
+        "/peer/*/peer_private_port",
+        "/peer/*/peer_priv_port",
+        "/peer/*/peer_public_port",
+        "/peer/*/peer_pub_port",
+        "/peer/*/controller_local_color",
+        "/peer/*/controller_proxy",
+        "/peer/*/controller_state",
+        "/peer/*/controller_uptime",
+        "/peer/*/site_id",
+        "/peer/*/domain_id"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    }
+  ]
+}

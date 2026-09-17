@@ -39,7 +39,6 @@ from agentscope.model import FinishedReason
 
 from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
-from .model_attempts import ObservedOpenAIChatModel
 from .prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
@@ -857,11 +856,6 @@ async def _run_generation_phase(
         if session.agent_rounds >= session.max_agent_rounds:
             exceeded_max_iters = True
             break
-        if phase == "schema" and isinstance(agent.model, ObservedOpenAIChatModel):
-            if stop_for_deadline():
-                break
-            agent.model.prepare_schema_reasoning_recovery()
-
         session.record_no_tool_retry(phase)
         if progress is not None:
             retry_number = (
