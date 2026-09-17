@@ -5,6 +5,7 @@ from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import openai
 import pytest
 from openai.types.chat import ChatCompletion
@@ -128,6 +129,95 @@ def _tool_feedback(request: dict[str, Any], call_id: str) -> dict[str, Any]:
     )
     assert separator
     return json.loads(serialized)
+
+
+async def test_v48_policy_and_frozen_names_through_actual_openai_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Validate SDK serialization and stage separation, not model obedience."""
+    requests: list[dict[str, Any]] = []
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"cache_ttl_ms": {"type": "string"}},
+        "required": ["cache_ttl_ms"],
+    }
+    rejected = {
+        **schema,
+        "properties": {"class": {"type": "string"}},
+        "required": ["class"],
+    }
+    responses = [
+        _completion(
+            tool_name=SUBMIT_SCHEMA_TOOL_NAME,
+            tool_arguments={"result_schema": rejected},
+            tool_call_id="bad-name",
+        ),
+        _completion(
+            tool_name=SUBMIT_SCHEMA_TOOL_NAME,
+            tool_arguments={"result_schema": schema},
+            tool_call_id="frozen",
+        ),
+        _completion(
+            tool_name=SUBMIT_TEMPLATE_TOOL_NAME,
+            tool_arguments={
+                "ttp_template": "Cache TTL(ms): {{ cache_ttl_ms | ORPHRASE }}"
+            },
+            tool_call_id="template",
+        ),
+        _completion(
+            tool_name=FINISH_GENERATION_TOOL_NAME,
+            tool_arguments={},
+            tool_call_id="finish",
+        ),
+    ]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        assert len(requests) <= len(responses)
+        return httpx.Response(200, json=responses[len(requests) - 1].model_dump())
+
+    real_client = openai.AsyncClient
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http_client:
+        monkeypatch.setattr(
+            openai,
+            "AsyncClient",
+            lambda **kwargs: real_client(**kwargs, http_client=http_client),
+        )
+        result = await TtpGenerator(
+            settings=TtpGeneratorSettings(
+                api_key="offline",
+                model_name="offline",
+                base_url="https://offline.invalid/v1",
+            )
+        ).generate(GenerationRequest(command_outputs=["Cache TTL(ms): 30 ms\n"]))
+
+    assert result.status == "success"
+    assert len(requests) == 4
+    assert result.artifact is not None
+    assert result.artifact.result_schema == schema
+    assert result.artifact.records == [{"cache_ttl_ms": "30 ms"}]
+    first, repaired, ttp, _ = requests
+    schema_text = _request_text(first)
+    for marker in ("Survey: depot", "primary_counters", "先区分固定业务角色"):
+        assert marker in schema_text
+        assert marker not in _request_text(ttp)
+    function = first["tools"][0]["function"]
+    assert function["description"] == SubmitResultSchemaTool.description
+    assert (
+        "整份单次命令输出"
+        in function["parameters"]["properties"]["result_schema"]["description"]
+    )
+    assert "schema.python_keyword_property_name" in _request_text(repaired)
+    assert "schema.python_keyword_property_name" not in _request_text(ttp)
+    assert ttp["messages"][-1]["content"] == [
+        {
+            "type": "text",
+            "text": build_ttp_task_prompt(["Cache TTL(ms): 30 ms\n"], schema),
+        }
+    ]
+    assert all(request["parallel_tool_calls"] is False for request in requests)
+    assert all("tool_choice" not in request for request in requests)
 
 
 async def test_pipe_gate_feedback_reaches_next_request_and_allows_repair(
@@ -371,6 +461,9 @@ async def test_first_ttp_wire_request_has_no_schema_phase_history(
     for request in ttp_requests:
         assert "Report: workshop" not in _request_text(request)
         assert "第二个实体及其子项" not in _request_text(request)
+        assert "Survey: depot" not in _request_text(request)
+        assert "primary_counters" not in _request_text(request)
+        assert "先区分固定业务角色" not in _request_text(request)
 
     assert _SCHEMA_RETRY_MARKER in _request_text(schema_requests[1])
     final_schema_request = _request_text(schema_requests[2])

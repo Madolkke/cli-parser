@@ -64,7 +64,9 @@ class SchemaSubmissionInput(ParamsBase):
 
     result_schema: dict[str, Any] = Field(
         description=(
-            "描述单个 record 的完整 Draft 2020-12 JSON Schema。属性名称必须是 "
+            "描述整份单次命令输出的完整 Draft 2020-12 JSON Schema，根为一个 record。"
+            "先确定业务值、实体归属及 object/array，再按可靠英文标签命名，保留词序、"
+            "缩写、完整限定及单复数；必要时使用准确语义名称。属性名称必须是 "
             "ASCII 小写 snake_case，不超过 120 字符，不能是 Python 保留关键字；"
             "冲突时按业务含义改名，不追加尾随下划线。"
         ),
@@ -764,7 +766,9 @@ class SubmitResultSchemaTool(_SubmissionToolBase):
 
     name = SUBMIT_SCHEMA_TOOL_NAME
     description = (
-        "提交完整的结果 JSON Schema。Schema 一旦通过便"
+        "提交描述整份单次命令输出的完整 JSON Schema。先确定业务值与结构，再命名；"
+        "重复实体使用 array，固定角色章节使用 object，可靠标签保留词序、缩写、"
+        "完整限定和单复数，必要时使用语义兜底。Schema 一旦通过便"
         "永久冻结；被拒绝后可以修正并重新提交。属性名称必须是 ASCII 小写 "
         "snake_case，最长 120 字符，禁止 Python 保留关键字；冲突时按业务含义改名。"
     )

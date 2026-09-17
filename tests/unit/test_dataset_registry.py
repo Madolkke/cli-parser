@@ -1072,11 +1072,14 @@ async def test_schema_only_runner_concurrency_and_safe_artifacts(tmp_path, monke
         assert secret not in content
 
 
-def test_schema_review_command_is_offline_and_preserves_source(tmp_path, monkeypatch):
-    from test_schema_consistency import fixtures
+@pytest.mark.parametrize("version", [1, 2])
+def test_schema_review_command_is_offline_and_preserves_source(
+    tmp_path, monkeypatch, version
+):
+    from test_schema_consistency import fixtures, policy_fixtures
 
     runner = _load_runner()
-    summary, review = fixtures()
+    summary, review = policy_fixtures() if version == 2 else fixtures()
     summary_path = tmp_path / "summary.json"
     review_path = tmp_path / "review.json"
     summary_path.write_text(json.dumps(summary), encoding="utf-8")
@@ -1093,6 +1096,8 @@ def test_schema_review_command_is_offline_and_preserves_source(tmp_path, monkeyp
     assert runner.main([*args, str(review_path)]) == 0
     result = json.loads((tmp_path / "schema-review-summary.json").read_text())
     assert result["confirmed_reasonable_consistent_pairs"] == 6
+    assert result["review_version"] == version
+    assert (result["policy_compliance"] is None) == (version == 1)
     assert summary_path.read_bytes() == before
     review["trials"][0]["body"] = "PRIVATE"
     review_path.write_text(json.dumps(review), encoding="utf-8")

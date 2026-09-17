@@ -392,8 +392,16 @@ v32 保留 v31 的 XML 结构标签与章节边界提示：仅转义匹配正文
 
 ## SchemaPlan 诊断边界
 
-SchemaPlan 预试未获采用，产品默认为 v44 直接生成路径。`schema_plan.py` 以及 `agent/schema_plan_prompt.py` 保留为独立诊断机制，不接入 generator/workflow/Toolkit；旧 B/C 工具与确认状态已移除。公共 API、外部注入、TTP 及端到端评测能力保持兼容。实验实现固定于 fc2e31a，详见 [结果](schema-plan-pretrial-regression.md)。
+SchemaPlan 预试未获采用，当时恢复 v44 直接生成路径。`schema_plan.py` 以及 `agent/schema_plan_prompt.py` 保留为独立诊断机制，不接入 generator/workflow/Toolkit；旧 B/C 工具与确认状态已移除。公共 API、外部注入、TTP 及端到端评测能力保持兼容。实验实现固定于 fc2e31a，详见 [结果](schema-plan-pretrial-regression.md)。
 
 ## v47 轻量草稿诊断边界
 
-v47 预试未达到采用条件，产品仍只运行 v44。`schema_draft.py`、`schema_draft_sources.py` 和 `agent/schema_draft_prompt.py` 保留独立诊断，但不再由 generator/workflow/Toolkit 引用；工具、请求局部选择工厂与实验参数已撤下。来源合法和隐式根 object 都不证明业务判断正确；历史实现固定于 f7b9a16，见 [结果](schema-draft-v47-pretrial-regression.md)。
+v47 预试未达到采用条件，当时恢复 v44。`schema_draft.py`、`schema_draft_sources.py` 和 `agent/schema_draft_prompt.py` 保留独立诊断，但不再由 generator/workflow/Toolkit 引用；工具、请求局部选择工厂与实验参数已撤下。来源合法和隐式根 object 都不证明业务判断正确；历史实现固定于 f7b9a16，见 [结果](schema-draft-v47-pretrial-regression.md)。
+
+## v48 直接 Schema 建模政策
+
+当前默认版本为 `ttp-generator-v48-schema-naming-and-structure-policy-zh-cn`。Schema Agent
+仍只提交最终 JSON Schema，首份合法结果永久冻结；本轮重写命名和结构决策指导，不改变
+公共 API、工具签名、外部注入、确定性校验或 TTP 阶段。固定角色章节使用 object，实体集合
+使用 array；名称优先忠实规范原始英文标签，必要时语义兜底。政策由模型执行和人工审阅，
+不构成确定性转换或业务门禁。详见 [v48 协议](schema-policy-v48-protocol.md)。

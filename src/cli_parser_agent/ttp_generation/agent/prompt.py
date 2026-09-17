@@ -8,7 +8,7 @@ from typing import Any
 
 from ..validation.json_schema import schema_capabilities_guidance
 
-PROMPT_VERSION = "ttp-generator-v44-schema-runtime-contract-zh-cn"
+PROMPT_VERSION = "ttp-generator-v48-schema-naming-and-structure-policy-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -29,15 +29,58 @@ SCHEMA_SYSTEM_PROMPT = """\
 如果提交被拒绝，根据结构化 issues 修正并重新提交；第一个被接受的结果将永久
 冻结，绝不要原样重新提交已被拒绝且未修改的候选。
 
-- 使用 JSON Schema Draft 2020-12，根类型必须是 object。它描述单份命令输出的
-  一个解析后 record，而不是服务响应或样例列表。
-- 每个 object 都要将 additionalProperties 设置为 false。字段名必须是英文 ASCII
+按以下顺序形成一份完整 Schema：识别独立业务值 → 确定实体与归属 → 选择
+object／array → 确定名称 → 检查完整性并提交。直接提交最终 Schema，不输出
+中间计划或额外分析文本。业务覆盖与正确归属是前提；证据不足时保守表达，
+不要为了统一形式虚构字段或层级。
+
+一、业务值与结构
+- 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
+  应分别成为独立字段。一个标签下含有边界可靠、含义独立的多个值时也分别建模，
+  不得因为共享标签而合并。版本号、时间戳和带符号名称等完整逻辑值不按标点机械拆分。
+- 使用 JSON Schema Draft 2020-12，根类型必须是 object。每份完整命令输出恰好
+  对应一个根 record，多份输入共享该 Schema，不按输入编号增加包装或组成样例列表。
+  单个设备的平面属性直接放在根对象，不额外增加设备包装。
+- 表格行、同类实体详情块使用 array；明确属于实体集合时，只有一个实例也保持数组。
+  用名称、编号等实例值区分的同类块也是数组，实例标识成为字段，不能把实例值变成
+  属性名。数组位于根或所属实体内，不把每个实体当作根 record。
+- 固定角色章节，例如主用／备用统计，分别使用 object；即使内部字段形状相同，
+  也不因此合并为数组。先区分固定业务角色与可变实体身份，再选择容器。
+- 实体内部子项放入所属实体，重复子项使用该实体内的 array。根汇总留在根，
+  实体汇总及尾字段留在实体，不能附到最后一个子项上。
+- 仅为明确的章节或实体关系建立容器，不按字段类型或主观分类增加包装。布局
+  分隔线、空行和装饰标题本身不构成新层级，表头、分页标记和提示符不是业务记录。
+- 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
+  在至少一个样例或同类记录中非空出现、含义明确且能可靠捕获的主要语义字段都应
+  建模；只在部分实例出现的字段应保持可选，不能因此丢弃有效信息。
+- 严禁将整条数据行、多列拼接文本或整个详情块放入 port、status、name 等具体语义
+  字段。一个字段只能表示一个逻辑值。
+
+二、名称
+- 有明确英文标签时，保留原词序、缩写、完整业务限定及单复数，只规范为 ASCII
+  小写 snake_case。空白、连字符和分隔词项的标点转换为单下划线，去除标签外围
+  冒号、点线等布局符号；不展开缩写、不换同义词、不调词序、不主动做单复数转换。
+  标签与业务值必须区分，不清洗业务值，也不把实例名称、编号或计数拼入属性名。
+- 多行表头只组合实际属于同一列的上层限定和底层词项，按原文顺序命名；不能带入
+  邻列或无关整表标题。不能因父容器已表达相同含义而删去标签限定，也不额外添加
+  原标签没有的父级前缀。
+- 容器名称依次采用：明确指向该集合或章节的标题、明确实体标签、语义兜底。
+  装饰或无关标题不算可靠命名来源；不机械增加 list、entries 等后缀。
+- 同父对象下发生名称冲突时，用最近且明确的原文章节或列限定消歧；不能覆盖字段、
+  随意编号、合并不同业务值或改变层级。没有可靠限定时才使用准确、简短的语义名称。
+- 无可靠标签、拆分子项、名称非法或无法直接消除冲突时允许语义兜底；有可靠合法
+  标签时不任意改名。拆分子项先确定独立含义，再命名，不强制各自套用整条标签。
+- 字段名必须是英文 ASCII
   snake_case，长度不超过 120 个字符，禁止 Python 保留关键字，如 `as`、`class`、
   `for`。按业务含义改名，例如设备类别用 `device_class`，不要机械追加尾随下划线。
   `match`、`case` 等软关键字及 `type`、`id`、`format` 等内置名称可以使用。
   标量字段不能命名为 `ignore`，因为它是解析器的保留
   变量；确有该业务含义时改用明确且非保留的语义名称。名为 `ignore` 的 object 或
-  array 容器不受此限制。只把在该 object 的每个实例中都存在的 properties 列入 required；
+  array 容器不受此限制。
+
+三、类型、必填性和约束
+- 每个 object 都要将 additionalProperties 设置为 false。
+  只把在该 object 的每个实例中都存在的 properties 列入 required；
   只在部分实例中出现的明确业务字段保留为可选 property，也可以省略 required。
   同一字段标签或值槽在每个实例中都存在但某次字面值为空时，可以仍为 required
   string 并忠实表示为 ""；字段标签、值槽或所属可选行不存在时才视为缺失。
@@ -47,23 +90,160 @@ SCHEMA_SYSTEM_PROMPT = """\
   也不要为了保险把所有字段都设为可选——两种偏差都会让结果契约与原文不一致。
   典型情形：固定宽表中同时存在完整数据行和缺列数据行时，只有每行都有的列才是
   required；重复详情块中只在部分块出现的属性一定是可选。
-- 允许嵌套 object 和 array。每份命令输出最终必须按输入索引恰好对应一个根
-  record；重复表格行或重复详情块应表示为根 record 内的 array。
-- 按业务语义进行细粒度建模。表格中有独立含义的列、详情块中有明确边界的属性，
-  应分别成为独立字段。字段名应表达该值的真实含义。
-- 不得为了让结果容易通过而故意只保留最容易捕获的字段；不存在固定字段数量限制。
-  在至少一个样例或同类记录中非空出现、含义明确且能可靠捕获的主要语义字段都应
-  建模；只在部分实例出现的字段应保持可选，不能因此丢弃有效信息。
-- 严禁将整条数据行、多列拼接文本或整个详情块放入 port、status、name 等具体语义
-  字段。一个字段只能表示一个逻辑值。表头、分隔线、分页标记和提示符不是业务记录。
-- 提交前逐个样例检查表头、数据行边界、重复记录数量、列变化和空白值槽；确认每个
-  array 条目的字段都能在每条对应记录中稳定得到，且没有遗漏明显的稳定业务列。
 - 保守推断类型。含义不明确的值保留为 string。只有不含前导零、单位、标识符或
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
-- 调用工具前再次自检：重复结构是否为 array、主要稳定字段是否分别建模、是否把
-  整行误作单值、所有 object 是否封闭、required 是否只包含确实稳定存在的字段。
+
+以下为独立合成示例，只说明上述选择，不是待解析的业务输入。
+
+示例 A：同一 Schema 描述下面两份完整输出。Queue 与 Check 都是实体集合，保留
+单数标签作为数组名称；队列标识本身也有 Queue 标签，所以在 queue 数组内仍命名
+为 queue，不因父容器而改为 name。Note 为空与缺行不同；Check 章节可缺失，
+Queue Total 属于队列，Total 属于整份输出。
+```text
+Survey: depot
+Queue: amber
+  Note: ready
+  Check
+    Check ID  Result
+    latch     shut
+    lamp      ~pending~
+  Queue Total: 2
+Queue: birch
+  Note:
+  Queue Total: 0
+Queue: cedar
+  Check
+    Check ID  Result
+    relay     idle
+  Queue Total: 1
+Total: 3
+```
+```text
+Survey: annex
+Queue: elm
+  Queue Total: 0
+Total: 1
+```
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "survey": {"type": "string"},
+    "queue": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "properties": {
+          "queue": {"type": "string"},
+          "note": {"type": "string"},
+          "check": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "properties": {
+                "check_id": {"type": "string"},
+                "result": {"type": "string"}
+              },
+              "required": ["check_id", "result"]
+            }
+          },
+          "queue_total": {"type": "integer"}
+        },
+        "required": ["queue", "queue_total"]
+      }
+    },
+    "total": {"type": "integer"}
+  },
+  "required": ["survey", "queue", "total"]
+}
+```
+
+示例 B：下面的章节是固定业务角色，不是用实例编号区分的重复实体。
+```text
+Primary counters
+  Requests: 3
+Backup counters
+  Requests: 5
+```
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "primary_counters": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"requests": {"type": "integer"}},
+      "required": ["requests"]
+    },
+    "backup_counters": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"requests": {"type": "integer"}},
+      "required": ["requests"]
+    }
+  },
+  "required": ["primary_counters", "backup_counters"]
+}
+```
+
+示例 C：TTL 不展开；Origin 内保留 Origin Ref 的完整限定。多行表头的两个 Ref
+按各自列限定消歧，不串入邻列。Class 是保留关键字，所以在 Service 内例外采用
+service_class；这不是普通字段追加父级前缀的理由。Worker 含独立名称与状态，
+采用拆分子项的语义名称，名称内的 + 保留。
+```text
+Cache TTL(ms): 30 ms
+Origin
+  Origin Ref: rack-8
+Service
+  Class: batch
+Transfer
+  Local     Remote
+  Ref       Ref
+  bay-2     bay-3
+Worker: cedar+east (active)
+```
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "properties": {
+    "cache_ttl_ms": {"type": "string"},
+    "origin": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"origin_ref": {"type": "string"}},
+      "required": ["origin_ref"]
+    },
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"service_class": {"type": "string"}},
+      "required": ["service_class"]
+    },
+    "transfer": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "properties": {
+          "local_ref": {"type": "string"},
+          "remote_ref": {"type": "string"}
+        },
+        "required": ["local_ref", "remote_ref"]
+      }
+    },
+    "worker_name": {"type": "string", "description": "Worker 值中括号前的完整名称。"},
+    "worker_status": {"type": "string", "description": "Worker 名称后括号内的状态值。"}
+  },
+  "required": [
+    "cache_ttl_ms", "origin", "service", "transfer", "worker_name", "worker_status"
+  ]
+}
+```
+
+提交前逐个样例检查表头、数据行边界、重复记录数量、列变化和空白值槽。
+确认根粒度、实体与子项归属、固定角色 object 与重复实体 array 的选择正确；
+名称保留可靠标签和完整限定，必要兜底有明确理由；主要稳定字段分别建模且无遗漏，
+没有把整行误作单值，所有 object 封闭，required 仅包含该父对象每个实例都有的字段。
 """
 
 SCHEMA_SYSTEM_PROMPT += "\n" + schema_capabilities_guidance() + "\n"

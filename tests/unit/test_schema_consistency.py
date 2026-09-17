@@ -8,6 +8,7 @@ from uuid import UUID
 import pytest
 
 from cli_parser_agent.evaluation import (
+    SCHEMA_POLICY_CHECKS,
     HarnessError,
     schema_consistency_overview,
     schema_contract_consistency,
@@ -90,6 +91,18 @@ def fixtures(n=4):
         "trials": reviews,
         "pairs": pairs,
     }
+
+
+def policy_fixtures(n=4):
+    summary, review = fixtures(n)
+    review["review_version"] = 2
+    for row in review["trials"]:
+        row["policy_checks"] = dict.fromkeys(SCHEMA_POLICY_CHECKS, "passed")
+        row["policy_paths"] = []
+    for row in review["pairs"]:
+        row["naming_consistency"] = "consistent"
+        row["hierarchy_consistency"] = "consistent"
+    return summary, review
 
 
 def test_order_annotations_and_business_annotation_names():
@@ -345,3 +358,219 @@ def test_failed_proposal_stays_in_planned_denominator():
     assert result["reasonable_proposal_rate"] == 0.5
     assert result["valid_pairs"] == 0 and result["planned_pairs"] == 1
     assert result["planned_pair_confirmed_rate"] == 0
+
+
+def test_policy_review_preserves_v1_metrics_and_marks_legacy_policy_unavailable():
+    summary, legacy = fixtures()
+    _, review = policy_fixtures()
+    before = summarize_schema_review(summary, legacy)
+    result = summarize_schema_review(summary, review)
+    assert before["policy_compliance"] is None
+    assert before["pair_consistency_review"] is None
+    for key in (
+        "planned_trials",
+        "planned_pairs",
+        "reasonable_proposal_rate",
+        "reasonable_pairs",
+        "confirmed_reasonable_consistent_pairs",
+        "all_repeats_reasonable_consistent",
+        "review_complete",
+    ):
+        assert result[key] == before[key]
+    assert result["review_version"] == 2
+    policy = result["policy_compliance"]
+    assert policy["passed_trials"] == 4 and policy["pass_rate"] == 1
+    assert policy["trial_counts"] == {
+        "compliant": 4,
+        "issue": 0,
+        "unknown": 0,
+        "failed": 0,
+        "missing": 0,
+    }
+    assert policy["evidence_complete"]
+    assert policy["by_case"]["demo"]["passed_trials"] == 4
+    assert result["pair_consistency_review"]["naming_consistency"] == {
+        "valid_pairs": 6,
+        "reviewed_pairs": 6,
+        "missing_pairs": 0,
+        "consistent": 6,
+        "different": 0,
+        "unknown": 0,
+        "judgeable_pairs": 6,
+        "consistent_valid_pair_rate": 1,
+        "consistent_judgeable_pair_rate": 1,
+    }
+
+
+def test_policy_violation_is_independent_of_semantics_and_contract_equality():
+    summary, review = policy_fixtures(2)
+    row = review["trials"][0]
+    row["policy_checks"]["source_label_fidelity"] = "issue"
+    row["policy_paths"] = ["/title"]
+    result = summarize_schema_review(summary, review)
+    assert result["acceptable_trials"] == 2
+    assert result["confirmed_reasonable_consistent_pairs"] == 1
+    assert result["policy_compliance"]["passed_trials"] == 1
+    assert result["policy_compliance"]["trial_counts"]["issue"] == 1
+    assert result["policy_compliance"]["checks"]["source_label_fidelity"]["issue"] == 1
+    assert result["policy_compliance"]["evidence_complete"]
+
+
+def test_policy_compliance_and_equal_contracts_do_not_make_bad_proposals_pass():
+    summary, review = policy_fixtures(2)
+    for row in review["trials"]:
+        row["overall"] = "needs_revision"
+        row["dimensions"]["coverage"] = "issue"
+        row["categories"] = ["coverage"]
+        row["paths"] = ["/title"]
+    review["pairs"][0]["judgment"] = "at_least_one_issue"
+    result = summarize_schema_review(summary, review)
+    assert result["policy_compliance"]["trial_counts"]["compliant"] == 2
+    assert result["policy_compliance"]["passed_trials"] == 0
+    assert result["confirmed_reasonable_consistent_pairs"] == 0
+
+
+def test_policy_unknown_na_and_pair_correspondence_are_not_guessed():
+    summary, review = policy_fixtures()
+    review["trials"][0]["policy_checks"]["fixed_role_sections"] = "not_applicable"
+    review["trials"][1]["policy_checks"]["qualifier_ownership"] = (
+        "insufficient_evidence"
+    )
+    review["pairs"][0]["naming_consistency"] = "different"
+    review["pairs"][1]["naming_consistency"] = "unknown"
+    review["pairs"][1]["hierarchy_consistency"] = "unknown"
+    # Unknown whole-field correspondence is a human finding, not an automatic rename.
+    review["pairs"][1]["categories"] = ["unresolved_mapping"]
+    review["pairs"].pop()
+    result = summarize_schema_review(summary, review)
+    policy = result["policy_compliance"]
+    assert policy["passed_trials"] == 3 and policy["trial_counts"]["unknown"] == 1
+    assert not policy["evidence_complete"]
+    naming = result["pair_consistency_review"]["naming_consistency"]
+    assert (naming["consistent"], naming["different"], naming["unknown"]) == (3, 1, 1)
+    assert naming["valid_pairs"] == 6 and naming["judgeable_pairs"] == 4
+    assert naming["missing_pairs"] == 1
+    assert naming["consistent_valid_pair_rate"] == 0.5
+    assert naming["consistent_judgeable_pair_rate"] == 0.75
+    assert result["pair_consistency_review"]["hierarchy_consistency"]["different"] == 0
+
+
+def test_policy_failure_missing_and_missing_trace_cannot_pass():
+    summary, review = policy_fixtures()
+    summary["planned_trials_per_case"] = 5
+    summary["trials"][0].update(generation_success=False, proposal_revalidated=None)
+    row = review["trials"][0]
+    row["overall"] = "unjudgeable"
+    row["dimensions"] = dict.fromkeys(row["dimensions"], "insufficient_evidence")
+    # Even erroneous all-passed policy entries cannot manufacture a valid proposal.
+    row = review["trials"][1]
+    row["overall"] = "unjudgeable"
+    row["trace_id"] = None
+    summary["trials"][1]["trace_id"] = None
+    review["trials"].pop()
+    review["pairs"] = []
+    result = summarize_schema_review(summary, review)
+    policy = result["policy_compliance"]
+    assert policy["trial_counts"] == {
+        "compliant": 1,
+        "issue": 0,
+        "unknown": 1,
+        "failed": 1,
+        "missing": 2,
+    }
+    assert policy["passed_trials"] == 1 and policy["pass_rate"] == 1 / 5
+    assert policy["missing_trial_reviews"] == 2
+    assert not policy["evidence_complete"]
+
+
+@pytest.mark.parametrize("n", [0, 1])
+def test_policy_pair_rates_are_unavailable_without_two_valid_proposals(n):
+    summary, review = policy_fixtures(n)
+    if not n:
+        summary.pop("planned_trials_per_case")
+    result = summarize_schema_review(summary, review)
+    for row in result["pair_consistency_review"].values():
+        assert row["valid_pairs"] == 0
+        assert row["consistent_valid_pair_rate"] is None
+        assert row["consistent_judgeable_pair_rate"] is None
+
+
+def test_policy_paths_share_one_bounded_union_with_business_paths():
+    summary, review = policy_fixtures(1)
+    row = review["trials"][0]
+    row["paths"] = [f"/field{i}" for i in range(24)]
+    row["policy_paths"] = list(reversed(row["paths"]))
+    result = summarize_schema_review(summary, review)
+    assert result["trials"][0]["policy_paths"] == row["policy_paths"]
+    row["policy_paths"].append("/other")
+    with pytest.raises(HarnessError):
+        summarize_schema_review(summary, review)
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "version",
+        "bool_version",
+        "v1_policy",
+        "missing_check",
+        "extra_check",
+        "prose_check",
+        "check_type",
+        "root_na",
+        "policy_prose",
+        "malicious_path",
+        "long_path",
+        "long_segment",
+        "duplicate_path",
+        "combined_paths",
+        "missing_pair_check",
+        "pair_prose",
+        "pair_type",
+        "extra_pair_key",
+    ],
+)
+def test_invalid_policy_review_rejected_without_echoing_body(change):
+    summary, review = policy_fixtures()
+    row = review["trials"][0]
+    pair = review["pairs"][0]
+    if change == "version":
+        review["review_version"] = 3
+    elif change == "bool_version":
+        review["review_version"] = True
+    elif change == "v1_policy":
+        review["review_version"] = 1
+    elif change == "missing_check":
+        row["policy_checks"].pop("root_scope")
+    elif change == "extra_check":
+        row["policy_checks"]["PRIVATE"] = "passed"
+    elif change == "prose_check":
+        row["policy_checks"]["root_scope"] = "PRIVATE"
+    elif change == "check_type":
+        row["policy_checks"]["root_scope"] = {"PRIVATE": True}
+    elif change == "root_na":
+        row["policy_checks"]["root_scope"] = "not_applicable"
+    elif change == "policy_prose":
+        row["policy_body"] = "PRIVATE"
+    elif change == "malicious_path":
+        row["policy_paths"] = ["/value\nPRIVATE"]
+    elif change == "long_path":
+        row["policy_paths"] = ["/a" * 1025]
+    elif change == "long_segment":
+        row["policy_paths"] = ["/" + "a" * 121]
+    elif change == "duplicate_path":
+        row["policy_paths"] = ["/value", "/value"]
+    elif change == "combined_paths":
+        row["paths"] = [f"/field{i}" for i in range(24)]
+        row["policy_paths"] = ["/other"]
+    elif change == "missing_pair_check":
+        pair.pop("naming_consistency")
+    elif change == "pair_prose":
+        pair["naming_consistency"] = "PRIVATE"
+    elif change == "pair_type":
+        pair["hierarchy_consistency"] = ["PRIVATE"]
+    else:
+        pair["body"] = "PRIVATE"
+    with pytest.raises(HarnessError) as exc:
+        summarize_schema_review(summary, review)
+    assert "PRIVATE" not in str(exc.value)

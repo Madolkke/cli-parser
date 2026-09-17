@@ -404,6 +404,22 @@ def test_schema_review_keeps_frozen_schema_when_ttp_failed():
     assert result["confirmed_reasonable_consistent_pairs"] == 6
 
 
+def test_parse_review_accepts_schema_policy_v2_without_changing_joint_semantics():
+    from test_schema_consistency import policy_fixtures
+
+    summary, legacy, parse_review = review_fixtures()
+    _, schema_review = policy_fixtures()
+    schema_review["trials"][0]["policy_checks"]["source_label_fidelity"] = "issue"
+    schema_review["trials"][0]["policy_paths"] = ["/title"]
+    policy_summary = summarize_schema_review(summary, schema_review)
+    assert policy_summary["policy_compliance"]["passed_trials"] == 3
+    result = summarize_parse_review(summary, parse_review, schema_review)
+    old_result = summarize_parse_review(summary, parse_review, legacy)
+    assert result.pop("schema") == policy_summary
+    old_result.pop("schema")
+    assert result == old_result
+
+
 def test_parse_review_cli_is_offline_and_preserves_sources(tmp_path, monkeypatch):
     runner = _load_runner()
     summary, schema_review, parse_review = review_fixtures()

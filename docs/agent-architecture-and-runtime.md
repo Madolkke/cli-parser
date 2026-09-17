@@ -141,7 +141,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v44-schema-runtime-contract-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v48-schema-naming-and-structure-policy-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -348,12 +348,21 @@ v43 未达到生成成功及契约一致性门槛，默认恢复 v40。独立合
 
 ## v44 运行契约底座
 
-默认保留 v40 建模规则，增加受限能力说明、连续协议失败受控修复及 DeepSeek 官方输出预算映射。见 [实现与证据](schema-runtime-v44.md)。这些修复不代表语义质量已经提升。
+v44 当时保留 v40 建模规则，增加受限能力说明、连续协议失败受控修复及 DeepSeek 官方输出预算映射。见 [实现与证据](schema-runtime-v44.md)。这些修复不代表语义质量已经提升。
 
 ## SchemaPlan 预试结果
 
-v45 计划编译与 v46 显式确认均未达到预试资格，运行接线已撤下。当前默认是 v44 共同底座，保留协议止损、受限能力说明和 DeepSeek 输出预算修复。独立编译器与来源/示例测试仅保留诊断用途；外部注入和 TTP 协议不变。历史实验可在 fc2e31a 重现，但本轮不补跑。见 [结果与边界](schema-plan-pretrial-regression.md)。
+v45 计划编译与 v46 显式确认均未达到预试资格，运行接线已撤下。实验结束时恢复 v44 共同底座，保留协议止损、受限能力说明和 DeepSeek 输出预算修复。独立编译器与来源/示例测试仅保留诊断用途；外部注入和 TTP 协议不变。历史实验可在 fc2e31a 重现，但本轮不补跑。见 [结果与边界](schema-plan-pretrial-regression.md)。
 
 ## v47 轻量 Schema 草稿预试
 
-24 次 A/B 预试已结束，候选未达到 12/12 生成门槛，不启动正式端到端对照。默认保留 v44 及其可靠性修复，候选工具、工厂和来源展示运行接线已撤下。独立草稿编译器、来源与示例测试及安全历史指标保留；不新增产品选项，不改变外部注入和 TTP。实验实现固定于 f7b9a16，见 [预试结果](schema-draft-v47-pretrial-regression.md)。
+24 次 A/B 预试已结束，候选未达到 12/12 生成门槛，不启动正式端到端对照。实验结束时保留 v44 及其可靠性修复，候选工具、工厂和来源展示运行接线已撤下。独立草稿编译器、来源与示例测试及安全历史指标保留；不新增产品选项，不改变外部注入和 TTP。实验实现固定于 f7b9a16，见 [预试结果](schema-draft-v47-pretrial-regression.md)。
+
+## v48 命名与结构政策
+
+当前仍由单个 Schema Agent 直接提交最终 Schema。提示按独立业务值、实体归属、容器选择、
+标签命名和完整性复核组织决策；固定角色章节使用 object，同类实体使用 array，可靠英文
+标签保留词序、缩写、限定和单复数。语义兜底允许但仍可能漂移，不增加编译或自动改名。
+类型、required、约束、采样、预算及 TTP 正文保持原政策，v44 可靠性修复继续生效。
+Schema 合法不能证明遵循建模规则；规则、业务合理性和重复一致性由审阅分别统计。
+本轮仅运行 56 次 Schema-only，可解析性未测，详见 [实施与评测协议](schema-policy-v48-protocol.md)。

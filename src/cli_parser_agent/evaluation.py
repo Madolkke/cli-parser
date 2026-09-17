@@ -2804,6 +2804,22 @@ _SCHEMA_REVIEW_CATEGORIES = frozenset(
         "unresolved_mapping",
     }
 )
+SCHEMA_POLICY_CHECKS = frozenset(
+    {
+        "root_scope",
+        "repeated_entities",
+        "fixed_role_sections",
+        "ownership_and_wrappers",
+        "source_label_fidelity",
+        "qualifier_ownership",
+        "container_name_source",
+        "fallback_and_collision",
+    }
+)
+_SCHEMA_REVIEW_VERDICTS = frozenset(
+    {"passed", "issue", "insufficient_evidence", "not_applicable"}
+)
+_SCHEMA_PAIR_POLICY_CHECKS = ("naming_consistency", "hierarchy_consistency")
 
 
 def summarize_schema_review(summary, review):
@@ -2828,16 +2844,7 @@ def summarize_schema_review(summary, review):
         except (ValueError, AttributeError):
             raise HarnessError("invalid schema review identifier") from None
 
-    def common(row):
-        require(isinstance(row["categories"], list))
-        require(
-            all(
-                isinstance(x, str) and x in _SCHEMA_REVIEW_CATEGORIES
-                for x in row["categories"]
-            )
-        )
-        require(len(row["categories"]) == len(set(row["categories"])))
-        paths = row["paths"]
+    def valid_paths(paths):
         require(isinstance(paths, list) and len(paths) <= 24)
         require(
             all(
@@ -2853,8 +2860,31 @@ def summarize_schema_review(summary, review):
         )
         require(len(paths) == len(set(paths)))
 
+    def common(row):
+        require(isinstance(row["categories"], list))
+        require(
+            all(
+                isinstance(x, str) and x in _SCHEMA_REVIEW_CATEGORIES
+                for x in row["categories"]
+            )
+        )
+        require(len(row["categories"]) == len(set(row["categories"])))
+        valid_paths(row["paths"])
+
+    def verdicts(node, expected):
+        keys(node, expected)
+        require(
+            all(
+                isinstance(value, str) and value in _SCHEMA_REVIEW_VERDICTS
+                for value in node.values()
+            )
+        )
+
     keys(review, {"review_version", "run_id", "trials", "pairs"})
-    require(type(review["review_version"]) is int and review["review_version"] == 1)
+    require(
+        type(review["review_version"]) is int and review["review_version"] in {1, 2}
+    )
+    policy_available = review["review_version"] == 2
     require(
         isinstance(summary, dict)
         and summary.get("mode") in {"schema-only", "end-to-end"}
@@ -2894,7 +2924,8 @@ def summarize_schema_review(summary, review):
                 "overall",
                 "categories",
                 "paths",
-            },
+            }
+            | ({"policy_checks", "policy_paths"} if policy_available else set()),
         )
         tid = row["trial_id"]
         require(isinstance(tid, str) and tid in trials and tid not in trial_reviews)
@@ -2906,19 +2937,17 @@ def summarize_schema_review(summary, review):
             require(isinstance(span, str))
             valid_uuid(span)
         require(len(set(row["span_ids"])) == len(row["span_ids"]))
-        keys(row["dimensions"], _SCHEMA_REVIEW_DIMENSIONS)
-        require(
-            all(
-                isinstance(v, str)
-                and v in {"passed", "issue", "insufficient_evidence", "not_applicable"}
-                for v in row["dimensions"].values()
-            )
-        )
+        verdicts(row["dimensions"], _SCHEMA_REVIEW_DIMENSIONS)
         require(
             isinstance(row["overall"], str)
             and row["overall"] in {"acceptable", "needs_revision", "unjudgeable"}
         )
         common(row)
+        if policy_available:
+            verdicts(row["policy_checks"], SCHEMA_POLICY_CHECKS)
+            require(row["policy_checks"]["root_scope"] != "not_applicable")
+            valid_paths(row["policy_paths"])
+            require(len(set(row["paths"]) | set(row["policy_paths"])) <= 24)
         if row["overall"] == "acceptable":
             require(schema_success(t) is True and t["proposal_revalidated"] is True)
             require(
@@ -2952,7 +2981,8 @@ def summarize_schema_review(summary, review):
                 "judgment",
                 "categories",
                 "paths",
-            },
+            }
+            | (set(_SCHEMA_PAIR_POLICY_CHECKS) if policy_available else set()),
         )
         require(
             isinstance(row["left_trial_id"], str)
@@ -2981,6 +3011,14 @@ def summarize_schema_review(summary, review):
             in {"both_reasonable", "at_least_one_issue", "insufficient_evidence"}
         )
         common(row)
+        if policy_available:
+            require(
+                all(
+                    isinstance(row[name], str)
+                    and row[name] in {"consistent", "different", "unknown"}
+                    for name in _SCHEMA_PAIR_POLICY_CHECKS
+                )
+            )
         for tid in ids:
             known = trial_reviews.get(tid)
             if known and row["judgment"] == "both_reasonable":
@@ -3030,8 +3068,23 @@ def summarize_schema_review(summary, review):
         for case, ids in groups.items()
     }
     counts = Counter(r["overall"] for r in trial_reviews.values())
+    policy_compliance = None
+    pair_consistency_review = None
+    if policy_available:
+        policy_compliance = _schema_policy_review_summary(
+            trials,
+            trial_reviews,
+            groups,
+            expected_counts,
+            planned_trials,
+            schema_success,
+        )
+        pair_consistency_review = {
+            name: _schema_pair_policy_summary(pair_reviews, valid_pairs, name)
+            for name in _SCHEMA_PAIR_POLICY_CHECKS
+        }
     return {
-        "review_version": 1,
+        "review_version": review["review_version"],
         "schema_metrics_version": summary.get("schema_metrics_version"),
         "run_id": run_id,
         "parseability": "executed_pending_review"
@@ -3068,8 +3121,106 @@ def summarize_schema_review(summary, review):
         if metrics_available and planned_pairs
         else None,
         "all_repeats_reasonable_consistent": complete_cases,
+        "policy_compliance": policy_compliance,
+        "pair_consistency_review": pair_consistency_review,
         "review_complete": len(trial_reviews) == planned_trials
         and valid_pairs <= pair_reviews.keys(),
         "trials": list(trial_reviews.values()),
         "pairs": list(pair_reviews.values()),
+    }
+
+
+def _schema_policy_review_summary(
+    trials, reviews, groups, expected_counts, planned_trials, schema_success
+):
+    """Keep policy adherence separate from business acceptance and old joint rates."""
+
+    def status(tid):
+        trial = trials[tid]
+        if schema_success(trial) is False or trial["proposal_revalidated"] is False:
+            return "failed"
+        row = reviews.get(tid)
+        if row is None:
+            return "missing"
+        if (
+            schema_success(trial) is not True
+            or trial["proposal_revalidated"] is not True
+            or row["trace_id"] is None
+        ):
+            return "unknown"
+        values = row["policy_checks"].values()
+        if "issue" in values:
+            return "issue"
+        if "insufficient_evidence" in values:
+            return "unknown"
+        return "compliant"
+
+    states = {tid: status(tid) for tid in trials}
+    passed = {
+        tid
+        for tid, state in states.items()
+        if state == "compliant" and reviews[tid]["overall"] == "acceptable"
+    }
+
+    def counts(ids, planned):
+        observed = Counter(states[tid] for tid in ids)
+        observed["missing"] += planned - len(ids)
+        return {
+            state: observed[state]
+            for state in ("compliant", "issue", "unknown", "failed", "missing")
+        }
+
+    return {
+        "planned_trials": planned_trials,
+        "trial_counts": counts(trials, planned_trials),
+        "checks": {
+            check: {
+                verdict: sum(
+                    row["policy_checks"][check] == verdict for row in reviews.values()
+                )
+                for verdict in sorted(_SCHEMA_REVIEW_VERDICTS)
+            }
+            for check in sorted(SCHEMA_POLICY_CHECKS)
+        },
+        "missing_trial_reviews": planned_trials - len(reviews),
+        "passed_trials": len(passed),
+        "pass_rate": len(passed) / planned_trials if planned_trials else None,
+        "evidence_complete": len(trials) == planned_trials
+        and len(reviews) == planned_trials
+        and all(
+            schema_success(trials[tid]) is True
+            and trials[tid]["proposal_revalidated"] is True
+            and row["trace_id"] is not None
+            and "insufficient_evidence" not in row["policy_checks"].values()
+            for tid, row in reviews.items()
+        ),
+        "by_case": {
+            case: {
+                "planned_trials": expected_counts[case],
+                "trial_counts": counts(ids, expected_counts[case]),
+                "passed_trials": sum(tid in passed for tid in ids),
+            }
+            for case, ids in groups.items()
+        },
+    }
+
+
+def _schema_pair_policy_summary(reviews, valid_pairs, name):
+    """Summarize human field correspondence; no inferred renaming or movement."""
+    counts = Counter(row[name] for row in reviews.values())
+    judgeable = counts["consistent"] + counts["different"]
+    return {
+        "valid_pairs": len(valid_pairs),
+        "reviewed_pairs": len(reviews),
+        "missing_pairs": len(valid_pairs - reviews.keys()),
+        "consistent": counts["consistent"],
+        "different": counts["different"],
+        "unknown": counts["unknown"],
+        "judgeable_pairs": judgeable,
+        "consistent_valid_pair_rate": counts["consistent"] / len(valid_pairs)
+        if valid_pairs
+        else None,
+        "consistent_judgeable_pair_rate": counts["consistent"] / judgeable
+        if judgeable
+        else None,
     }

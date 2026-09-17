@@ -190,6 +190,30 @@ uv run python scripts/run_test_sets.py schema-review --run-directory .artifacts/
 已确认合理且一致比例，并逐例检查全部重复和全部 pair 是否都通过。两份同样错误的提案
 即使契约完全相同，也不能计入联合通过。缺失旧指标时联合一致结果为 null。
 
+## Schema 审阅 v2：政策、业务与一致性
+
+`schema-review` 同时接受严格的 `review_version=1` 和 `2`，runner 仍为 5、自动
+metrics 仍为 2。v1 的旧字段、七维和联合通过含义不变；新增政策及人工一致性指标为 null。
+v2 保留全部旧字段，并要求以下附加字段；所有层级仍拒绝额外键和自由正文。
+
+- trial 的 `policy_checks` 固定为 `root_scope`、`repeated_entities`、`fixed_role_sections`、
+  `ownership_and_wrappers`、`source_label_fidelity`、`qualifier_ownership`、
+  `container_name_source`、`fallback_and_collision`。值沿用 passed/issue/insufficient_evidence/
+  not_applicable；root_scope 不能不适用，其他项仅在确无场景时不适用。
+- trial 的 `policy_paths` 独立于业务问题路径，沿用现有格式限制；与 `paths` 的并集最多 24 条。
+- pair 的 `naming_consistency`、`hierarchy_consistency` 为 consistent/different/unknown。
+  人工可靠对应业务字段后判断；发现差异为 different，没有确认差异但对应不完整为 unknown。
+  层级仅关注根粒度、容器类型和归属，不将标量类型或 required 差异混入。不得自动匹配同义名。
+
+业务合理性与政策遵循相互独立：合理同义名可以 acceptable 但违反标签政策；两份同样错误的
+Schema 仍不业务通过；合法语义兜底也可能命名不一致。旧联合指标保持原义。
+新增 `policy_compliance` 汇总各规则四态、合规/违反/不足/失败/缺失，以及同时业务可接受的
+本轮通过数；`pair_consistency_review` 分别汇总命名和层级的一致/不同/未知，列出有效 pair、
+已审阅、缺失和可判断分母。生成或复验失败、证据不足和缺失审阅都不能记通过。
+
+本轮政策见 [v48 协议](schema-policy-v48-protocol.md)。工程验收后保留新政策，不设真实结果
+提升门槛、不自动回退或追加批次。Schema-only 继续标记可解析性未测。
+
 ## 生成契约的端到端评测
 
 `run --mode end-to-end` 只将所选输入传给公共 `generate()`，Schema 与 TTP 共用产品预算；
@@ -247,6 +271,6 @@ SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数
 
 ## 历史 v47 同期轻量草稿实验（f7b9a16）
 
-实验提交 f7b9a16 的选择仅允许 direct/draft。24 次预试未达标后，当前入口已撤下选择参数，只运行默认 v44；以下描述历史执行及保留指标。两组复用同一原始输入快照、全局 semaphore、模型和 policy，按用例 AB/BA 轮换，不跨组组成一致性 pair。来源展示会增加候选上下文开销，单列采样量与展示字符数。工具参数、Schema 及兜底名称集合只在内存观察；保存的 draft 指标只含字段/引用/兜底/原因/拒绝/字节数量。供应商 finish_reason 缺失不能按零截断统计。
+实验提交 f7b9a16 的选择仅允许 direct/draft。24 次预试未达标后撤下选择参数并恢复 v44；当前默认为 v48，以下描述历史执行及保留指标。两组复用同一原始输入快照、全局 semaphore、模型和 policy，按用例 AB/BA 轮换，不跨组组成一致性 pair。来源展示会增加候选上下文开销，单列采样量与展示字符数。工具参数、Schema 及兜底名称集合只在内存观察；保存的 draft 指标只含字段/引用/兜底/原因/拒绝/字节数量。供应商 finish_reason 缺失不能按零截断统计。
 
 原计划为 24 次预试达标后才运行 112 次端到端对照，最多 136 次。实际止于 24 次，没有补跑或正式对照，见 [结果](schema-draft-v47-pretrial-regression.md)。受限 Schema/解析审阅及业务事实清单沿用现有协议，新增命名和根粒度观察不作为自动业务门禁。完整配置、采用门槛、隐私和回退见 [v47 实验协议](schema-draft-v47-protocol.md)。
