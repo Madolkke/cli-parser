@@ -1,0 +1,1385 @@
+{
+  "results_version": 1,
+  "runtime_policy": "schema-reasoning-recovery-v1",
+  "run_id": "20260917T171125.667859Z",
+  "implementation_revision": "500a69b90da405b320a67cd8c7cad4ca34e115b4",
+  "dirty": true,
+  "mode": "schema-only",
+  "parseability": "not_tested",
+  "adoption": "not_adopted",
+  "public_requests_executed": 4,
+  "protection_status": "not_run_sdwan_gate_failed",
+  "configuration": {
+    "model": {
+      "name": "deepseek-v4-flash",
+      "base_url": "https://api.deepseek.com",
+      "stream": false,
+      "temperature": 0.0,
+      "parallel_tool_calls": false,
+      "max_tokens": 8192,
+      "context_size": 128000,
+      "model_timeout_seconds": 120.0,
+      "model_max_retries": 2,
+      "verify_tls": true,
+      "thinking_enable": null,
+      "reasoning_effort": null,
+      "extra_body_configured": false
+    },
+    "policy": {
+      "total_timeout_seconds": 1800.0,
+      "max_agent_rounds": 26,
+      "max_ttp_submissions": 18,
+      "max_ttp_test_calls": 3,
+      "max_schema_no_tool_retries": 3,
+      "max_ttp_no_tool_retries": 3,
+      "ttp_validation_timeout_seconds": 20.0,
+      "model_input_char_budget": 240000,
+      "max_ttp_template_bytes": 65536,
+      "max_ttp_group_depth": 16,
+      "max_ttp_regex_chars": 2048,
+      "max_ttp_argument_chars": 4096,
+      "max_parse_result_bytes": 8388608,
+      "max_schema_bytes": 65536,
+      "max_schema_depth": 16,
+      "max_schema_properties": 256
+    },
+    "prompt": {
+      "version": "ttp-generator-v48-schema-naming-and-structure-policy-zh-cn"
+    }
+  },
+  "selected_inputs": [
+    {
+      "dataset": "cisco_ios.show_sdwan_control_connections",
+      "input_scope": "default",
+      "default_input": "inputs/001.txt",
+      "selected_input": "inputs/001.txt",
+      "selected_input_count": 1,
+      "selected_inputs": [
+        {
+          "input_index": 0,
+          "display_number": 1,
+          "file": "inputs/001.txt"
+        }
+      ]
+    }
+  ],
+  "generation_success_count": 3,
+  "proposal_revalidated_count": 3,
+  "trials": [
+    {
+      "generation_success": false,
+      "proposal_revalidated": null,
+      "exception_type": null,
+      "trace_id": "2a0775ff-a4b7-866b-29cb-c0b874533040",
+      "schema_submissions": 0,
+      "schema_agent_rounds": 4,
+      "termination_reason": "model_submission_tool_call_invalid",
+      "elapsed_seconds": 106.8119999999999,
+      "observations": {
+        "observed_submissions": 0,
+        "first_submission_accepted": null,
+        "first_frozen_seconds": null,
+        "observed_confirmations": 0,
+        "compiler_facts": [],
+        "source_display": {
+          "sampling_observations": 1,
+          "input_prepared_observations": 1,
+          "original_chars": 1640,
+          "sampled_chars": 1640,
+          "truncated_inputs": 0,
+          "input_count": 1,
+          "input_fits": true,
+          "prepared_message_chars": 1765,
+          "prepared_minus_sampled_chars": 125
+        },
+        "protocol": {
+          "repair_observations": 4,
+          "category_counts": {
+            "no_tool": 3,
+            "product_arguments": 1
+          },
+          "boundary_observations": 0,
+          "boundary_counts": {}
+        },
+        "reasoning_recovery": {
+          "status": "observed",
+          "activation_count": 1,
+          "rounds": [
+            {
+              "after_round_index": 3,
+              "after_attempt_index": 3,
+              "consecutive_responses": 3
+            }
+          ],
+          "runtime_policy": "schema-reasoning-recovery-v1",
+          "mode": "thinking_disabled",
+          "reason": "consecutive_reasoning_only_length"
+        },
+        "provider_finish_reason_observations": 0,
+        "provider_length_count": null,
+        "draft_rejection_counts": {
+          "schema_draft.invalid_shape": null,
+          "schema_draft.too_large": null,
+          "schema_draft.invalid_sources": null,
+          "schema_draft.invalid_reference": null,
+          "schema_draft.ambiguous_reference": null,
+          "schema_draft.partial_word": null,
+          "schema_draft.source_order": null,
+          "schema_draft.reference_limit": null,
+          "schema_draft.invalid_name": null,
+          "schema_draft.unnecessary_fallback": null,
+          "schema_draft.name_collision": null,
+          "schema_draft.invalid_attribute": null,
+          "schema_draft.depth_exceeded": null,
+          "schema_draft.property_limit": null,
+          "schema_draft.other_rejection": null
+        },
+        "rejection_counts": {
+          "schema.python_keyword_property_name": null,
+          "schema.invalid_property_name": null,
+          "schema.reserved_scalar_field_name": null,
+          "schema.other_rejection": null
+        },
+        "input_tokens": 15347,
+        "output_tokens": 24933,
+        "usage_observations": 4,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "fallback_naming": {
+        "status": "not_applicable",
+        "business_nodes": null,
+        "fallback_nodes": null,
+        "fallback_ratio": null
+      },
+      "runner_version": 5,
+      "mode": "schema-only",
+      "schema_metrics_version": 2,
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "case": {
+        "id": "cisco_ios.show_sdwan_control_connections",
+        "command": "show sdwan control connections",
+        "path": "test_sets/cisco_ios.show_sdwan_control_connections",
+        "suites": [],
+        "tags": [
+          "medium"
+        ],
+        "input_scope": "default",
+        "selected_input_count": 1,
+        "selected_input": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt",
+        "selected_inputs": [
+          {
+            "input_index": 0,
+            "display_number": 1,
+            "path": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt"
+          }
+        ]
+      },
+      "trial_index": 0,
+      "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/1",
+      "started_at": "2026-09-17T17:11:25.670337+00:00",
+      "finished_at": "2026-09-17T17:13:12.471915+00:00",
+      "git": {
+        "revision": "500a69b90da405b320a67cd8c7cad4ca34e115b4",
+        "dirty": true
+      }
+    },
+    {
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "exception_type": null,
+      "trace_id": "8df94a5c-09e4-9335-9c20-4561ea574e5d",
+      "schema_submissions": 1,
+      "schema_agent_rounds": 4,
+      "termination_reason": "success",
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 16,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 16
+        },
+        "required_count": 17,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 18,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "elapsed_seconds": 105.82799999999952,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 105.79700000000048,
+        "observed_confirmations": 0,
+        "compiler_facts": [],
+        "source_display": {
+          "sampling_observations": 1,
+          "input_prepared_observations": 1,
+          "original_chars": 1640,
+          "sampled_chars": 1640,
+          "truncated_inputs": 0,
+          "input_count": 1,
+          "input_fits": true,
+          "prepared_message_chars": 1765,
+          "prepared_minus_sampled_chars": 125
+        },
+        "protocol": {
+          "repair_observations": 3,
+          "category_counts": {
+            "no_tool": 3
+          },
+          "boundary_observations": 1,
+          "boundary_counts": {
+            "arguments_valid": 1
+          }
+        },
+        "reasoning_recovery": {
+          "status": "observed",
+          "activation_count": 1,
+          "rounds": [
+            {
+              "after_round_index": 3,
+              "after_attempt_index": 3,
+              "consecutive_responses": 3
+            }
+          ],
+          "runtime_policy": "schema-reasoning-recovery-v1",
+          "mode": "thinking_disabled",
+          "reason": "consecutive_reasoning_only_length"
+        },
+        "provider_finish_reason_observations": 0,
+        "provider_length_count": null,
+        "draft_rejection_counts": {
+          "schema_draft.invalid_shape": null,
+          "schema_draft.too_large": null,
+          "schema_draft.invalid_sources": null,
+          "schema_draft.invalid_reference": null,
+          "schema_draft.ambiguous_reference": null,
+          "schema_draft.partial_word": null,
+          "schema_draft.source_order": null,
+          "schema_draft.reference_limit": null,
+          "schema_draft.invalid_name": null,
+          "schema_draft.unnecessary_fallback": null,
+          "schema_draft.name_collision": null,
+          "schema_draft.invalid_attribute": null,
+          "schema_draft.depth_exceeded": null,
+          "schema_draft.property_limit": null,
+          "schema_draft.other_rejection": null
+        },
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 15347,
+        "output_tokens": 24929,
+        "usage_observations": 4,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "fallback_naming": {
+        "status": "not_applicable",
+        "business_nodes": null,
+        "fallback_nodes": null,
+        "fallback_ratio": null
+      },
+      "runner_version": 5,
+      "mode": "schema-only",
+      "schema_metrics_version": 2,
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "case": {
+        "id": "cisco_ios.show_sdwan_control_connections",
+        "command": "show sdwan control connections",
+        "path": "test_sets/cisco_ios.show_sdwan_control_connections",
+        "suites": [],
+        "tags": [
+          "medium"
+        ],
+        "input_scope": "default",
+        "selected_input_count": 1,
+        "selected_input": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt",
+        "selected_inputs": [
+          {
+            "input_index": 0,
+            "display_number": 1,
+            "path": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt"
+          }
+        ]
+      },
+      "trial_index": 1,
+      "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/2",
+      "started_at": "2026-09-17T17:11:27.205058+00:00",
+      "finished_at": "2026-09-17T17:13:13.022088+00:00",
+      "git": {
+        "revision": "500a69b90da405b320a67cd8c7cad4ca34e115b4",
+        "dirty": true
+      }
+    },
+    {
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "exception_type": null,
+      "trace_id": "87617d04-1dd3-fdcf-e718-a0e205890416",
+      "schema_submissions": 1,
+      "schema_agent_rounds": 4,
+      "termination_reason": "success",
+      "structure": {
+        "property_count": 17,
+        "leaf_count": 16,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 16
+        },
+        "required_count": 17,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 18,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "elapsed_seconds": 105.21800000000076,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 105.1869999999999,
+        "observed_confirmations": 0,
+        "compiler_facts": [],
+        "source_display": {
+          "sampling_observations": 1,
+          "input_prepared_observations": 1,
+          "original_chars": 1640,
+          "sampled_chars": 1640,
+          "truncated_inputs": 0,
+          "input_count": 1,
+          "input_fits": true,
+          "prepared_message_chars": 1765,
+          "prepared_minus_sampled_chars": 125
+        },
+        "protocol": {
+          "repair_observations": 3,
+          "category_counts": {
+            "no_tool": 3
+          },
+          "boundary_observations": 1,
+          "boundary_counts": {
+            "arguments_valid": 1
+          }
+        },
+        "reasoning_recovery": {
+          "status": "observed",
+          "activation_count": 1,
+          "rounds": [
+            {
+              "after_round_index": 3,
+              "after_attempt_index": 3,
+              "consecutive_responses": 3
+            }
+          ],
+          "runtime_policy": "schema-reasoning-recovery-v1",
+          "mode": "thinking_disabled",
+          "reason": "consecutive_reasoning_only_length"
+        },
+        "provider_finish_reason_observations": 0,
+        "provider_length_count": null,
+        "draft_rejection_counts": {
+          "schema_draft.invalid_shape": null,
+          "schema_draft.too_large": null,
+          "schema_draft.invalid_sources": null,
+          "schema_draft.invalid_reference": null,
+          "schema_draft.ambiguous_reference": null,
+          "schema_draft.partial_word": null,
+          "schema_draft.source_order": null,
+          "schema_draft.reference_limit": null,
+          "schema_draft.invalid_name": null,
+          "schema_draft.unnecessary_fallback": null,
+          "schema_draft.name_collision": null,
+          "schema_draft.invalid_attribute": null,
+          "schema_draft.depth_exceeded": null,
+          "schema_draft.property_limit": null,
+          "schema_draft.other_rejection": null
+        },
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 15347,
+        "output_tokens": 24933,
+        "usage_observations": 4,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "fallback_naming": {
+        "status": "not_applicable",
+        "business_nodes": null,
+        "fallback_nodes": null,
+        "fallback_ratio": null
+      },
+      "runner_version": 5,
+      "mode": "schema-only",
+      "schema_metrics_version": 2,
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "case": {
+        "id": "cisco_ios.show_sdwan_control_connections",
+        "command": "show sdwan control connections",
+        "path": "test_sets/cisco_ios.show_sdwan_control_connections",
+        "suites": [],
+        "tags": [
+          "medium"
+        ],
+        "input_scope": "default",
+        "selected_input_count": 1,
+        "selected_input": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt",
+        "selected_inputs": [
+          {
+            "input_index": 0,
+            "display_number": 1,
+            "path": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt"
+          }
+        ]
+      },
+      "trial_index": 2,
+      "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/3",
+      "started_at": "2026-09-17T17:11:27.212058+00:00",
+      "finished_at": "2026-09-17T17:13:12.425072+00:00",
+      "git": {
+        "revision": "500a69b90da405b320a67cd8c7cad4ca34e115b4",
+        "dirty": true
+      }
+    },
+    {
+      "generation_success": true,
+      "proposal_revalidated": true,
+      "exception_type": null,
+      "trace_id": "c0177423-4080-dad5-c3cf-0927d7a6e5da",
+      "schema_submissions": 1,
+      "schema_agent_rounds": 3,
+      "termination_reason": "success",
+      "structure": {
+        "property_count": 3,
+        "leaf_count": 2,
+        "max_depth": 3,
+        "type_counts": {
+          "object": 2,
+          "array": 1,
+          "string": 2
+        },
+        "required_count": 0,
+        "description_count": 0,
+        "description_coverage": 0.0,
+        "reference_path_missing_count": 17,
+        "reference_path_added_count": 4,
+        "reference_type_difference_count": 0,
+        "reference_required_difference_count": 0
+      },
+      "elapsed_seconds": 97.60900000000038,
+      "observations": {
+        "observed_submissions": 1,
+        "first_submission_accepted": true,
+        "first_frozen_seconds": 97.59300000000076,
+        "observed_confirmations": 0,
+        "compiler_facts": [],
+        "source_display": {
+          "sampling_observations": 1,
+          "input_prepared_observations": 1,
+          "original_chars": 1640,
+          "sampled_chars": 1640,
+          "truncated_inputs": 0,
+          "input_count": 1,
+          "input_fits": true,
+          "prepared_message_chars": 1765,
+          "prepared_minus_sampled_chars": 125
+        },
+        "protocol": {
+          "repair_observations": 2,
+          "category_counts": {
+            "no_tool": 2
+          },
+          "boundary_observations": 1,
+          "boundary_counts": {
+            "arguments_valid": 1
+          }
+        },
+        "reasoning_recovery": {
+          "status": "unavailable",
+          "activation_count": null,
+          "rounds": [],
+          "runtime_policy": null,
+          "mode": null,
+          "reason": null
+        },
+        "provider_finish_reason_observations": 0,
+        "provider_length_count": null,
+        "draft_rejection_counts": {
+          "schema_draft.invalid_shape": null,
+          "schema_draft.too_large": null,
+          "schema_draft.invalid_sources": null,
+          "schema_draft.invalid_reference": null,
+          "schema_draft.ambiguous_reference": null,
+          "schema_draft.partial_word": null,
+          "schema_draft.source_order": null,
+          "schema_draft.reference_limit": null,
+          "schema_draft.invalid_name": null,
+          "schema_draft.unnecessary_fallback": null,
+          "schema_draft.name_collision": null,
+          "schema_draft.invalid_attribute": null,
+          "schema_draft.depth_exceeded": null,
+          "schema_draft.property_limit": null,
+          "schema_draft.other_rejection": null
+        },
+        "rejection_counts": {
+          "schema.python_keyword_property_name": 0,
+          "schema.invalid_property_name": 0,
+          "schema.reserved_scalar_field_name": 0,
+          "schema.other_rejection": 0
+        },
+        "input_tokens": 11484,
+        "output_tokens": 24576,
+        "usage_observations": 3,
+        "reasoning_tokens": null,
+        "submission_observation_complete": true
+      },
+      "fallback_naming": {
+        "status": "not_applicable",
+        "business_nodes": null,
+        "fallback_nodes": null,
+        "fallback_ratio": null
+      },
+      "runner_version": 5,
+      "mode": "schema-only",
+      "schema_metrics_version": 2,
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "case": {
+        "id": "cisco_ios.show_sdwan_control_connections",
+        "command": "show sdwan control connections",
+        "path": "test_sets/cisco_ios.show_sdwan_control_connections",
+        "suites": [],
+        "tags": [
+          "medium"
+        ],
+        "input_scope": "default",
+        "selected_input_count": 1,
+        "selected_input": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt",
+        "selected_inputs": [
+          {
+            "input_index": 0,
+            "display_number": 1,
+            "path": "test_sets/cisco_ios.show_sdwan_control_connections/inputs/001.txt"
+          }
+        ]
+      },
+      "trial_index": 3,
+      "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/4",
+      "started_at": "2026-09-17T17:11:27.219746+00:00",
+      "finished_at": "2026-09-17T17:13:04.828964+00:00",
+      "git": {
+        "revision": "500a69b90da405b320a67cd8c7cad4ca34e115b4",
+        "dirty": true
+      }
+    }
+  ],
+  "contract_consistency": {
+    "cisco_ios.show_sdwan_control_connections": {
+      "schema_metrics_version": 2,
+      "valid_trial_ids": [
+        "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/2",
+        "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/3",
+        "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/4"
+      ],
+      "contract_variants": 3,
+      "dominant_contract_share": 0.3333333333333333,
+      "pair_count": 3,
+      "contract_equal_pair_count": 0,
+      "pairwise_contract_consistency": 0.0,
+      "mean_path_overlap": 0.4148148148148148,
+      "differences": {
+        "path": {
+          "affected_pairs": 3,
+          "node_count": 32,
+          "comparable_nodes": 56
+        },
+        "container_type": {
+          "affected_pairs": 0,
+          "node_count": 0,
+          "comparable_nodes": 27
+        },
+        "scalar_type": {
+          "affected_pairs": 0,
+          "node_count": 0,
+          "comparable_nodes": 27
+        },
+        "required": {
+          "affected_pairs": 2,
+          "node_count": 6,
+          "comparable_nodes": 21
+        },
+        "constraint": {
+          "affected_pairs": 0,
+          "node_count": 0,
+          "comparable_nodes": 27
+        },
+        "annotation": {
+          "affected_pairs": 0,
+          "node_count": 0,
+          "comparable_nodes": 27
+        }
+      },
+      "pairs": [
+        {
+          "left_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/2",
+          "right_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/3",
+          "structure_equal": false,
+          "contract_equal": false,
+          "path_set_equal": false,
+          "path_intersection_count": 16,
+          "path_union_count": 20,
+          "path_difference_count": 4,
+          "path_overlap": 0.8,
+          "type_comparable_nodes": 17,
+          "container_type_difference_count": 0,
+          "scalar_type_difference_count": 0,
+          "required_comparable_nodes": 15,
+          "required_difference_count": 0,
+          "constraint_comparable_nodes": 17,
+          "constraint_difference_count": 0,
+          "annotation_comparable_nodes": 17,
+          "annotation_difference_count": 0
+        },
+        {
+          "left_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/2",
+          "right_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/4",
+          "structure_equal": false,
+          "contract_equal": false,
+          "path_set_equal": false,
+          "path_intersection_count": 4,
+          "path_union_count": 18,
+          "path_difference_count": 14,
+          "path_overlap": 0.2222222222222222,
+          "type_comparable_nodes": 5,
+          "container_type_difference_count": 0,
+          "scalar_type_difference_count": 0,
+          "required_comparable_nodes": 3,
+          "required_difference_count": 3,
+          "constraint_comparable_nodes": 5,
+          "constraint_difference_count": 0,
+          "annotation_comparable_nodes": 5,
+          "annotation_difference_count": 0
+        },
+        {
+          "left_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/3",
+          "right_trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/4",
+          "structure_equal": false,
+          "contract_equal": false,
+          "path_set_equal": false,
+          "path_intersection_count": 4,
+          "path_union_count": 18,
+          "path_difference_count": 14,
+          "path_overlap": 0.2222222222222222,
+          "type_comparable_nodes": 5,
+          "container_type_difference_count": 0,
+          "scalar_type_difference_count": 0,
+          "required_comparable_nodes": 3,
+          "required_difference_count": 3,
+          "constraint_comparable_nodes": 5,
+          "constraint_difference_count": 0,
+          "annotation_comparable_nodes": 5,
+          "annotation_difference_count": 0
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "telemetry_version": 2,
+    "run_id": "20260917T171125.667859Z",
+    "stage": "sdwan",
+    "mode": "schema-only",
+    "configured_model": "deepseek-v4-flash",
+    "configured_max_tokens": 8192,
+    "trials": [
+      {
+        "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/1",
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trace_id": "2a0775ff-a4b7-866b-29cb-c0b874533040",
+        "trial_seconds": 106.8119999999999,
+        "status": "observed",
+        "model_identifier_query_status": "observed",
+        "expected_model_calls": 4,
+        "call_count_matches_summary": true,
+        "calls": [
+          {
+            "span_id": "00000000-0000-0000-855b-7dd1f2cd9604",
+            "input_tokens": 3798,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009916104,
+            "duration_seconds": 33.3696,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-4855-072d518dccdf",
+            "input_tokens": 3828,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009925103999999999,
+            "duration_seconds": 34.110988,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-35b3-089f5939842f",
+            "input_tokens": 3858,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009896472,
+            "duration_seconds": 33.121893,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-a1a9-a873662f35c3",
+            "input_tokens": 3863,
+            "output_tokens": 357,
+            "reasoning_tokens": null,
+            "cost_usd": 0.0015873,
+            "duration_seconds": 1.64695,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "tool_calls": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 0,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          }
+        ],
+        "observed_model_calls": 4,
+        "input_tokens_observations": 4,
+        "input_tokens_observed_sum": 15347,
+        "output_tokens_observations": 4,
+        "output_tokens_observed_sum": 24933,
+        "reasoning_tokens_observations": 3,
+        "reasoning_tokens_observed_sum": 24576,
+        "cost_usd_observations": 4,
+        "cost_usd_observed_sum": 0.03132498,
+        "duration_seconds_observations": 4,
+        "duration_seconds_observed_sum": 102.249431,
+        "provider_finish_reasons": {
+          "length": 3,
+          "tool_calls": 1
+        },
+        "output_message_observations": 4,
+        "calls_without_output_observation": 0,
+        "thinking_only_observations": 4,
+        "thinking_only_length_count": 3,
+        "request_max_tokens_observations": 4,
+        "request_max_tokens_values": [
+          8192
+        ]
+      },
+      {
+        "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/2",
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trace_id": "8df94a5c-09e4-9335-9c20-4561ea574e5d",
+        "trial_seconds": 105.82799999999952,
+        "status": "observed",
+        "model_identifier_query_status": "observed",
+        "expected_model_calls": 4,
+        "call_count_matches_summary": true,
+        "calls": [
+          {
+            "span_id": "00000000-0000-0000-1382-72d057b81176",
+            "input_tokens": 3798,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009916104,
+            "duration_seconds": 34.570706,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-67d7-3865fbae1dc5",
+            "input_tokens": 3828,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009925103999999999,
+            "duration_seconds": 33.571455,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-5513-715722a67983",
+            "input_tokens": 3858,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009896472,
+            "duration_seconds": 32.63954,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-4e3f-fe8e3d5efe02",
+            "input_tokens": 3863,
+            "output_tokens": 353,
+            "reasoning_tokens": null,
+            "cost_usd": 0.000491172,
+            "duration_seconds": 1.303486,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "tool_calls": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 0,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          }
+        ],
+        "observed_model_calls": 4,
+        "input_tokens_observations": 4,
+        "input_tokens_observed_sum": 15347,
+        "output_tokens_observations": 4,
+        "output_tokens_observed_sum": 24929,
+        "reasoning_tokens_observations": 3,
+        "reasoning_tokens_observed_sum": 24576,
+        "cost_usd_observations": 4,
+        "cost_usd_observed_sum": 0.030228852,
+        "duration_seconds_observations": 4,
+        "duration_seconds_observed_sum": 102.085187,
+        "provider_finish_reasons": {
+          "length": 3,
+          "tool_calls": 1
+        },
+        "output_message_observations": 4,
+        "calls_without_output_observation": 0,
+        "thinking_only_observations": 4,
+        "thinking_only_length_count": 3,
+        "request_max_tokens_observations": 4,
+        "request_max_tokens_values": [
+          8192
+        ]
+      },
+      {
+        "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/3",
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trace_id": "87617d04-1dd3-fdcf-e718-a0e205890416",
+        "trial_seconds": 105.21800000000076,
+        "status": "observed",
+        "model_identifier_query_status": "observed",
+        "expected_model_calls": 4,
+        "call_count_matches_summary": true,
+        "calls": [
+          {
+            "span_id": "00000000-0000-0000-b952-a36de7349c62",
+            "input_tokens": 3798,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009916104,
+            "duration_seconds": 32.715569,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-0a36-bee35fd21fe2",
+            "input_tokens": 3828,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009925103999999999,
+            "duration_seconds": 32.674257,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-9dbe-34371fde57b8",
+            "input_tokens": 3858,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009896472,
+            "duration_seconds": 32.939586,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-2f41-dfdb9f28ac0d",
+            "input_tokens": 3863,
+            "output_tokens": 357,
+            "reasoning_tokens": null,
+            "cost_usd": 0.0015873,
+            "duration_seconds": 2.463865,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "tool_calls": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 0,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          }
+        ],
+        "observed_model_calls": 4,
+        "input_tokens_observations": 4,
+        "input_tokens_observed_sum": 15347,
+        "output_tokens_observations": 4,
+        "output_tokens_observed_sum": 24933,
+        "reasoning_tokens_observations": 3,
+        "reasoning_tokens_observed_sum": 24576,
+        "cost_usd_observations": 4,
+        "cost_usd_observed_sum": 0.03132498,
+        "duration_seconds_observations": 4,
+        "duration_seconds_observed_sum": 100.793277,
+        "provider_finish_reasons": {
+          "length": 3,
+          "tool_calls": 1
+        },
+        "output_message_observations": 4,
+        "calls_without_output_observation": 0,
+        "thinking_only_observations": 4,
+        "thinking_only_length_count": 3,
+        "request_max_tokens_observations": 4,
+        "request_max_tokens_values": [
+          8192
+        ]
+      },
+      {
+        "trial_id": "20260917T171125.667859Z/cisco_ios.show_sdwan_control_connections/4",
+        "case_id": "cisco_ios.show_sdwan_control_connections",
+        "trace_id": "c0177423-4080-dad5-c3cf-0927d7a6e5da",
+        "trial_seconds": 97.60900000000038,
+        "status": "observed",
+        "model_identifier_query_status": "observed",
+        "expected_model_calls": 3,
+        "call_count_matches_summary": true,
+        "calls": [
+          {
+            "span_id": "00000000-0000-0000-4ceb-37845631f3c0",
+            "input_tokens": 3798,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009916104,
+            "duration_seconds": 30.386475,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-0a31-58fa15ae04c7",
+            "input_tokens": 3828,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8192,
+            "cost_usd": 0.009925103999999999,
+            "duration_seconds": 31.553101,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 1,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          },
+          {
+            "span_id": "00000000-0000-0000-05be-c741cadd4907",
+            "input_tokens": 3858,
+            "output_tokens": 8192,
+            "reasoning_tokens": 8078,
+            "cost_usd": 0.009896472,
+            "duration_seconds": 31.353937,
+            "request_max_tokens": 8192,
+            "output_message_observations": 1,
+            "provider_finish_reasons": {
+              "length": 1
+            },
+            "thinking_only_observations": 1,
+            "thinking_only_length_count": 0,
+            "request_model": "deepseek-v4-flash",
+            "request_model_status": "observed",
+            "response_model": "deepseek-flash",
+            "response_model_status": "observed"
+          }
+        ],
+        "observed_model_calls": 3,
+        "input_tokens_observations": 3,
+        "input_tokens_observed_sum": 11484,
+        "output_tokens_observations": 3,
+        "output_tokens_observed_sum": 24576,
+        "reasoning_tokens_observations": 3,
+        "reasoning_tokens_observed_sum": 24462,
+        "cost_usd_observations": 3,
+        "cost_usd_observed_sum": 0.02973768,
+        "duration_seconds_observations": 3,
+        "duration_seconds_observed_sum": 93.293513,
+        "provider_finish_reasons": {
+          "length": 3
+        },
+        "output_message_observations": 3,
+        "calls_without_output_observation": 0,
+        "thinking_only_observations": 3,
+        "thinking_only_length_count": 2,
+        "request_max_tokens_observations": 3,
+        "request_max_tokens_values": [
+          8192
+        ]
+      }
+    ],
+    "summary": {
+      "observed_model_calls": 15,
+      "input_tokens_observations": 15,
+      "input_tokens_observed_sum": 57525,
+      "output_tokens_observations": 15,
+      "output_tokens_observed_sum": 99371,
+      "reasoning_tokens_observations": 12,
+      "reasoning_tokens_observed_sum": 98190,
+      "cost_usd_observations": 15,
+      "cost_usd_observed_sum": 0.122616492,
+      "duration_seconds_observations": 15,
+      "duration_seconds_observed_sum": 398.421408,
+      "provider_finish_reasons": {
+        "length": 12,
+        "tool_calls": 3
+      },
+      "output_message_observations": 15,
+      "calls_without_output_observation": 0,
+      "thinking_only_observations": 15,
+      "thinking_only_length_count": 11,
+      "request_max_tokens_observations": 15,
+      "request_max_tokens_values": [
+        8192
+      ],
+      "trial_count": 4,
+      "trial_status_counts": {
+        "observed": 4
+      },
+      "trial_seconds_median": 105.52300000000014,
+      "call_count_match_trials": 4,
+      "call_count_mismatch_trials": 0,
+      "call_count_unknown_trials": 0,
+      "request_model_status_counts": {
+        "observed": 15
+      },
+      "request_model_counts": {
+        "deepseek-v4-flash": 15
+      },
+      "response_model_status_counts": {
+        "observed": 15
+      },
+      "response_model_counts": {
+        "deepseek-flash": 15
+      }
+    },
+    "cases": {
+      "cisco_ios.show_sdwan_control_connections": {
+        "observed_model_calls": 15,
+        "input_tokens_observations": 15,
+        "input_tokens_observed_sum": 57525,
+        "output_tokens_observations": 15,
+        "output_tokens_observed_sum": 99371,
+        "reasoning_tokens_observations": 12,
+        "reasoning_tokens_observed_sum": 98190,
+        "cost_usd_observations": 15,
+        "cost_usd_observed_sum": 0.122616492,
+        "duration_seconds_observations": 15,
+        "duration_seconds_observed_sum": 398.421408,
+        "provider_finish_reasons": {
+          "length": 12,
+          "tool_calls": 3
+        },
+        "output_message_observations": 15,
+        "calls_without_output_observation": 0,
+        "thinking_only_observations": 15,
+        "thinking_only_length_count": 11,
+        "request_max_tokens_observations": 15,
+        "request_max_tokens_values": [
+          8192
+        ],
+        "trial_count": 4,
+        "trial_status_counts": {
+          "observed": 4
+        },
+        "trial_seconds_median": 105.52300000000014,
+        "call_count_match_trials": 4,
+        "call_count_mismatch_trials": 0,
+        "call_count_unknown_trials": 0,
+        "request_model_status_counts": {
+          "observed": 15
+        },
+        "request_model_counts": {
+          "deepseek-v4-flash": 15
+        },
+        "response_model_status_counts": {
+          "observed": 15
+        },
+        "response_model_counts": {
+          "deepseek-flash": 15
+        }
+      }
+    }
+  },
+  "preflight_probe": {
+    "verified_at": "2026-09-17T17:04:44.438354+00:00",
+    "trace_id": "41988dfc-88db-bebf-497c-149acf392ad9",
+    "span_count": 1,
+    "status": "success",
+    "ingestion_and_sql_verified": true,
+    "body_read_verified": true,
+    "query_attempts": 1
+  },
+  "offline_checks": {
+    "pytest_passed": 1538,
+    "javascript_passed": 31,
+    "baseline_default_passed": 16,
+    "baseline_full_passed": 16,
+    "template_smoke_passed": 1,
+    "ruff": "passed",
+    "format": "passed",
+    "diff": "passed",
+    "prompt_and_tools_unchanged": true
+  },
+  "mechanisms": {
+    "reasoning_recovery_activated_trials": 3,
+    "post_recovery_generation_successes": 2,
+    "post_recovery_acceptable_trials": 0,
+    "truncated_tool_frozen_trials": 1,
+    "malformed_envelope_trials": 1,
+    "local_color_split_trials": 2,
+    "incomplete_final_proposal_trials": 1,
+    "shutdown_generator_warning": true
+  },
+  "review_summary": {
+    "review_version": 2,
+    "schema_metrics_version": 2,
+    "run_id": "20260917T171125.667859Z",
+    "parseability": "not_tested",
+    "planned_trials": 4,
+    "planned_pairs": 6,
+    "generation_failed_trials": 1,
+    "revalidation_failed_trials": 0,
+    "reviewed_trials": 4,
+    "missing_trial_reviews": 0,
+    "acceptable_trials": 0,
+    "needs_revision_trials": 3,
+    "unjudgeable_trials": 1,
+    "reasonable_proposal_rate": 0.0,
+    "valid_pairs": 3,
+    "reviewed_pairs": 3,
+    "missing_pair_reviews": 0,
+    "unknown_annotation_pairs": 0,
+    "reasonable_pairs": 0,
+    "confirmed_reasonable_consistent_pairs": 0,
+    "reasonable_pair_consistency": null,
+    "planned_pair_confirmed_rate": 0.0,
+    "all_repeats_reasonable_consistent": {
+      "cisco_ios.show_sdwan_control_connections": false
+    },
+    "policy_compliance": {
+      "planned_trials": 4,
+      "trial_counts": {
+        "compliant": 0,
+        "issue": 2,
+        "unknown": 1,
+        "failed": 1,
+        "missing": 0
+      },
+      "checks": {
+        "container_name_source": {
+          "insufficient_evidence": 1,
+          "issue": 0,
+          "not_applicable": 0,
+          "passed": 3
+        },
+        "fallback_and_collision": {
+          "insufficient_evidence": 1,
+          "issue": 2,
+          "not_applicable": 0,
+          "passed": 1
+        },
+        "fixed_role_sections": {
+          "insufficient_evidence": 1,
+          "issue": 0,
+          "not_applicable": 3,
+          "passed": 0
+        },
+        "ownership_and_wrappers": {
+          "insufficient_evidence": 1,
+          "issue": 0,
+          "not_applicable": 0,
+          "passed": 3
+        },
+        "qualifier_ownership": {
+          "insufficient_evidence": 2,
+          "issue": 2,
+          "not_applicable": 0,
+          "passed": 0
+        },
+        "repeated_entities": {
+          "insufficient_evidence": 1,
+          "issue": 0,
+          "not_applicable": 0,
+          "passed": 3
+        },
+        "root_scope": {
+          "insufficient_evidence": 1,
+          "issue": 0,
+          "not_applicable": 0,
+          "passed": 3
+        },
+        "source_label_fidelity": {
+          "insufficient_evidence": 2,
+          "issue": 2,
+          "not_applicable": 0,
+          "passed": 0
+        }
+      },
+      "missing_trial_reviews": 0,
+      "passed_trials": 0,
+      "pass_rate": 0.0,
+      "evidence_complete": false,
+      "by_case": {
+        "cisco_ios.show_sdwan_control_connections": {
+          "planned_trials": 4,
+          "trial_counts": {
+            "compliant": 0,
+            "issue": 2,
+            "unknown": 1,
+            "failed": 1,
+            "missing": 0
+          },
+          "passed_trials": 0
+        }
+      }
+    },
+    "pair_consistency_review": {
+      "naming_consistency": {
+        "valid_pairs": 3,
+        "reviewed_pairs": 3,
+        "missing_pairs": 0,
+        "consistent": 0,
+        "different": 1,
+        "unknown": 2,
+        "judgeable_pairs": 1,
+        "consistent_valid_pair_rate": 0.0,
+        "consistent_judgeable_pair_rate": 0.0
+      },
+      "hierarchy_consistency": {
+        "valid_pairs": 3,
+        "reviewed_pairs": 3,
+        "missing_pairs": 0,
+        "consistent": 1,
+        "different": 0,
+        "unknown": 2,
+        "judgeable_pairs": 1,
+        "consistent_valid_pair_rate": 0.3333333333333333,
+        "consistent_judgeable_pair_rate": 1.0
+      }
+    },
+    "review_complete": true
+  }
+}
