@@ -287,4 +287,5 @@ SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数
 
 来源定位恢复实验只投影受控状态、来源量、跳过量、序列与估算Token，不持久化逐字
 定位视图。模型提示仍v48，额外恢复指导与runtime_policy单列，历史恢复事件保持兼容。
-只有先通过SD-WAN四次完整业务与规则审阅才进入其余13例保护，见 [协议](schema-source-recovery-v1.md)。
+该实验 SD-WAN 生成 0/4，未进入其余13例保护；运行接线撤下，数值指标继续兼容历史读取。
+见 [结果](schema-source-recovery-v1-results.md)。

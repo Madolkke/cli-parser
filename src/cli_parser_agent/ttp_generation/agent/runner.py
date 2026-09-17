@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
 from agentscope.event import (
@@ -39,7 +39,6 @@ from agentscope.model import FinishedReason
 
 from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
-from .model_attempts import ObservedOpenAIChatModel
 from .prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
@@ -247,97 +246,6 @@ def _retry_message(
     return UserMsg(name="user", content=content)
 
 
-async def _schema_source_retry_message(
-    agent: Any,
-    initial_message: Any,
-    retry_message: UserMsg,
-    session: GenerationSession,
-    progress: ProgressEmitter | None,
-) -> UserMsg:
-    """Add literal positions only while original input and context room remain."""
-
-    if not isinstance(getattr(agent, "model", None), ObservedOpenAIChatModel):
-        return retry_message
-    if not session.has_time_for_another_round():
-        return retry_message
-    view = agent.model.take_schema_source_view()
-    if view is None:
-        return retry_message
-    estimated_tokens: int | None = None
-
-    def emit(status: str) -> None:
-        if progress is not None:
-            progress.custom(
-                "cli_parser.schema.source_view",
-                {
-                    "runtime_policy": "schema-source-recovery-v1",
-                    "status": status,
-                    "round_index": session.agent_rounds,
-                    "attempt_index": session.model_attempts_observed,
-                    "estimated_tokens": estimated_tokens,
-                    **asdict(view.facts),
-                },
-                phase="schema",
-                sensitive=False,
-            )
-
-    def original_present(messages: list[Any]) -> bool:
-        return not agent.state.summary and any(
-            item.role == initial_message.role
-            and item.get_content_blocks() == initial_message.get_content_blocks()
-            for item in messages
-        )
-
-    if not session.has_time_for_another_round():
-        emit("skipped_deadline")
-        return retry_message
-    if view.text is None:
-        emit("skipped_no_source")
-        return retry_message
-    if not original_present(agent.state.context):
-        emit("skipped_history")
-        return retry_message
-    candidate = UserMsg(
-        name="user",
-        content=[*retry_message.get_content_blocks(), TextBlock(text=view.text)],
-    )
-    try:
-        prepared = await agent._prepare_model_input()
-    except Exception:
-        emit("skipped_count")
-        return retry_message
-    if not session.has_time_for_another_round():
-        emit("skipped_deadline")
-        return retry_message
-    if not original_present(prepared["messages"]):
-        emit("skipped_history")
-        return retry_message
-    try:
-        estimated_tokens = await agent.model.count_tokens(
-            [*prepared["messages"], candidate], prepared["tools"]
-        )
-    except Exception:
-        emit("skipped_count")
-        return retry_message
-    if not session.has_time_for_another_round():
-        emit("skipped_deadline")
-        return retry_message
-    if not original_present(agent.state.context):
-        emit("skipped_history")
-        return retry_message
-    context_size = agent.model.context_size
-    max_input_tokens = min(
-        context_size * 0.5,
-        context_size * agent.context_config.trigger_ratio,
-        context_size - (agent.model.parameters.max_tokens or 0),
-    )
-    if estimated_tokens >= max_input_tokens:
-        emit("skipped_context")
-        return retry_message
-    emit("injected")
-    return candidate
-
-
 def _expected_tool_names(phase: GenerationPhase) -> tuple[str, ...]:
     if phase == "schema":
         return (SUBMIT_SCHEMA_TOOL_NAME,)
@@ -483,7 +391,6 @@ async def _run_generation_phase(
     """Repair protocol failures without retaining rejected calls or outputs."""
 
     expected_tools = await _registered_phase_tools(agent, phase)
-    initial_message = deepcopy(message) if phase == "schema" else None
     exceeded_max_iters = False
     stopped_after_terminal_tool = False
     model_no_tool_retry_limit = False
@@ -949,15 +856,6 @@ async def _run_generation_phase(
         if session.agent_rounds >= session.max_agent_rounds:
             exceeded_max_iters = True
             break
-        next_message = _retry_message(phase, expected_tools)
-        if phase == "schema":
-            if stop_for_deadline():
-                break
-            next_message = await _schema_source_retry_message(
-                agent, initial_message, next_message, session, progress
-            )
-            if stop_for_deadline():
-                break
         session.record_no_tool_retry(phase)
         if progress is not None:
             retry_number = (
@@ -979,6 +877,7 @@ async def _run_generation_phase(
                 phase=phase,
                 sensitive=False,
             )
+        next_message = _retry_message(phase, expected_tools)
 
     phase_completed = _phase_completed(session, phase)
     if (

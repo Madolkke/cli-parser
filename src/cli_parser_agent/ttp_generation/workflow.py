@@ -35,7 +35,6 @@ from .agent import (
     estimate_initial_model_tokens,
     run_generation_phase,
 )
-from .agent.model_attempts import ObservedOpenAIChatModel
 from .contracts import (
     ArtifactBundle,
     GenerationMetadata,
@@ -1134,8 +1133,6 @@ class _GenerationWorkflow:
 
             if phase == "schema":
                 self.schema_sampled = candidate_sample
-                if isinstance(getattr(agent, "model", None), ObservedOpenAIChatModel):
-                    agent.model.configure_schema_source_samples(tuple(candidate_sample))
             else:
                 self.ttp_sampled = candidate_sample
             texts = [item.text for item in candidate_sample]

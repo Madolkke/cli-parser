@@ -1,0 +1,131 @@
+{
+  "review_version": 2,
+  "run_id": "20260917T180854.565223Z",
+  "trials": [
+    {
+      "trial_id": "20260917T180854.565223Z/cisco_ios.show_sdwan_control_connections/1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "56146761-5d9e-3abb-e1dd-a53e2605f775",
+      "span_ids": [
+        "00000000-0000-0000-ae78-89cb5ab62c30"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T180854.565223Z/cisco_ios.show_sdwan_control_connections/2",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "80af734b-5bf9-7688-ac86-0486e5b00570",
+      "span_ids": [
+        "00000000-0000-0000-c41f-81a59d203895"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T180854.565223Z/cisco_ios.show_sdwan_control_connections/3",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "b9dbc627-a86c-755c-6f4d-7dec92cddcae",
+      "span_ids": [
+        "00000000-0000-0000-7994-6ecef6ec1732"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T180854.565223Z/cisco_ios.show_sdwan_control_connections/4",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "f34fc2b3-7123-491e-316d-d8b18c6d513a",
+      "span_ids": [
+        "00000000-0000-0000-bc6c-58aeca44df0c"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    }
+  ],
+  "pairs": []
+}

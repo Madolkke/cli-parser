@@ -24,8 +24,6 @@ from opentelemetry import trace as otel_trace
 
 from ...observability import finish_laminar_span
 from ..progress import ProgressEmitter
-from ..sampling import SampledCommandOutput
-from .schema_source_view import SchemaSourceView, build_schema_source_view
 from .session import GenerationPhase, GenerationSession
 
 _T = TypeVar("_T")
@@ -322,42 +320,6 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
         self._provider_reply_facts: _ProviderReplyFacts | None = None
-        self._schema_source_samples: tuple[SampledCommandOutput, ...] | None = None
-        self._schema_source_view_used = False
-
-    def configure_schema_source_samples(
-        self, samples: tuple[SampledCommandOutput, ...]
-    ) -> None:
-        """Keep only the already-fitted Schema sources for this request."""
-
-        if self._attempt_recorder.phase != "schema":
-            return
-        if self._schema_source_samples is not None:
-            raise RuntimeError("Schema source samples are already configured")
-        self._schema_source_samples = samples
-
-    def take_schema_source_view(self) -> SchemaSourceView | None:
-        """Offer literal source positions once after completed reasoning exhaustion."""
-
-        facts = self._provider_reply_facts
-        recorder = self._attempt_recorder
-        if (
-            recorder.phase != "schema"
-            or self._schema_source_samples is None
-            or self._schema_source_view_used
-            or facts is None
-            or not facts.completed
-            or facts.round_index != recorder.session.agent_rounds
-            or facts.attempt_index != recorder.session.model_attempts_observed
-            or facts.finished_reason != "length"
-            or not facts.reasoning_present
-            or facts.text_present
-        ):
-            return None
-        # Tool suffixes with provider length are discarded before execution;
-        # they do not constitute a completed submission.
-        self._schema_source_view_used = True
-        return build_schema_source_view(self._schema_source_samples)
 
     def _parse_completion_response(
         self, start_datetime: datetime, response: Any, audio_format: str = "wav"
