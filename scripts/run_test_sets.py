@@ -750,6 +750,9 @@ class _SchemaTracer:
         self.protocol_boundaries = []
         self.reasoning_recovery_count = 0
         self.reasoning_recovery_rounds = []
+        self.reasoning_recovery_policy = None
+        self.truncated_submission_count = 0
+        self.truncated_submission_rounds = []
         self._last_schema_submission = 0
 
     def _observe_source_and_protocol(self, event):
@@ -825,9 +828,19 @@ class _SchemaTracer:
                     "after_round_index",
                     "after_attempt_index",
                 }
-                and value["runtime_policy"] == "schema-reasoning-recovery-v1"
-                and value["mode"] == "thinking_disabled"
-                and value["reason"] == "consecutive_reasoning_only_length"
+                and (value["runtime_policy"], value["mode"], value["reason"])
+                in (
+                    (
+                        "schema-reasoning-recovery-v1",
+                        "thinking_disabled",
+                        "consecutive_reasoning_only_length",
+                    ),
+                    (
+                        "schema-reasoning-recovery-v2",
+                        "reasoning_low",
+                        "consecutive_reasoning_length",
+                    ),
+                )
                 and type(value["consecutive_responses"]) is int
                 and value["consecutive_responses"] == 3
                 and all(
@@ -835,6 +848,12 @@ class _SchemaTracer:
                     for key in ("after_round_index", "after_attempt_index")
                 )
             ):
+                policy = {
+                    key: value[key] for key in ("runtime_policy", "mode", "reason")
+                }
+                if self.reasoning_recovery_policy not in (None, policy):
+                    return
+                self.reasoning_recovery_policy = policy
                 self.reasoning_recovery_count += 1
                 if len(self.reasoning_recovery_rounds) < 32:
                     self.reasoning_recovery_rounds.append(
@@ -844,6 +863,35 @@ class _SchemaTracer:
                                 "after_round_index",
                                 "after_attempt_index",
                                 "consecutive_responses",
+                            )
+                        }
+                    )
+        elif event.name == "cli_parser.schema.truncated_submission_discarded":
+            if (
+                set(value)
+                == {
+                    "reason",
+                    "discarded_tool_calls",
+                    "round_index",
+                    "attempt_index",
+                    "runtime_policy",
+                }
+                and value["reason"] == "provider_length"
+                and value["runtime_policy"] == "schema-truncated-submission-guard-v1"
+                and all(
+                    type(value[key]) is int and value[key] > 0
+                    for key in ("discarded_tool_calls", "round_index", "attempt_index")
+                )
+            ):
+                self.truncated_submission_count += value["discarded_tool_calls"]
+                if len(self.truncated_submission_rounds) < 32:
+                    self.truncated_submission_rounds.append(
+                        {
+                            key: value[key]
+                            for key in (
+                                "discarded_tool_calls",
+                                "round_index",
+                                "attempt_index",
                             )
                         }
                     )
@@ -1060,13 +1108,21 @@ class _SchemaTracer:
                 else "unavailable",
                 "activation_count": self.reasoning_recovery_count or None,
                 "rounds": list(self.reasoning_recovery_rounds),
-                "runtime_policy": "schema-reasoning-recovery-v1"
-                if self.reasoning_recovery_count
-                else None,
-                "mode": "thinking_disabled" if self.reasoning_recovery_count else None,
-                "reason": "consecutive_reasoning_only_length"
-                if self.reasoning_recovery_count
-                else None,
+                **(
+                    self.reasoning_recovery_policy
+                    or {
+                        "runtime_policy": None,
+                        "mode": None,
+                        "reason": None,
+                    }
+                ),
+            },
+            "truncated_submission_guard": {
+                "status": "observed"
+                if self.truncated_submission_count
+                else "unavailable",
+                "discarded_tool_calls": self.truncated_submission_count or None,
+                "rounds": list(self.truncated_submission_rounds),
             },
             # AgentScope's ModelCallEndEvent is a framework finish reason;
             # it does not expose the supplier's `length` finish_reason.

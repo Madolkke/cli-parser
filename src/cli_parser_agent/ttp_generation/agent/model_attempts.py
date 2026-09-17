@@ -15,7 +15,7 @@ from typing import Any, TypeVar, cast
 from urllib.parse import urlsplit
 
 import openai
-from agentscope.message import Msg, ThinkingBlock
+from agentscope.message import Msg, ThinkingBlock, ToolCallBlock
 from agentscope.model import ChatResponse, OpenAIChatModel
 from agentscope.tool import ToolChoice
 from lmnr import Laminar
@@ -325,7 +325,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         self._schema_reasoning_recovery = False
 
     def prepare_schema_reasoning_recovery(self) -> bool:
-        """Use only an existing retry after three observed reasoning-only limits."""
+        """Reduce reasoning effort only within an already permitted retry."""
 
         recorder = self._attempt_recorder
         facts = self._provider_reply_facts
@@ -347,8 +347,10 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             facts.finished_reason == "length"
             and facts.reasoning_present
             and not facts.text_present
-            and not facts.tool_calls_present
         )
+        # Schema tool blocks in a provider-length reply are always discarded
+        # before execution. A truncated tool suffix therefore does not turn
+        # an exhausted reasoning reply into a completed submission.
         if not qualifies:
             self._reasoning_length_streak = 0
         elif facts.round_index == self._last_recovery_round + 1:
@@ -363,12 +365,12 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             recorder.progress.custom(
                 "cli_parser.schema.reasoning_recovery",
                 {
-                    "reason": "consecutive_reasoning_only_length",
+                    "reason": "consecutive_reasoning_length",
                     "consecutive_responses": self._reasoning_length_streak,
                     "after_round_index": facts.round_index,
                     "after_attempt_index": facts.attempt_index,
-                    "mode": "thinking_disabled",
-                    "runtime_policy": "schema-reasoning-recovery-v1",
+                    "mode": "reasoning_low",
+                    "runtime_policy": "schema-reasoning-recovery-v2",
                 },
                 phase="schema",
                 sensitive=False,
@@ -386,7 +388,41 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             if response.choices:
                 facts.observe(response.choices[0], response.choices[0].message)
             facts.completed = True
+            if self._discard_truncated_schema_tools(facts, result.content):
+                result.content = [
+                    block
+                    for block in result.content
+                    if not isinstance(block, ToolCallBlock)
+                ]
         return result
+
+    def _discard_truncated_schema_tools(
+        self, facts: _ProviderReplyFacts, blocks: list[Any]
+    ) -> bool:
+        """Reject provider-truncated tool calls before JSON repair or execution."""
+
+        count = sum(isinstance(block, ToolCallBlock) for block in blocks)
+        if (
+            self._attempt_recorder.phase != "schema"
+            or facts.finished_reason != "length"
+            or not count
+        ):
+            return False
+        progress = self._attempt_recorder.progress
+        if progress is not None:
+            progress.custom(
+                "cli_parser.schema.truncated_submission_discarded",
+                {
+                    "reason": "provider_length",
+                    "discarded_tool_calls": count,
+                    "round_index": facts.round_index,
+                    "attempt_index": facts.attempt_index,
+                    "runtime_policy": "schema-truncated-submission-guard-v1",
+                },
+                phase="schema",
+                sensitive=False,
+            )
+        return True
 
     async def _parse_stream_response(
         self, start_datetime: datetime, response: Any
@@ -396,13 +432,37 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             _ProviderStreamFacts(response, facts) if facts is not None else response
         )
         parsed = super()._parse_stream_response(start_datetime, source)
+        pending_tools = ChatResponse(content=[], is_last=False)
+        protect_schema = self._attempt_recorder.phase == "schema" and facts is not None
         try:
             async for chunk in parsed:
+                if protect_schema:
+                    tool_blocks = [
+                        block
+                        for block in chunk.content
+                        if isinstance(block, ToolCallBlock)
+                    ]
+                    if tool_blocks:
+                        pending_tools.id = chunk.id
+                        pending_tools.append_chat_response(
+                            ChatResponse(
+                                content=tool_blocks, is_last=False, id=chunk.id
+                            )
+                        )
+                        chunk.content = [
+                            block
+                            for block in chunk.content
+                            if not isinstance(block, ToolCallBlock)
+                        ]
                 yield chunk
         finally:
             await parsed.aclose()
         if facts is not None:
             facts.completed = True
+            if pending_tools.content and not self._discard_truncated_schema_tools(
+                facts, pending_tools.content
+            ):
+                yield pending_tools
 
     async def count_tokens(
         self,
@@ -453,7 +513,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             if self.parameters.max_tokens is not None:
                 kwargs["max_tokens"] = self.parameters.max_tokens
             if self._schema_reasoning_recovery:
-                kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+                kwargs["reasoning_effort"] = "low"
         return await self._attempt_recorder.call(
             lambda: super(ObservedOpenAIChatModel, self)._call_api(
                 model_name,

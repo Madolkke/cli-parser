@@ -51,7 +51,7 @@
 - 普通日志、公共 issues 和失败结果只保留有界结构化事实，不保存输入正文、模型文本、模板参数、解析值或 secrets。完整内容只允许进入明确启用的 Laminar、observer/TUI 或本地 WebUI 存储，并且只读观察、不得回灌模型上下文。
 
 - 连续工具协议失败最多三次受控修复，第四次停止；合法参数调用重置序列，业务拒绝与执行异常独立统计。官方 DeepSeek 端点以其文档规定的 `max_tokens` 发送输出预算；细节见 [v44运行契约](docs/schema-runtime-v44.md)。
-- 默认推理配置下，官方 DeepSeek 的 Schema 阶段连续三次仅推理且长度截断后，最后一次既有修复显式关闭 thinking；不增加预算，不影响 TTP 或调用者显式配置。提示仍为 v48，运行时策略单独标记，见 [恢复协议](docs/schema-reasoning-recovery-v1.md)。
+- 默认推理配置下，官方 DeepSeek 的 Schema 阶段连续三次含推理且无正文的长度截断后，最后一次既有修复使用低强度推理；不增加预算，不影响 TTP 或调用者显式配置。Schema 截断工具调用在执行前丢弃。提示仍为 v48，运行时策略单独标记，见 [恢复协议](docs/schema-reasoning-recovery-v2.md)。
 
 ## 代码与产品边界
 

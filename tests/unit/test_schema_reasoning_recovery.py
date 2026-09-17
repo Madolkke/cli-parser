@@ -55,6 +55,7 @@ def _body(
     if tool:
         message["tool_calls"] = [
             {
+                "index": 0,
                 "id": "call-1",
                 "type": "function",
                 "function": {"name": "submit_result_schema", "arguments": "{}"},
@@ -129,7 +130,7 @@ def _model(
             "parameters", OpenAIChatModel.Parameters(max_tokens=8192)
         ),
         stream=kwargs.pop("stream", False),
-        max_retries=0,
+        max_retries=kwargs.pop("max_retries", 0),
         client_kwargs={"http_client": client, "max_retries": 0},
         **kwargs,
     )
@@ -165,10 +166,15 @@ async def test_three_complete_observed_limits_activate_only_existing_next_reques
         assert len(requests) == 3
         assert not model.prepare_schema_reasoning_recovery()
         await _round(model)
-        assert all("thinking" not in request for request in requests[:3])
-        assert requests[3]["thinking"] == {"type": "disabled"}
+        await _round(model)
+        assert all("thinking" not in request for request in requests)
+        assert all("reasoning_effort" not in request for request in requests[:3])
+        assert requests[:3] == [requests[0]] * 3
+        for request in requests[3:]:
+            assert request == {**requests[0], "reasoning_effort": "low"}
         assert model.extra_body is None
         assert not model.parameters.thinking_enable
+        assert model.parameters.reasoning_effort is None
         assert model.parameters.max_tokens == 8192
     recovery = [
         event
@@ -176,9 +182,71 @@ async def test_three_complete_observed_limits_activate_only_existing_next_reques
         if event.name == "cli_parser.schema.reasoning_recovery"
     ]
     assert len(recovery) == 1
-    assert recovery[0].value["runtime_policy"] == "schema-reasoning-recovery-v1"
+    assert recovery[0].value["runtime_policy"] == "schema-reasoning-recovery-v2"
+    assert recovery[0].value["mode"] == "reasoning_low"
+    assert recovery[0].value["reason"] == "consecutive_reasoning_length"
     assert recovery[0].value["consecutive_responses"] == 3
     assert "private" not in json.dumps([event.value for event in events])
+
+
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("tool_rounds", [{0, 1, 2}, {2}])
+async def test_discarded_length_tools_still_count_as_reasoning_exhaustion(
+    stream: bool, tool_rounds: set[int]
+) -> None:
+    requests, events = [], []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        index = len(requests)
+        requests.append(json.loads(request.content))
+        body = _body(tool=index in tool_rounds)
+        if index in tool_rounds:
+            body["choices"][0]["message"]["tool_calls"][0]["function"]["arguments"] = (
+                '{"result_schema":{"type":"object","properties":{'
+            )
+        return _response(body, stream=stream)
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        model = _model(client, stream=stream, events=events)
+        assert [await _round(model) for _ in range(3)] == [False, False, True]
+        assert len(requests) == 3
+        await _round(model)
+        assert requests[3]["reasoning_effort"] == "low"
+    discarded = [
+        event
+        for event in events
+        if event.name == "cli_parser.schema.truncated_submission_discarded"
+    ]
+    assert len(discarded) == len(tool_rounds)
+    assert model._attempt_recorder.session.frozen_schema is None
+
+
+async def test_http_retries_neither_complete_rounds_nor_reset_override() -> None:
+    requests, events = [], []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        if len(requests) in {3, 5}:
+            return httpx.Response(500, json={"error": {"message": "private"}})
+        return _response(_body())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        model = _model(client, events=events, max_retries=1, retry_delay=0)
+        assert [await _round(model) for _ in range(3)] == [False, False, True]
+        assert len(requests) == 4
+        await _round(model)
+        assert len(requests) == 6
+        assert requests[:4] == [requests[0]] * 4
+        assert requests[4:] == [{**requests[0], "reasoning_effort": "low"}] * 2
+        assert model._attempt_recorder.session.model_retries_observed == 2
+    recovery = [
+        event
+        for event in events
+        if event.name == "cli_parser.schema.reasoning_recovery"
+    ]
+    assert len(recovery) == 1
+    assert recovery[0].value["after_round_index"] == 3
+    assert recovery[0].value["after_attempt_index"] == 4
 
 
 @pytest.mark.parametrize(
@@ -187,7 +255,7 @@ async def test_three_complete_observed_limits_activate_only_existing_next_reques
         _body(reason="stop"),
         _body(text="visible"),
         _body(thinking=None),
-        _body(tool=True),
+        _body(reason="tool_calls", tool=True),
     ],
 )
 async def test_nonqualifying_response_breaks_the_sequence(
@@ -215,6 +283,7 @@ async def test_nonqualifying_response_breaks_the_sequence(
         {"base_url": "https://api.deepseek.com.invalid"},
         {"extra_body": {}},
         {"extra_body": {"thinking": {"type": "enabled"}}},
+        {"extra_body": {"thinking": {"type": "disabled"}}},
         {"parameters": OpenAIChatModel.Parameters(thinking_enable=True)},
         {
             "parameters": OpenAIChatModel.Parameters(
@@ -222,16 +291,22 @@ async def test_nonqualifying_response_breaks_the_sequence(
             )
         },
         {"parameters": OpenAIChatModel.Parameters(reasoning_effort="high")},
+        {"parameters": OpenAIChatModel.Parameters(reasoning_effort="low")},
     ],
 )
 async def test_phase_provider_and_explicit_settings_opt_out(
     options: dict[str, Any],
 ) -> None:
-    async with httpx.AsyncClient(
-        transport=httpx.MockTransport(lambda _: _response(_body()))
-    ) as client:
+    requests = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return _response(_body())
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
         model = _model(client, **options)
         assert [await _round(model) for _ in range(4)] == [False] * 4
+        assert requests == [requests[0]] * 4
 
 
 async def test_intervening_round_without_recovery_check_resets_streak() -> None:
@@ -373,5 +448,7 @@ async def test_reused_generator_keeps_recovery_local_to_each_request(
     assert all(result.status == "success" for result in results)
     assert len(requests["first"]) == 4
     assert len(requests["second"]) == 1
-    assert requests["first"][3]["thinking"] == {"type": "disabled"}
+    assert requests["first"][3]["reasoning_effort"] == "low"
+    assert "thinking" not in requests["first"][3]
+    assert "reasoning_effort" not in requests["second"][0]
     assert "thinking" not in requests["second"][0]

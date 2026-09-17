@@ -106,3 +106,79 @@ def test_incomplete_recovery_event_is_ignored(missing_key):
     del payload[missing_key]
     tracer(recovery_event(payload))
     assert tracer.facts()["reasoning_recovery"]["status"] == "unavailable"
+
+
+def test_v2_recovery_records_actual_policy_without_relabeling_v1():
+    tracer = _load_runner()._SchemaTracer()
+    value = {
+        **recovery_value(),
+        "runtime_policy": "schema-reasoning-recovery-v2",
+        "mode": "reasoning_low",
+        "reason": "consecutive_reasoning_length",
+    }
+    tracer(recovery_event(value))
+    facts = tracer.facts()["reasoning_recovery"]
+    assert facts["activation_count"] == 1
+    assert all(facts[key] == value[key] for key in ("runtime_policy", "mode", "reason"))
+    tracer(recovery_event(recovery_value()))
+    assert tracer.facts()["reasoning_recovery"] == facts
+    mismatched = {**value, "mode": "thinking_disabled"}
+    fresh = _load_runner()._SchemaTracer()
+    fresh(recovery_event(mismatched))
+    assert fresh.facts()["reasoning_recovery"]["status"] == "unavailable"
+
+
+def guard_event(value, *, phase="schema"):
+    return events.CustomEvent(
+        name="cli_parser.schema.truncated_submission_discarded",
+        value=value,
+        metadata={"phase": phase, "sensitive": False},
+    )
+
+
+def guard_value():
+    return {
+        "reason": "provider_length",
+        "discarded_tool_calls": 1,
+        "round_index": 3,
+        "attempt_index": 3,
+        "runtime_policy": "schema-truncated-submission-guard-v1",
+    }
+
+
+def test_guard_projects_only_bounded_facts_without_counting_schema_submission():
+    tracer = _load_runner()._SchemaTracer(record_rows=True)
+    assert tracer.facts()["truncated_submission_guard"] == {
+        "status": "unavailable",
+        "discarded_tool_calls": None,
+        "rounds": [],
+    }
+    for _ in range(40):
+        tracer(guard_event(guard_value()))
+    facts = tracer.facts()["truncated_submission_guard"]
+    assert facts["status"] == "observed"
+    assert facts["discarded_tool_calls"] == 40
+    assert len(facts["rounds"]) == 32
+    assert tracer.facts()["observed_submissions"] == 0
+    assert tracer.rounds.rows == []
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("reason", "PRIVATE_REASON"),
+        ("runtime_policy", "PRIVATE_POLICY"),
+        ("round_index", True),
+        ("attempt_index", 0),
+        ("discarded_tool_calls", -1),
+        ("discarded_tool_calls", 1.0),
+        ("description", "PRIVATE_BODY"),
+    ],
+)
+def test_guard_rejects_invalid_event_without_body_leakage(key, value):
+    tracer = _load_runner()._SchemaTracer(record_rows=True)
+    tracer(guard_event({**guard_value(), key: value}))
+    tracer(guard_event(guard_value(), phase="ttp"))
+    assert tracer.facts()["truncated_submission_guard"]["status"] == "unavailable"
+    assert "PRIVATE" not in json.dumps(tracer.facts())
+    assert tracer.rounds.rows == []

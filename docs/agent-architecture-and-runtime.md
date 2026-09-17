@@ -369,9 +369,10 @@ Schema 合法不能证明遵循建模规则；规则、业务合理性和重复�
 
 ## Schema 推理截断恢复
 
-提示仍为 v48。运行时 `schema-reasoning-recovery-v1` 只在官方 DeepSeek、默认推理配置、
-Schema 连续三次仅推理 length 后，使用最后一次既有修复关闭 thinking；前面的请求原样保留。
+提示仍为 v48。候选运行时 `schema-reasoning-recovery-v2` 只在官方 DeepSeek、默认推理配置、
+Schema 连续三次含推理、无正文的 length 后，使用最后一次既有修复设置 reasoning_effort=low；前三轮请求原样保留。
 事实直接来自当前供应商响应，只有枚举与布尔进入请求局部状态，不读取 Trace 或保留草稿。
 调用者显式配置、TTP、外部注入及其他供应商不变，既有计数、deadline、冻结和错误分类不变。
 安全事件 `cli_parser.schema.reasoning_recovery` 标明激活轮次；缺失观测不补零。
-完整边界和验证见 [恢复协议](schema-reasoning-recovery-v1.md)。
+Schema 原始 length 回复中的工具调用在执行前全部丢弃，不能经 JSON 修复后冻结；流式工具片段在结束原因已知前不交给 Agent。
+完整边界和验证见 [恢复协议](schema-reasoning-recovery-v2.md)；关闭 thinking 的 v1 已因业务失败撤下。

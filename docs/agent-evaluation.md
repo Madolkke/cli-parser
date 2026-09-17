@@ -279,6 +279,7 @@ SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数
 
 `observations.reasoning_recovery` 仅投影当前 Schema 受控恢复事件的状态、次数及轮次，
 不导出供应商正文。未观察到有效事件时标为 unavailable，不以零代表历史已核对无激活。
-提示版本与运行时策略分别记录：本轮仍为 v48，恢复为 schema-reasoning-recovery-v1；
+提示版本与运行时策略分别记录：本轮仍为 v48，候选恢复为 schema-reasoning-recovery-v2；
 真实配置由 revision、显式 model/policy 和逐条观察共同确定。详见
-[恢复与保护协议](schema-reasoning-recovery-v1.md)。
+[恢复与保护协议](schema-reasoning-recovery-v2.md)。v1 历史事件保留原枚举；v2 的 mode 为 reasoning_low。
+`observations.truncated_submission_guard` 仅保存被丢弃工具调用数和轮次，未观察到有效事件仍为 unavailable，不当作零。

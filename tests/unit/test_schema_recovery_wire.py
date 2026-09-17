@@ -51,8 +51,9 @@ def completion(*, length=False, tool=None, args=None):
 
 
 @pytest.mark.parametrize("failed_rounds", [0, 1, 2, 3])
+@pytest.mark.parametrize("truncated_submission", [False, True])
 async def test_recovery_changes_only_fourth_schema_request_and_never_ttp(
-    monkeypatch, failed_rounds
+    monkeypatch, failed_rounds, truncated_submission
 ):
     schema = {
         "type": "object",
@@ -67,6 +68,17 @@ async def test_recovery_changes_only_fourth_schema_request_and_never_ttp(
         ),
         completion(tool="finish_generation", args={}),
     ]
+    if failed_rounds and truncated_submission:
+        responses[failed_rounds - 1] = completion(
+            length=True,
+            tool="submit_result_schema",
+            args={"result_schema": schema},
+        )
+        # AgentScope repairs these missing closing braces into a legal
+        # submission. Provider length must prevent that premature freeze.
+        responses[failed_rounds - 1]["choices"][0]["message"]["tool_calls"][0][
+            "function"
+        ]["arguments"] = json.dumps({"result_schema": schema})[:-2]
     requests = []
 
     def respond(request):
@@ -101,10 +113,10 @@ async def test_recovery_changes_only_fourth_schema_request_and_never_ttp(
         assert "tool_choice" not in request
         assert request["parallel_tool_calls"] is False
         if failed_rounds == 3 and index == 3:
-            assert request["thinking"] == {"type": "disabled"}
+            assert request["reasoning_effort"] == "low"
         else:
-            assert "thinking" not in request
-        assert "reasoning_effort" not in request
+            assert "reasoning_effort" not in request
+        assert "thinking" not in request
         assert "private-unfinished-analysis" not in json.dumps(request)
     initial = requests[0]
     for request in requests[: failed_rounds + 1]:
