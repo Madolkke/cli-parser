@@ -10,6 +10,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, TypeVar, cast
 from urllib.parse import urlsplit
 
@@ -30,6 +31,66 @@ _call_streams: ContextVar[list[_ObservedStream] | None] = ContextVar(
     "ttp_model_attempt_streams",
     default=None,
 )
+
+
+@dataclass(slots=True)
+class _ProviderReplyFacts:
+    """Request-local facts only; provider bodies never enter recovery state."""
+
+    round_index: int
+    attempt_index: int
+    finished_reason: str = "unknown"
+    reasoning_present: bool = False
+    text_present: bool = False
+    tool_calls_present: bool = False
+    completed: bool = False
+
+    def observe(self, choice: Any, message: Any) -> None:
+        reason = getattr(choice, "finish_reason", None)
+        if reason is not None:
+            self.finished_reason = (
+                reason
+                if reason
+                in {"length", "stop", "tool_calls", "content_filter", "function_call"}
+                else "unknown"
+            )
+        reasoning = getattr(message, "reasoning_content", None)
+        if not isinstance(reasoning, str):
+            reasoning = getattr(message, "reasoning", None)
+        self.reasoning_present |= isinstance(reasoning, str) and bool(reasoning)
+        self.text_present |= bool(getattr(message, "content", None)) or bool(
+            getattr(message, "audio", None)
+        )
+        self.tool_calls_present |= bool(getattr(message, "tool_calls", None)) or bool(
+            getattr(message, "function_call", None)
+        )
+
+
+class _ProviderStreamFacts:
+    """Observe raw chunks while leaving parsing and closing to AgentScope."""
+
+    def __init__(self, source: Any, facts: _ProviderReplyFacts) -> None:
+        self.source = source
+        self.facts = facts
+        self.iterator: Any = None
+
+    async def __aenter__(self) -> _ProviderStreamFacts:
+        source = await self.source.__aenter__()
+        self.iterator = source.__aiter__()
+        return self
+
+    async def __aexit__(self, *args: Any) -> Any:
+        return await self.source.__aexit__(*args)
+
+    def __aiter__(self) -> _ProviderStreamFacts:
+        return self
+
+    async def __anext__(self) -> Any:
+        chunk = await anext(self.iterator)
+        choices = getattr(chunk, "choices", None)
+        if choices:
+            self.facts.observe(choices[0], choices[0].delta)
+        return chunk
 
 
 class _RetryLogFilter(logging.Filter):
@@ -258,6 +319,90 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
     ) -> None:
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
+        self._provider_reply_facts: _ProviderReplyFacts | None = None
+        self._reasoning_length_streak = 0
+        self._last_recovery_round = -1
+        self._schema_reasoning_recovery = False
+
+    def prepare_schema_reasoning_recovery(self) -> bool:
+        """Use only an existing retry after three observed reasoning-only limits."""
+
+        recorder = self._attempt_recorder
+        facts = self._provider_reply_facts
+        if (
+            self._schema_reasoning_recovery
+            or recorder.phase != "schema"
+            or urlsplit(self.credential.base_url or "").hostname != "api.deepseek.com"
+            or self.parameters.thinking_enable
+            or self.parameters.reasoning_effort is not None
+            or self.extra_body is not None
+            or facts is None
+            or not facts.completed
+            or facts.round_index != recorder.session.agent_rounds
+            or facts.attempt_index != recorder.session.model_attempts_observed
+            or facts.round_index == self._last_recovery_round
+        ):
+            return False
+        qualifies = (
+            facts.finished_reason == "length"
+            and facts.reasoning_present
+            and not facts.text_present
+            and not facts.tool_calls_present
+        )
+        if not qualifies:
+            self._reasoning_length_streak = 0
+        elif facts.round_index == self._last_recovery_round + 1:
+            self._reasoning_length_streak += 1
+        else:
+            self._reasoning_length_streak = 1
+        self._last_recovery_round = facts.round_index
+        if self._reasoning_length_streak < 3:
+            return False
+        self._schema_reasoning_recovery = True
+        if recorder.progress is not None:
+            recorder.progress.custom(
+                "cli_parser.schema.reasoning_recovery",
+                {
+                    "reason": "consecutive_reasoning_only_length",
+                    "consecutive_responses": self._reasoning_length_streak,
+                    "after_round_index": facts.round_index,
+                    "after_attempt_index": facts.attempt_index,
+                    "mode": "thinking_disabled",
+                    "runtime_policy": "schema-reasoning-recovery-v1",
+                },
+                phase="schema",
+                sensitive=False,
+            )
+        return True
+
+    def _parse_completion_response(
+        self, start_datetime: datetime, response: Any, audio_format: str = "wav"
+    ) -> ChatResponse:
+        facts = self._provider_reply_facts
+        result = super()._parse_completion_response(
+            start_datetime, response, audio_format
+        )
+        if facts is not None:
+            if response.choices:
+                facts.observe(response.choices[0], response.choices[0].message)
+            facts.completed = True
+        return result
+
+    async def _parse_stream_response(
+        self, start_datetime: datetime, response: Any
+    ) -> AsyncGenerator[ChatResponse, None]:
+        facts = self._provider_reply_facts
+        source = (
+            _ProviderStreamFacts(response, facts) if facts is not None else response
+        )
+        parsed = super()._parse_stream_response(start_datetime, source)
+        try:
+            async for chunk in parsed:
+                yield chunk
+        finally:
+            await parsed.aclose()
+        if facts is not None:
+            facts.completed = True
 
     async def count_tokens(
         self,
@@ -291,6 +436,10 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         tool_choice: ToolChoice | None = None,
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
+        self._provider_reply_facts = _ProviderReplyFacts(
+            round_index=self._attempt_recorder.session.agent_rounds,
+            attempt_index=self._attempt_recorder.session.model_attempts_observed + 1,
+        )
         # AgentScope 2.0 maps Parameters.max_tokens to the OpenAI-specific
         # max_completion_tokens. DeepSeek's official API documents max_tokens
         # instead. Suppress the incompatible SDK argument without modifying
@@ -303,6 +452,8 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             kwargs["max_completion_tokens"] = openai.NOT_GIVEN
             if self.parameters.max_tokens is not None:
                 kwargs["max_tokens"] = self.parameters.max_tokens
+            if self._schema_reasoning_recovery:
+                kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
         return await self._attempt_recorder.call(
             lambda: super(ObservedOpenAIChatModel, self)._call_api(
                 model_name,

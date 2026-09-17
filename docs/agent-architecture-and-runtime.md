@@ -366,3 +366,12 @@ v45 计划编译与 v46 显式确认均未达到预试资格，运行接线已�
 类型、required、约束、采样、预算及 TTP 正文保持原政策，v44 可靠性修复继续生效。
 Schema 合法不能证明遵循建模规则；规则、业务合理性和重复一致性由审阅分别统计。
 本轮仅运行 56 次 Schema-only，可解析性未测，详见 [实施与评测协议](schema-policy-v48-protocol.md)。
+
+## Schema 推理截断恢复
+
+提示仍为 v48。运行时 `schema-reasoning-recovery-v1` 只在官方 DeepSeek、默认推理配置、
+Schema 连续三次仅推理 length 后，使用最后一次既有修复关闭 thinking；前面的请求原样保留。
+事实直接来自当前供应商响应，只有枚举与布尔进入请求局部状态，不读取 Trace 或保留草稿。
+调用者显式配置、TTP、外部注入及其他供应商不变，既有计数、deadline、冻结和错误分类不变。
+安全事件 `cli_parser.schema.reasoning_recovery` 标明激活轮次；缺失观测不补零。
+完整边界和验证见 [恢复协议](schema-reasoning-recovery-v1.md)。

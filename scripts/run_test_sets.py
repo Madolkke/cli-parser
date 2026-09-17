@@ -748,6 +748,8 @@ class _SchemaTracer:
         self.prepared_input_chars = []
         self.protocol_categories = []
         self.protocol_boundaries = []
+        self.reasoning_recovery_count = 0
+        self.reasoning_recovery_rounds = []
         self._last_schema_submission = 0
 
     def _observe_source_and_protocol(self, event):
@@ -810,6 +812,41 @@ class _SchemaTracer:
                 "execution_error",
             }:
                 self.protocol_boundaries.append(category)
+        elif event.name == "cli_parser.schema.reasoning_recovery":
+            # This event carries fixed protocol facts only. Do not accept
+            # future free-text extensions into persisted evaluation artifacts.
+            if (
+                set(value)
+                == {
+                    "runtime_policy",
+                    "mode",
+                    "reason",
+                    "consecutive_responses",
+                    "after_round_index",
+                    "after_attempt_index",
+                }
+                and value["runtime_policy"] == "schema-reasoning-recovery-v1"
+                and value["mode"] == "thinking_disabled"
+                and value["reason"] == "consecutive_reasoning_only_length"
+                and type(value["consecutive_responses"]) is int
+                and value["consecutive_responses"] == 3
+                and all(
+                    type(value[key]) is int and value[key] > 0
+                    for key in ("after_round_index", "after_attempt_index")
+                )
+            ):
+                self.reasoning_recovery_count += 1
+                if len(self.reasoning_recovery_rounds) < 32:
+                    self.reasoning_recovery_rounds.append(
+                        {
+                            key: value[key]
+                            for key in (
+                                "after_round_index",
+                                "after_attempt_index",
+                                "consecutive_responses",
+                            )
+                        }
+                    )
 
     def __call__(self, event):
         self.rounds(event)
@@ -1014,6 +1051,22 @@ class _SchemaTracer:
                     key: self.protocol_boundaries.count(key)
                     for key in sorted(set(self.protocol_boundaries))
                 },
+            },
+            "reasoning_recovery": {
+                # Absence also covers legacy observers and missing telemetry;
+                # it does not prove that the recovery was never activated.
+                "status": "observed"
+                if self.reasoning_recovery_count
+                else "unavailable",
+                "activation_count": self.reasoning_recovery_count or None,
+                "rounds": list(self.reasoning_recovery_rounds),
+                "runtime_policy": "schema-reasoning-recovery-v1"
+                if self.reasoning_recovery_count
+                else None,
+                "mode": "thinking_disabled" if self.reasoning_recovery_count else None,
+                "reason": "consecutive_reasoning_only_length"
+                if self.reasoning_recovery_count
+                else None,
             },
             # AgentScope's ModelCallEndEvent is a framework finish reason;
             # it does not expose the supplier's `length` finish_reason.

@@ -274,3 +274,11 @@ SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数
 实验提交 f7b9a16 的选择仅允许 direct/draft。24 次预试未达标后撤下选择参数并恢复 v44；当前默认为 v48，以下描述历史执行及保留指标。两组复用同一原始输入快照、全局 semaphore、模型和 policy，按用例 AB/BA 轮换，不跨组组成一致性 pair。来源展示会增加候选上下文开销，单列采样量与展示字符数。工具参数、Schema 及兜底名称集合只在内存观察；保存的 draft 指标只含字段/引用/兜底/原因/拒绝/字节数量。供应商 finish_reason 缺失不能按零截断统计。
 
 原计划为 24 次预试达标后才运行 112 次端到端对照，最多 136 次。实际止于 24 次，没有补跑或正式对照，见 [结果](schema-draft-v47-pretrial-regression.md)。受限 Schema/解析审阅及业务事实清单沿用现有协议，新增命名和根粒度观察不作为自动业务门禁。完整配置、采用门槛、隐私和回退见 [v47 实验协议](schema-draft-v47-protocol.md)。
+
+## Schema 推理截断恢复观察
+
+`observations.reasoning_recovery` 仅投影当前 Schema 受控恢复事件的状态、次数及轮次，
+不导出供应商正文。未观察到有效事件时标为 unavailable，不以零代表历史已核对无激活。
+提示版本与运行时策略分别记录：本轮仍为 v48，恢复为 schema-reasoning-recovery-v1；
+真实配置由 revision、显式 model/policy 和逐条观察共同确定。详见
+[恢复与保护协议](schema-reasoning-recovery-v1.md)。
