@@ -283,3 +283,8 @@ SchemaPlan 的最终冻结方案另外记录 `fallback_naming`：业务节点数
 真实配置由 revision、显式 model/policy 和逐条观察共同确定。详见
 [恢复与保护协议](schema-reasoning-recovery-v2.md)。v1 历史事件保留原枚举；v2 的 mode 为 reasoning_low。两种自动恢复均未采用，历史读取保持兼容。
 `observations.truncated_submission_guard` 仅保存被丢弃工具调用数和轮次，未观察到有效事件仍为 unavailable，不当作零。
+
+
+来源定位恢复实验只投影受控状态、来源量、跳过量、序列与估算Token，不持久化逐字
+定位视图。模型提示仍v48，额外恢复指导与runtime_policy单列，历史恢复事件保持兼容。
+只有先通过SD-WAN四次完整业务与规则审阅才进入其余13例保护，见 [协议](schema-source-recovery-v1.md)。

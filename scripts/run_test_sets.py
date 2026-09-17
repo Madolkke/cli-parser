@@ -753,6 +753,7 @@ class _SchemaTracer:
         self.reasoning_recovery_policy = None
         self.truncated_submission_count = 0
         self.truncated_submission_rounds = []
+        self.source_view_observations = []
         self._last_schema_submission = 0
 
     def _observe_source_and_protocol(self, event):
@@ -895,6 +896,58 @@ class _SchemaTracer:
                             )
                         }
                     )
+        elif event.name == "cli_parser.schema.source_view":
+            counts = {
+                "input_count",
+                "complete_input_count",
+                "skipped_truncated_input_count",
+                "complete_source_line_count",
+                "displayed_line_count",
+                "displayed_token_count",
+                "omitted_line_limit_count",
+                "omitted_token_limit_line_count",
+                "omitted_byte_limit_line_count",
+                "serialized_bytes",
+            }
+            if (
+                set(value)
+                == counts
+                | {
+                    "runtime_policy",
+                    "status",
+                    "round_index",
+                    "attempt_index",
+                    "estimated_tokens",
+                }
+                and value["runtime_policy"] == "schema-source-recovery-v1"
+                and value["status"]
+                in (
+                    "injected",
+                    "skipped_deadline",
+                    "skipped_no_source",
+                    "skipped_history",
+                    "skipped_context",
+                    "skipped_count",
+                )
+                and all(type(value[key]) is int and value[key] >= 0 for key in counts)
+                and all(
+                    type(value[key]) is int and value[key] > 0
+                    for key in ("round_index", "attempt_index")
+                )
+                and (
+                    value["estimated_tokens"] is None
+                    or (
+                        type(value["estimated_tokens"]) is int
+                        and value["estimated_tokens"] >= 0
+                    )
+                )
+                and value["serialized_bytes"] <= 16384
+                and value["displayed_token_count"] <= 256
+                and value["input_count"] <= 5
+                and value["displayed_line_count"] <= 60
+                and len(self.source_view_observations) < 32
+            ):
+                self.source_view_observations.append(dict(value))
 
     def __call__(self, event):
         self.rounds(event)
@@ -1123,6 +1176,12 @@ class _SchemaTracer:
                 else "unavailable",
                 "discarded_tool_calls": self.truncated_submission_count or None,
                 "rounds": list(self.truncated_submission_rounds),
+            },
+            "source_view": {
+                "status": "observed"
+                if self.source_view_observations
+                else "unavailable",
+                "events": list(self.source_view_observations),
             },
             # AgentScope's ModelCallEndEvent is a framework finish reason;
             # it does not expose the supplier's `length` finish_reason.

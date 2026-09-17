@@ -52,6 +52,7 @@
 
 - 连续工具协议失败最多三次受控修复，第四次停止；合法参数调用重置序列，业务拒绝与执行异常独立统计。官方 DeepSeek 端点以其文档规定的 `max_tokens` 发送输出预算；细节见 [v44运行契约](docs/schema-runtime-v44.md)。
 - Schema 原始供应商回复以 `length` 结束时，工具调用在框架 JSON 修复及执行前丢弃，不能冻结残缺提案；流式工具片段在结束原因已知前不释放。v48 提示及默认推理参数保持不变；自动关闭推理和低强度恢复实验均未采用，见 [恢复结果](docs/schema-reasoning-recovery-v2-results.md)。
+- 来源定位恢复候选仅在首次推理截断后的既有Schema重试附加有界逐字位置视图，模型仍直接提交最终Schema，不做字段或表头编译；默认推理参数不变。见 [实验协议](docs/schema-source-recovery-v1.md)。
 
 ## 代码与产品边界
 
