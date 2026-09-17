@@ -1,0 +1,141 @@
+{
+  "review_version": 2,
+  "run_id": "20260917T163339.848919Z",
+  "trials": [
+    {
+      "trial_id": "20260917T163339.848919Z/cisco_ios.show_sdwan_control_connections/1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "59bd8293-8b63-6675-1942-406c6328ba9e",
+      "span_ids": [
+        "00000000-0000-0000-1636-33469d16f291"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T163339.848919Z/cisco_ios.show_sdwan_control_connections/2",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "e40c6a6c-fc61-467d-04f7-2b855eedc79d",
+      "span_ids": [
+        "00000000-0000-0000-0fa9-03c4ab41e22f"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260917T163339.848919Z/cisco_ios.show_sdwan_control_connections/3",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "5d4e079a-0b1b-c03c-1c6f-11cfc2c3d2ba",
+      "span_ids": [
+        "00000000-0000-0000-d1ce-e75c18afa665",
+        "00000000-0000-0000-ba8c-d7c2a9eb6f41"
+      ],
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "fixed_role_sections": "not_applicable",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "issue",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "passed",
+        "fallback_and_collision": "issue"
+      },
+      "policy_paths": [
+        "/peer/*/type",
+        "/peer/*/prot",
+        "/peer/*/system_ip",
+        "/peer/*/private_ip",
+        "/peer/*/priv_port",
+        "/peer/*/public_ip",
+        "/peer/*/pub_port",
+        "/peer/*/group_id"
+      ]
+    },
+    {
+      "trial_id": "20260917T163339.848919Z/cisco_ios.show_sdwan_control_connections/4",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "8ea0101b-b43f-5d76-9666-047c820d8819",
+      "span_ids": [
+        "00000000-0000-0000-4852-5633772b447b"
+      ],
+      "overall": "unjudgeable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "insufficient_evidence",
+        "coverage": "insufficient_evidence",
+        "decomposition": "insufficient_evidence",
+        "structure": "insufficient_evidence",
+        "types_required": "insufficient_evidence",
+        "value_boundaries": "insufficient_evidence",
+        "overconstraint": "insufficient_evidence"
+      },
+      "policy_checks": {
+        "root_scope": "insufficient_evidence",
+        "repeated_entities": "insufficient_evidence",
+        "fixed_role_sections": "insufficient_evidence",
+        "ownership_and_wrappers": "insufficient_evidence",
+        "source_label_fidelity": "insufficient_evidence",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "insufficient_evidence",
+        "fallback_and_collision": "insufficient_evidence"
+      },
+      "policy_paths": []
+    }
+  ],
+  "pairs": []
+}

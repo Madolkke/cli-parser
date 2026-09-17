@@ -1,14 +1,11 @@
 """Independent ambiguity and envelope diagnostics; no evaluation answers."""
 
-import json
-import re
 from copy import deepcopy
 
 import pytest
 from pydantic import ValidationError
 
 from cli_parser_agent.evaluation import schema_pair_metrics
-from cli_parser_agent.ttp_generation.agent.prompt import SCHEMA_SYSTEM_PROMPT
 from cli_parser_agent.ttp_generation.agent.tools import SchemaSubmissionInput
 from cli_parser_agent.ttp_generation.validation.json_schema import (
     validate_records_against_schema,
@@ -73,38 +70,6 @@ def expected_records():
             ]
         },
     ]
-
-
-def test_actual_prompt_envelope_preserves_columns_empty_slots_and_missing_lines():
-    blocks = [
-        json.loads(s)
-        for s in re.findall(r"```json\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.S)
-    ]
-    envelopes = [s for s in blocks if "result_schema" in s]
-    assert len(envelopes) == 1
-    envelope = envelopes[0]
-    before = deepcopy(envelope)
-    schema = SchemaSubmissionInput.model_validate(envelope).result_schema
-    assert validate_result_schema(schema) == []
-    assert validate_records_against_schema(expected_records(), schema) == []
-    assert envelope == before
-    assert schema_pair_metrics(schema, synthetic_envelope()["result_schema"])[
-        "contract_equal"
-    ]
-    fields = schema["properties"]["dispatch"]["items"]["properties"]
-    assert set(fields) == {"source_ref", "target_ref", "result", "tag"}
-    assert "note" not in schema["required"]
-    source = re.search(r"示例 D：.*?```text\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.S)[1]
-    lines = source.splitlines()
-    assert lines[2].index("Source") == lines[3].index("Ref")
-    assert lines[2].index("Target") == lines[3].rindex("Ref")
-    assert lines[1].index("Auxiliary") not in {
-        lines[3].index("Result"),
-        lines[3].index("Tag"),
-    }
-    missing = deepcopy(expected_records())
-    del missing[0]["dispatch"][0]["tag"]
-    assert validate_records_against_schema(missing, schema)
 
 
 def test_root_required_at_tool_top_level_is_rejected_without_mutation():

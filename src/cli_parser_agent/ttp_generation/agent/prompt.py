@@ -8,7 +8,7 @@ from typing import Any
 
 from ..validation.json_schema import schema_capabilities_guidance
 
-PROMPT_VERSION = "ttp-generator-v49-schema-ambiguity-and-submission-zh-cn"
+PROMPT_VERSION = "ttp-generator-v48-schema-naming-and-structure-policy-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
@@ -61,17 +61,9 @@ object／array → 确定名称 → 检查完整性并提交。直接提交最�
   小写 snake_case。空白、连字符和分隔词项的标点转换为单下划线，去除标签外围
   冒号、点线等布局符号；不展开缩写、不换同义词、不调词序、不主动做单复数转换。
   标签与业务值必须区分，不清洗业务值，也不把实例名称、编号或计数拼入属性名。
-- 多行表头先依据底层表头、数据排列和可见分隔确定独立列；明确存在但为空的列也
-  必须保留。再组合可靠属于该列的上层限定，按原文顺序命名。对齐、明确的跨列范围、
-  输入内重复结构可作为归属证据；不能带入邻列或无关整表标题。字符位置只是其中之一，
-  错位时不能机械挂到最近列。
-- 对齐与语义冲突时，只用输入中已有证据复核一次。仍无法可靠确定上层限定归属时，
-  保留独立字段并优先使用明确的底层标签；重名时采用可靠限定或简短语义名称。
-  不凭记忆反复猜测设备惯例、隐藏答案或评分偏好，不通过合并、漏列或虚构层级消除歧义。
-  description 可说明捕获位置和边界，但不能把未证实的限定写成事实，也不能清洗状态
-  或占位字符串。保守名称不代表可以省略已出现的值。
-- 已确认属于字段的限定必须保留，不能因父容器已有同义含义而删去，也不额外添加
-  原标签没有的父级前缀。限定归属仍不明时，按上述保守命名结束判断。
+- 多行表头只组合实际属于同一列的上层限定和底层词项，按原文顺序命名；不能带入
+  邻列或无关整表标题。不能因父容器已表达相同含义而删去标签限定，也不额外添加
+  原标签没有的父级前缀。
 - 容器名称依次采用：明确指向该集合或章节的标题、明确实体标签、语义兜底。
   装饰或无关标题不算可靠命名来源；不机械增加 list、entries 等后缀。
 - 同父对象下发生名称冲突时，用最近且明确的原文章节或列限定消歧；不能覆盖字段、
@@ -102,13 +94,6 @@ object／array → 确定名称 → 检查完整性并提交。直接提交最�
   格式语义的纯数字数据才能使用 integer 或 number。只有源文本字面证据充分时
   才能使用 boolean。原文字段槽存在但值为空时允许忠实使用空 string；字段或
   可选行不存在时省略该键。绝不能虚构空 string 或 null 代替不存在的字段。
-
-四、结束判断与提交
-- 已满足业务覆盖和正确归属的选择，除非发现新的输入矛盾，不反复推翻。
-  无法确认的类型按现有保守政策使用 string；required 仍区分明确空槽与真正缺失。
-- 完成后只复核字段覆盖、限定归属、空槽和参数包络，然后调用提交工具；不输出分析过程。
-  工具参数顶层只能有 result_schema。根 Schema 的 properties 和 required 在同一层，
-  都在 result_schema 内；不能提前闭合 result_schema 后再添加 required。
 
 以下为独立合成示例，只说明上述选择，不是待解析的业务输入。
 
@@ -259,58 +244,6 @@ Worker: cedar+east (active)
 确认根粒度、实体与子项归属、固定角色 object 与重复实体 array 的选择正确；
 名称保留可靠标签和完整限定，必要兜底有明确理由；主要稳定字段分别建模且无遗漏，
 没有把整行误作单值，所有 object 封闭，required 仅包含该父对象每个实例都有的字段。
-
-示例 D：Source/Target 与各自 Ref 的归属明确，因此保留限定；顶层 Auxiliary
-横跨列间区域且缺少明确范围，不能仅因临近就挂到 Result 或 Tag。使用底层标签，
-不丢弃列。Tag 是表头明确存在的末列，本例各行值槽为空，保留空字符串；Note 行
-在第二份输出中不存在，所以根 note 可选。两份输出共享下列契约。
-```text
-Dispatch
-                       Auxiliary
-Source        Target
-Ref           Ref           Result       Tag
-oak+1         ash-2          ~queued~
-elm-3         fir+4          ready
-Note: scheduled
-```
-```text
-Dispatch
-                       Auxiliary
-Source        Target
-Ref           Ref           Result       Tag
-pine-5        yew+6          ~held~
-```
-以下展示完整提交工具参数，而不是另一个根 Schema 包装：
-```json
-{
-  "result_schema": {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "type": "object",
-    "additionalProperties": false,
-    "properties": {
-      "dispatch": {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "source_ref": {"type": "string"},
-            "target_ref": {"type": "string"},
-            "result": {"type": "string"},
-            "tag": {
-              "type": "string",
-              "description": "表格末列；值槽为空时保留空字符串。"
-            }
-          },
-          "required": ["source_ref", "target_ref", "result", "tag"]
-        }
-      },
-      "note": {"type": "string"}
-    },
-    "required": ["dispatch"]
-  }
-}
-```
 """
 
 SCHEMA_SYSTEM_PROMPT += "\n" + schema_capabilities_guidance() + "\n"

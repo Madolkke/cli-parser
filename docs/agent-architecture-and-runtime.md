@@ -141,7 +141,7 @@ Schema 模型调用 `submit_result_schema`，提交 Draft 2020-12 Schema。根 `
 
 调用方也可以经公共 `generate_from_schema(TemplateRequest)` 直接提供结果 Schema。该模式跳过 Schema 阶段，把传入 Schema 通过与模型提交相同的受限子集校验后深拷贝冻结，随后从这一步开始执行完全相同的流程；Schema 未通过校验时以 `invalid_injected_schema` 失败且不启动 TTP Agent。TTP 白名单、spawn 隔离解析、records 回验和 Agent 外终验一律不变。该模式下 `schema_agent_rounds`、`schema_submissions` 与 `schema_sampled_char_count` 恒为 `0`，`agent_rounds` 等式仍然成立。
 
-随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v49-schema-ambiguity-and-submission-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
+随后创建全新的 `ttp_template_generator`、Model、`AgentState` 和三工具 Toolkit。它的首个 UserMsg 只包含 `<frozen_result_schema_json>` 和本阶段 `<command_outputs_json>`；两段 JSON 都可以无损还原。当前提示版本为 `ttp-generator-v48-schema-naming-and-structure-policy-zh-cn`。`test_ttp_template` 可用独立文本执行 parse-only 探索，不依赖冻结 Schema，也不改变候选、records、Schema 或提交计数。普通 TTP 变量头按词法规则识别，Python 关键字字段保持冻结名称；只有 `ignore(...)` 特殊调用继续使用受限 AST。对于标签存在但值为空且右侧有固定分隔符的字段，提示明确区分不能匹配空字符串的内置模式与允许零长度的受限 `re`，并要求行内空白问题不得通过改变 group 起止边界解决。
 
 ### 5. 生成和修正 TTP
 
@@ -366,12 +366,3 @@ v45 计划编译与 v46 显式确认均未达到预试资格，运行接线已�
 类型、required、约束、采样、预算及 TTP 正文保持原政策，v44 可靠性修复继续生效。
 Schema 合法不能证明遵循建模规则；规则、业务合理性和重复一致性由审阅分别统计。
 本轮仅运行 56 次 Schema-only，可解析性未测，详见 [实施与评测协议](schema-policy-v48-protocol.md)。
-
-## v49 歧义判断与提交收敛
-
-当前 Schema 指导先确定独立列，再组合有可靠证据的上层限定。对齐与语义冲突只用输入
-证据复核一次，仍不明确时保留列并采用底层标签或必要语义名称；不得错接限定、漏空列
-或改写值。已完成选择无新矛盾不反复推翻。工具参数顶层仅 result_schema，根 required
-与 properties 都在其内。类型、required 基本政策、恢复协议及 TTP 阶段不变。
-本轮预算仍 8192；通过 SD-WAN 4 次及三个稳定用例 12 次后才采用，
-见 [协议](schema-ambiguity-v49-protocol.md)。
