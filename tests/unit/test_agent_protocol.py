@@ -212,9 +212,7 @@ def test_validation_summary_is_bounded_and_structural() -> None:
     }
     assert "secret" not in json.dumps(summary)
 
-    assert (
-        PROMPT_VERSION == "ttp-generator-v48-schema-naming-and-structure-policy-zh-cn"
-    )
+    assert PROMPT_VERSION == "ttp-generator-v49-schema-ambiguity-and-submission-zh-cn"
     assert _contains_chinese(SCHEMA_SYSTEM_PROMPT)
     assert _contains_chinese(TTP_SYSTEM_PROMPT)
     assert SCHEMA_SYSTEM_PROMPT != TTP_SYSTEM_PROMPT

@@ -4,8 +4,16 @@ from .prompt import SCHEMA_SYSTEM_PROMPT
 
 
 def _draft_guidance() -> str:
+    # This retired diagnostic uses the shared modeling guidance, but never the
+    # active product's direct-submission envelope or its envelope example.
+    base = SCHEMA_SYSTEM_PROMPT
+    if "四、结束判断与提交\n" in base:
+        prefix, rest = base.split("四、结束判断与提交\n", 1)
+        base = prefix + "以下为独立合成示例" + rest.split("以下为独立合成示例", 1)[1]
+    if "示例 D：" in base:
+        base = base.split("示例 D：", 1)[0]
     prompt = (
-        SCHEMA_SYSTEM_PROMPT.replace(
+        base.replace(
             "只通过 submit_result_schema 提交产物。普通 assistant 文本不会被视为产物。",
             "只通过 submit_schema_draft 提交完整 draft。"
             "普通 assistant 文本不会被视为产物。",

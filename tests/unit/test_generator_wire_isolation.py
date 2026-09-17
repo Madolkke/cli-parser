@@ -131,7 +131,7 @@ def _tool_feedback(request: dict[str, Any], call_id: str) -> dict[str, Any]:
     return json.loads(serialized)
 
 
-async def test_v48_policy_and_frozen_names_through_actual_openai_transport(
+async def test_v49_policy_and_frozen_names_through_actual_openai_transport(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Validate SDK serialization and stage separation, not model obedience."""
@@ -199,7 +199,15 @@ async def test_v48_policy_and_frozen_names_through_actual_openai_transport(
     assert result.artifact.records == [{"cache_ttl_ms": "30 ms"}]
     first, repaired, ttp, _ = requests
     schema_text = _request_text(first)
-    for marker in ("Survey: depot", "primary_counters", "先区分固定业务角色"):
+    for marker in (
+        "Survey: depot",
+        "primary_counters",
+        "先区分固定业务角色",
+        "Dispatch",
+        "Auxiliary",
+        "不反复推翻",
+        "工具参数顶层只能有 result_schema",
+    ):
         assert marker in schema_text
         assert marker not in _request_text(ttp)
     function = first["tools"][0]["function"]

@@ -30,7 +30,7 @@
 
 - 完整生成严格分为 Schema 和模板两个阶段。每阶段创建独立的 Agent、`OpenAIChatModel`、`AgentState` 和 Toolkit；对话上下文不跨阶段复用。
 - Schema 阶段只注册 `submit_result_schema`，第一个合法 Schema 永久冻结。v47 轻量草稿预试未达到门槛，候选运行接线已撤下；独立编译和来源诊断保留，见 [预试结果](docs/schema-draft-v47-pretrial-regression.md)。旧 SchemaPlan 实验也未采用，不恢复其坐标、实例或确认流程。
-- v48 在同一次直接生成中按业务值、实体归属、容器选择、标签名称和完整性复核的顺序建模。固定角色章节使用 object，同类实体使用 array；可靠英文标签保留词序、缩写、限定和单复数。规则属于模型指导，不是自动改名或确定性语义门禁，详见 [本轮协议](docs/schema-policy-v48-protocol.md)。
+- v49 在同一次直接生成中按业务值、实体归属、容器选择、标签名称和完整性复核的顺序建模。固定角色章节使用 object，同类实体使用 array；可靠英文标签保留词序、缩写、限定和单复数。规则属于模型指导，不是自动改名或确定性语义门禁，限定归属不明时保留独立列并采用底层标签；只复核一次后提交，工具顶层只含 result_schema。详见 [本轮协议](docs/schema-ambiguity-v49-protocol.md)。
 - 模板阶段固定注册 `submit_ttp_template`、可选的 `test_ttp_template` 和无参数的 `finish_generation`。测试工具只对一份独立文本执行 parse-only 实验，不保存候选，也不执行 Schema 回验。
 - 模板提交与独立测试的模型反馈先返回有界 `<validation_feedback>`，再返回完整解析结果；校验事实来自当前确定性执行的白名单投影，不读取 Trace。反馈区分本次校验与保留候选，校验通过不代表内容完整或忠实。
 - 模板提交反馈还提供基于冻结 Schema 与本次 records 的有界字段覆盖事实；可选路径缺失只提示对照原文复核，不改变验收或推断原文存在字段。独立测试不提供 Schema 覆盖事实。
@@ -64,7 +64,7 @@
 
 - `evals/test_sets/` 是唯一标准测试集来源；每个 complete 数据集包含 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`。
 - `evals/datasets.toml` 使用版本 `2`，文件条目只登记 `{ file = "..." }`。当前登记 11 个数据集、38 份输入，其中 10 个 complete 数据集覆盖 34 份输入，Huawei 的 4 份输入处于 template 阶段。
-- `scripts/run_test_sets.py` 是唯一标准评测入口。`list`、`preflight` 和 `baseline` 离线运行；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。 `schema-only` 对 complete 数据集仅传入所选原始输入并调用 `propose_schema()`，独立统计命名、结构一致性和人工语义审阅，不与 TTP 准确率 baseline 混用。 `end-to-end` 调用 `generate()` 并用受限 Schema/解析审阅计算联合通过；当前入口只运行默认 v48，历史实验与受限指标读取保持兼容；Schema 审阅 v2 分开统计规则遵循、业务合理性和命名／层级一致性，详情见 [评测说明](docs/agent-evaluation.md)。
+- `scripts/run_test_sets.py` 是唯一标准评测入口。`list`、`preflight` 和 `baseline` 离线运行；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。 `schema-only` 对 complete 数据集仅传入所选原始输入并调用 `propose_schema()`，独立统计命名、结构一致性和人工语义审阅，不与 TTP 准确率 baseline 混用。 `end-to-end` 调用 `generate()` 并用受限 Schema/解析审阅计算联合通过；当前入口只运行默认 v49，历史实验与受限指标读取保持兼容；Schema 审阅 v2 分开统计规则遵循、业务合理性和命名／层级一致性，详情见 [评测说明](docs/agent-evaluation.md)。
 - 标准答案只能根据输入文本人工核对，不读取被测产物、Trace、历史 artifact、上游模板或其他参考结构，也不使用被测模型生成。
 - 普通 pytest 必须离线、稳定且不依赖模型。真实模型集成测试使用 `live` marker 和显式环境配置；首版交付前至少完成一次真实模型端到端闭环。
 - 新增或修改测试资产后，运行默认及 full-scope preflight/baseline，并同步更新注册表、第三方来源说明和文档计数。

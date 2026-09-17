@@ -125,8 +125,9 @@ def test_flat_device_contract_does_not_require_array_wrapper():
 
 def _prompt_examples():
     blocks = re.findall(r"```json\n(.*?)\n```", SCHEMA_SYSTEM_PROMPT, re.DOTALL)
-    assert len(blocks) == 3
-    return [json.loads(block) for block in blocks]
+    assert len(blocks) == 4
+    schemas = [json.loads(block) for block in blocks]
+    return [schema for schema in schemas if "result_schema" not in schema]
 
 
 def _queue_records():
