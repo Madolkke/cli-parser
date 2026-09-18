@@ -1,0 +1,383 @@
+{
+  "review_version": 2,
+  "schema_metrics_version": 2,
+  "run_id": "20260918T153142.179476Z",
+  "parseability": "not_tested",
+  "planned_trials": 4,
+  "planned_pairs": 6,
+  "generation_failed_trials": 0,
+  "revalidation_failed_trials": 0,
+  "reviewed_trials": 4,
+  "missing_trial_reviews": 0,
+  "acceptable_trials": 4,
+  "needs_revision_trials": 0,
+  "unjudgeable_trials": 0,
+  "reasonable_proposal_rate": 1.0,
+  "valid_pairs": 6,
+  "reviewed_pairs": 6,
+  "missing_pair_reviews": 0,
+  "unknown_annotation_pairs": 0,
+  "reasonable_pairs": 6,
+  "confirmed_reasonable_consistent_pairs": 0,
+  "reasonable_pair_consistency": 0.0,
+  "planned_pair_confirmed_rate": 0.0,
+  "all_repeats_reasonable_consistent": {
+    "cisco_ios.show_sdwan_control_connections": false
+  },
+  "policy_compliance": {
+    "planned_trials": 4,
+    "trial_counts": {
+      "compliant": 1,
+      "issue": 1,
+      "unknown": 2,
+      "failed": 0,
+      "missing": 0
+    },
+    "checks": {
+      "container_name_source": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 4
+      },
+      "fallback_and_collision": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 4
+      },
+      "fixed_role_sections": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 4,
+        "passed": 0
+      },
+      "ownership_and_wrappers": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 4
+      },
+      "qualifier_ownership": {
+        "insufficient_evidence": 2,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 2
+      },
+      "repeated_entities": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 4
+      },
+      "root_scope": {
+        "insufficient_evidence": 0,
+        "issue": 0,
+        "not_applicable": 0,
+        "passed": 4
+      },
+      "source_label_fidelity": {
+        "insufficient_evidence": 0,
+        "issue": 1,
+        "not_applicable": 0,
+        "passed": 3
+      }
+    },
+    "missing_trial_reviews": 0,
+    "passed_trials": 1,
+    "pass_rate": 0.25,
+    "evidence_complete": false,
+    "by_case": {
+      "cisco_ios.show_sdwan_control_connections": {
+        "planned_trials": 4,
+        "trial_counts": {
+          "compliant": 1,
+          "issue": 1,
+          "unknown": 2,
+          "failed": 0,
+          "missing": 0
+        },
+        "passed_trials": 1
+      }
+    }
+  },
+  "pair_consistency_review": {
+    "naming_consistency": {
+      "valid_pairs": 6,
+      "reviewed_pairs": 6,
+      "missing_pairs": 0,
+      "consistent": 0,
+      "different": 6,
+      "unknown": 0,
+      "judgeable_pairs": 6,
+      "consistent_valid_pair_rate": 0.0,
+      "consistent_judgeable_pair_rate": 0.0
+    },
+    "hierarchy_consistency": {
+      "valid_pairs": 6,
+      "reviewed_pairs": 6,
+      "missing_pairs": 0,
+      "consistent": 6,
+      "different": 0,
+      "unknown": 0,
+      "judgeable_pairs": 6,
+      "consistent_valid_pair_rate": 1.0,
+      "consistent_judgeable_pair_rate": 1.0
+    }
+  },
+  "review_complete": true,
+  "trials": [
+    {
+      "trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/1",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "7333efeb-6883-b639-5f2e-401c4ea43336",
+      "span_ids": [
+        "00000000-0000-0000-2c04-b48c869018da",
+        "00000000-0000-0000-5d58-aad069ade47b"
+      ],
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "passed",
+        "qualifier_ownership": "passed",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed",
+        "fixed_role_sections": "not_applicable"
+      },
+      "policy_paths": []
+    },
+    {
+      "trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/2",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "f80d0b87-361e-1bef-d765-248b7c304230",
+      "span_ids": [
+        "00000000-0000-0000-2f2b-03ffe20e49c3",
+        "00000000-0000-0000-0fb1-b5e034267cf1"
+      ],
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "passed",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed",
+        "fixed_role_sections": "not_applicable"
+      },
+      "policy_paths": [
+        "/peer/*/group_id"
+      ]
+    },
+    {
+      "trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/3",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "f61cfbb5-3bf4-d988-e6ac-a340ec2181fd",
+      "span_ids": [
+        "00000000-0000-0000-d628-235d74259da5",
+        "00000000-0000-0000-1577-7e71b9daf118"
+      ],
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "issue",
+        "qualifier_ownership": "passed",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed",
+        "fixed_role_sections": "not_applicable"
+      },
+      "policy_paths": [
+        "/peer/*/priv_port",
+        "/peer/*/pub_port"
+      ]
+    },
+    {
+      "trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/4",
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "trace_id": "878cf330-f672-29a9-8db7-7a7b934f1a0b",
+      "span_ids": [
+        "00000000-0000-0000-c62b-6fe2ae9584f7",
+        "00000000-0000-0000-d4b2-ef23a5025cea"
+      ],
+      "overall": "acceptable",
+      "categories": [],
+      "paths": [],
+      "dimensions": {
+        "naming": "passed",
+        "coverage": "passed",
+        "decomposition": "passed",
+        "structure": "passed",
+        "types_required": "passed",
+        "value_boundaries": "passed",
+        "overconstraint": "passed"
+      },
+      "policy_checks": {
+        "root_scope": "passed",
+        "repeated_entities": "passed",
+        "ownership_and_wrappers": "passed",
+        "source_label_fidelity": "passed",
+        "qualifier_ownership": "insufficient_evidence",
+        "container_name_source": "passed",
+        "fallback_and_collision": "passed",
+        "fixed_role_sections": "not_applicable"
+      },
+      "policy_paths": [
+        "/peer/*/controller_group_id"
+      ]
+    }
+  ],
+  "pairs": [
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/2",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "field_meaning",
+        "type"
+      ],
+      "paths": [
+        "/peer/*/id",
+        "/peer/*/group_id",
+        "/peer/*/peer_priv_port",
+        "/peer/*/peer_pub_port"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming"
+      ],
+      "paths": [
+        "/peer/*/peer_priv_port",
+        "/peer/*/priv_port",
+        "/peer/*/peer_pub_port",
+        "/peer/*/pub_port"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/1",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "field_meaning"
+      ],
+      "paths": [
+        "/peer/*/id",
+        "/peer/*/controller_group_id"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/2",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/3",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "field_meaning",
+        "type"
+      ],
+      "paths": [
+        "/peer/*/group_id",
+        "/peer/*/id",
+        "/peer/*/peer_priv_port",
+        "/peer/*/priv_port",
+        "/peer/*/peer_pub_port",
+        "/peer/*/pub_port"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/2",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "field_meaning",
+        "type"
+      ],
+      "paths": [
+        "/peer/*/group_id",
+        "/peer/*/controller_group_id",
+        "/peer/*/peer_priv_port",
+        "/peer/*/peer_pub_port"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    },
+    {
+      "case_id": "cisco_ios.show_sdwan_control_connections",
+      "left_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/3",
+      "right_trial_id": "20260918T153142.179476Z/cisco_ios.show_sdwan_control_connections/4",
+      "annotation_semantics": "equivalent",
+      "judgment": "both_reasonable",
+      "categories": [
+        "synonym_naming",
+        "field_meaning"
+      ],
+      "paths": [
+        "/peer/*/id",
+        "/peer/*/controller_group_id",
+        "/peer/*/priv_port",
+        "/peer/*/peer_priv_port",
+        "/peer/*/pub_port",
+        "/peer/*/peer_pub_port"
+      ],
+      "naming_consistency": "different",
+      "hierarchy_consistency": "consistent"
+    }
+  ]
+}

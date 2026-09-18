@@ -13,8 +13,6 @@ from cli_parser_agent import (
     TtpGeneratorSettings,
 )
 from cli_parser_agent.ttp_generation.agent.prompt import (
-    SCHEMA_NO_TOOL_RETRY_PROMPT,
-    SCHEMA_REASONING_LENGTH_RETRY_PROMPT,
     SCHEMA_SYSTEM_PROMPT,
     build_ttp_task_prompt,
 )
@@ -149,24 +147,7 @@ async def test_schema_retries_preserve_parameters_and_ttp_isolation(
         assert system == SCHEMA_SYSTEM_PROMPT or system == [
             {"type": "text", "text": SCHEMA_SYSTEM_PROMPT}
         ]
-    assert SCHEMA_REASONING_LENGTH_RETRY_PROMPT not in json.dumps(
-        initial, ensure_ascii=False
-    )
-    for request_index in range(1, failed_rounds + 1):
-        request = requests[request_index]
-        content = json.dumps(request["messages"][-1]["content"], ensure_ascii=False)
-        if failed_rounds == 3 and not truncated_submission and request_index == 3:
-            # Forced submission appends its envelope reminder after recovery.
-            content = json.dumps(request["messages"][-2]["content"], ensure_ascii=False)
-        if truncated_submission and request_index == failed_rounds:
-            assert SCHEMA_NO_TOOL_RETRY_PROMPT in content
-            assert SCHEMA_REASONING_LENGTH_RETRY_PROMPT not in content
-        else:
-            assert SCHEMA_REASONING_LENGTH_RETRY_PROMPT in content
     ttp = requests[failed_rounds + 1]
-    assert SCHEMA_REASONING_LENGTH_RETRY_PROMPT not in json.dumps(
-        ttp, ensure_ascii=False
-    )
     assert ttp["messages"][-1]["content"] == [
         {"type": "text", "text": build_ttp_task_prompt(["Value: one\n"], schema)}
     ]

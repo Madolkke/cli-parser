@@ -8,30 +8,19 @@ from typing import Any
 
 from ..validation.json_schema import schema_capabilities_guidance
 
-PROMPT_VERSION = "ttp-generator-v51-schema-length-recovery-zh-cn"
+PROMPT_VERSION = "ttp-generator-v48-schema-naming-and-structure-policy-zh-cn"
 
 SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
     "请现在只调用 submit_result_schema，并提交 result_schema。"
 )
-SCHEMA_REASONING_LENGTH_RETRY_PROMPT = (
-    "上一轮推理已耗尽输出预算，尚未提交产物。请根据原始输入完成当前选择并调用 "
-    "submit_result_schema，不重新推测设备惯例。先保留所有独立列和可靠的标签限定；"
-    "只有对齐、明确跨列范围或重复结构能证明归属的上层词才参与该列名称。"
-    "孤立上层词无法可靠归属时，不把它拼到任何列，使用清楚的底层标签；"
-    "上述退回底层标签的情形发生重名时，再用可靠限定或准确的语义名称消歧。"
-    "例如同列的 Local 与 Ref 可组成 local_ref；无法归属的浮动标题不能改变"
-    "唯一底层标签 Key 的名称 key。保守名称的 description 也不得断言未经证实的含义。"
-    "不要为消除歧义漏列、合并独立值或改写空槽及占位字符串。"
-    "实体归属、类型和 required 继续按系统规则判断；明确存在的空槽不等于字段缺失。"
-    "已被输入支持的选择保持不变，提交包含全部字段的 result_schema；"
-    "工具顶层仅有 result_schema，properties 和 required 位于相应 object 内。"
-)
 SCHEMA_FORCED_SUBMISSION_PROMPT = (
     "这是 Schema 阶段最后一次提交机会。请停止继续分析并立即调用 submit_result_schema。"
-    "沿用系统规则和最近的恢复指导，不重新改变实体归属、类型或 required 政策。"
-    "工具顶层只能有 result_schema，提交描述整份输出的完整 Schema；"
-    "根 properties 和 required 都必须位于 result_schema 内。"
+    "只根据输入中直接可见的列、行和章节提交完整 result_schema：重复表格保持一个 array，"
+    "上层表头限定无法可靠归属时保留清楚的底层标签，不创造组合字段、不拆成邻列字段；"
+    "空值槽在所有展示行中都为空时字段可选，真正缺失的列不要设为 required；"
+    "名称或编号类字段保持 string，只有明确的计数才使用 integer。不要添加任何输入中"
+    "没有证据的字段、限定或层级。"
 )
 TTP_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的可用工具，普通文本不会被视为产物。"

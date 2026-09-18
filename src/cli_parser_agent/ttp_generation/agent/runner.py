@@ -43,7 +43,6 @@ from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
 from .prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
-    SCHEMA_REASONING_LENGTH_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
 from .protocol import (
@@ -941,9 +940,6 @@ async def _run_generation_phase(
             )
         next_message = _retry_message(phase, expected_tools)
         if retained_reasoning is not None:
-            next_message = UserMsg(
-                name="user", content=SCHEMA_REASONING_LENGTH_RETRY_PROMPT
-            )
             agent.state.context.append(retained_reasoning)
             if progress is not None:
                 progress.custom(
