@@ -1,0 +1,716 @@
+{
+  "telemetry_version": 1,
+  "run_id": "20260918T143806.388244Z",
+  "mode": "schema-only",
+  "source": "laminar_sql_read_only",
+  "evidence_scope": "raw_provider_response_and_captured_request_messages_and_span_attributes",
+  "parseability": "not_tested",
+  "wire_parameter_status": "thinking_and_tool_choice_not_captured",
+  "query_time_utc": "2026-09-18T15:23:07.808308+00:00",
+  "recorded_run_configuration": {
+    "source": "runner_summary",
+    "max_tokens": 8192,
+    "context_size": 128000,
+    "model_timeout_seconds": 60.0,
+    "model_max_retries": 2,
+    "total_timeout_seconds": 900.0,
+    "max_agent_rounds": 13
+  },
+  "totals": {
+    "model_calls": 13,
+    "raw_finish_reason_counts": {
+      "length": 9,
+      "tool_calls": 4
+    },
+    "pure_reasoning_length_calls": 9,
+    "input_tokens": 142049,
+    "output_tokens": 80668,
+    "total_tokens": 222717,
+    "reasoning_tokens": null,
+    "reasoning_tokens_status": "unknown",
+    "observed_reasoning_tokens_sum": 79288,
+    "reasoning_tokens_observed_calls": 11,
+    "reasoning_tokens_unknown_calls": 2,
+    "input_cost_usd": 0.010552236,
+    "output_cost_usd": 0.0968016,
+    "total_cost_usd": 0.107353836,
+    "cost_source": "laminar_reported",
+    "model_span_seconds": 343.7035451,
+    "forced_submission_reminder_calls": 2,
+    "thinking_wire_parameter_observed_calls": 0,
+    "tool_choice_wire_parameter_observed_calls": 0
+  },
+  "trials": [
+    {
+      "trial_id": "20260918T143806.388244Z/cisco_ios.show_sdwan_control_connections/1",
+      "trace_id": "5c3c865f-54b6-5b38-feae-a54a26ed33c8",
+      "root_span_id": "00000000-0000-0000-c296-c1fb2417e9e9",
+      "trial_elapsed_seconds": 106.10900000000038,
+      "trace_observed_budgets": {
+        "total_timeout_seconds": 900.0,
+        "max_agent_rounds": 13,
+        "max_ttp_submissions": 9,
+        "model_http_timeout_seconds": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "totals": {
+        "model_calls": 4,
+        "raw_finish_reason_counts": {
+          "length": 3,
+          "tool_calls": 1
+        },
+        "pure_reasoning_length_calls": 3,
+        "input_tokens": 43516,
+        "output_tokens": 24912,
+        "total_tokens": 68428,
+        "reasoning_tokens": null,
+        "reasoning_tokens_status": "unknown",
+        "observed_reasoning_tokens_sum": 24576,
+        "reasoning_tokens_observed_calls": 3,
+        "reasoning_tokens_unknown_calls": 1,
+        "input_cost_usd": 0.003308112,
+        "output_cost_usd": 0.0298944,
+        "total_cost_usd": 0.033202512,
+        "cost_source": "laminar_reported",
+        "model_span_seconds": 101.9026682,
+        "forced_submission_reminder_calls": 1,
+        "thinking_wire_parameter_observed_calls": 0,
+        "tool_choice_wire_parameter_observed_calls": 0
+      },
+      "final_call": {
+        "span_id": "00000000-0000-0000-777c-6a56f160fc58",
+        "forced_submission_reminder_observed": true,
+        "request_reasoning_messages": 0,
+        "thinking_wire_value": {
+          "status": "unknown",
+          "value": null
+        },
+        "tool_choice_wire_value": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "calls": [
+        {
+          "call_index": 1,
+          "span_id": "00000000-0000-0000-911e-c6fd76da04ff",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 29271,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 4213,
+          "output_tokens": 8192,
+          "total_tokens": 12405,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.0012639,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.0110943,
+          "span_duration_seconds": 34.7719098,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        },
+        {
+          "call_index": 2,
+          "span_id": "00000000-0000-0000-59c5-565057695da9",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 28969,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 12701,
+          "output_tokens": 8192,
+          "total_tokens": 20893,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000197628,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.010028028,
+          "span_duration_seconds": 32.8087489,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 1,
+          "request_reasoning_chars": 29271
+        },
+        {
+          "call_index": 3,
+          "span_id": "00000000-0000-0000-2af4-83f3fab52e2d",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 29762,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 21189,
+          "output_tokens": 8192,
+          "total_tokens": 29381,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000222684,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.010053084,
+          "span_duration_seconds": 32.9429137,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 2,
+          "request_reasoning_chars": 58240
+        },
+        {
+          "call_index": 4,
+          "span_id": "00000000-0000-0000-777c-6a56f160fc58",
+          "raw_finish_reason": "tool_calls",
+          "pure_reasoning_length": false,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 0,
+          "reply_tool_call_count": 1,
+          "schema_submission_tool_observed": true,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 5413,
+          "output_tokens": 336,
+          "total_tokens": 5749,
+          "reasoning_tokens": null,
+          "reasoning_tokens_status": "unknown",
+          "input_cost_usd": 0.0016239,
+          "output_cost_usd": 0.0004032,
+          "total_cost_usd": 0.0020271,
+          "span_duration_seconds": 1.3790958,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": true,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        }
+      ]
+    },
+    {
+      "trial_id": "20260918T143806.388244Z/cisco_ios.show_sdwan_control_connections/2",
+      "trace_id": "86b6ba1f-ebf7-41ef-7fd3-bf211701aa68",
+      "root_span_id": "00000000-0000-0000-855f-e4cbd8dcfc17",
+      "trial_elapsed_seconds": 83.89099999999962,
+      "trace_observed_budgets": {
+        "total_timeout_seconds": 900.0,
+        "max_agent_rounds": 13,
+        "max_ttp_submissions": 9,
+        "model_http_timeout_seconds": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "totals": {
+        "model_calls": 3,
+        "raw_finish_reason_counts": {
+          "length": 2,
+          "tool_calls": 1
+        },
+        "pure_reasoning_length_calls": 2,
+        "input_tokens": 38103,
+        "output_tokens": 18425,
+        "total_tokens": 56528,
+        "reasoning_tokens": 18057,
+        "reasoning_tokens_status": "observed",
+        "observed_reasoning_tokens_sum": 18057,
+        "reasoning_tokens_observed_calls": 3,
+        "reasoning_tokens_unknown_calls": 0,
+        "input_cost_usd": 0.001684212,
+        "output_cost_usd": 0.02211,
+        "total_cost_usd": 0.023794212,
+        "cost_source": "laminar_reported",
+        "model_span_seconds": 80.955954,
+        "forced_submission_reminder_calls": 0,
+        "thinking_wire_parameter_observed_calls": 0,
+        "tool_choice_wire_parameter_observed_calls": 0
+      },
+      "final_call": {
+        "span_id": "00000000-0000-0000-4733-313e7dae645d",
+        "forced_submission_reminder_observed": false,
+        "request_reasoning_messages": 2,
+        "thinking_wire_value": {
+          "status": "unknown",
+          "value": null
+        },
+        "tool_choice_wire_value": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "calls": [
+        {
+          "call_index": 1,
+          "span_id": "00000000-0000-0000-0fd2-61a2fdbd4808",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 31075,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 4213,
+          "output_tokens": 8192,
+          "total_tokens": 12405,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.0012639,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.0110943,
+          "span_duration_seconds": 36.2829845,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        },
+        {
+          "call_index": 2,
+          "span_id": "00000000-0000-0000-6ed8-a6794625e665",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 30709,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 12701,
+          "output_tokens": 8192,
+          "total_tokens": 20893,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000197628,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.010028028,
+          "span_duration_seconds": 35.9394203,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 1,
+          "request_reasoning_chars": 31075
+        },
+        {
+          "call_index": 3,
+          "span_id": "00000000-0000-0000-4733-313e7dae645d",
+          "raw_finish_reason": "tool_calls",
+          "pure_reasoning_length": false,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 6232,
+          "reply_tool_call_count": 1,
+          "schema_submission_tool_observed": true,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 21189,
+          "output_tokens": 2041,
+          "total_tokens": 23230,
+          "reasoning_tokens": 1673,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000222684,
+          "output_cost_usd": 0.0024492,
+          "total_cost_usd": 0.002671884,
+          "span_duration_seconds": 8.7335492,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 2,
+          "request_reasoning_chars": 61784
+        }
+      ]
+    },
+    {
+      "trial_id": "20260918T143806.388244Z/cisco_ios.show_sdwan_control_connections/3",
+      "trace_id": "f1b59f51-a295-9ad7-8a46-6dbec1835e0d",
+      "root_span_id": "00000000-0000-0000-f0e9-6ba5defc43a2",
+      "trial_elapsed_seconds": 113.60900000000038,
+      "trace_observed_budgets": {
+        "total_timeout_seconds": 900.0,
+        "max_agent_rounds": 13,
+        "max_ttp_submissions": 9,
+        "model_http_timeout_seconds": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "totals": {
+        "model_calls": 4,
+        "raw_finish_reason_counts": {
+          "length": 3,
+          "tool_calls": 1
+        },
+        "pure_reasoning_length_calls": 3,
+        "input_tokens": 43516,
+        "output_tokens": 24914,
+        "total_tokens": 68430,
+        "reasoning_tokens": null,
+        "reasoning_tokens_status": "unknown",
+        "observed_reasoning_tokens_sum": 24576,
+        "reasoning_tokens_observed_calls": 3,
+        "reasoning_tokens_unknown_calls": 1,
+        "input_cost_usd": 0.0017652,
+        "output_cost_usd": 0.0298968,
+        "total_cost_usd": 0.031662,
+        "cost_source": "laminar_reported",
+        "model_span_seconds": 109.2710524,
+        "forced_submission_reminder_calls": 1,
+        "thinking_wire_parameter_observed_calls": 0,
+        "tool_choice_wire_parameter_observed_calls": 0
+      },
+      "final_call": {
+        "span_id": "00000000-0000-0000-a363-01870b8f6b1c",
+        "forced_submission_reminder_observed": true,
+        "request_reasoning_messages": 0,
+        "thinking_wire_value": {
+          "status": "unknown",
+          "value": null
+        },
+        "tool_choice_wire_value": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "calls": [
+        {
+          "call_index": 1,
+          "span_id": "00000000-0000-0000-a819-fb833b567562",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 28165,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 4213,
+          "output_tokens": 8192,
+          "total_tokens": 12405,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.0012639,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.0110943,
+          "span_duration_seconds": 34.0705835,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        },
+        {
+          "call_index": 2,
+          "span_id": "00000000-0000-0000-497a-09bb1e9961d6",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 30354,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 12701,
+          "output_tokens": 8192,
+          "total_tokens": 20893,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000197628,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.010028028,
+          "span_duration_seconds": 36.6658177,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 1,
+          "request_reasoning_chars": 28165
+        },
+        {
+          "call_index": 3,
+          "span_id": "00000000-0000-0000-533d-3d053ca354b3",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 30649,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 21189,
+          "output_tokens": 8192,
+          "total_tokens": 29381,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.000222684,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.010053084,
+          "span_duration_seconds": 37.1507207,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 2,
+          "request_reasoning_chars": 58519
+        },
+        {
+          "call_index": 4,
+          "span_id": "00000000-0000-0000-a363-01870b8f6b1c",
+          "raw_finish_reason": "tool_calls",
+          "pure_reasoning_length": false,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 0,
+          "reply_tool_call_count": 1,
+          "schema_submission_tool_observed": true,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 5413,
+          "output_tokens": 338,
+          "total_tokens": 5751,
+          "reasoning_tokens": null,
+          "reasoning_tokens_status": "unknown",
+          "input_cost_usd": 8.098799999999999e-05,
+          "output_cost_usd": 0.0004056,
+          "total_cost_usd": 0.000486588,
+          "span_duration_seconds": 1.3839305,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": true,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        }
+      ]
+    },
+    {
+      "trial_id": "20260918T143806.388244Z/cisco_ios.show_sdwan_control_connections/4",
+      "trace_id": "289c57ee-9e63-4b0a-dc43-bb39c125ff49",
+      "root_span_id": "00000000-0000-0000-c581-b416708a0355",
+      "trial_elapsed_seconds": 55.03100000000086,
+      "trace_observed_budgets": {
+        "total_timeout_seconds": 900.0,
+        "max_agent_rounds": 13,
+        "max_ttp_submissions": 9,
+        "model_http_timeout_seconds": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "totals": {
+        "model_calls": 2,
+        "raw_finish_reason_counts": {
+          "length": 1,
+          "tool_calls": 1
+        },
+        "pure_reasoning_length_calls": 1,
+        "input_tokens": 16914,
+        "output_tokens": 12417,
+        "total_tokens": 29331,
+        "reasoning_tokens": 12079,
+        "reasoning_tokens_status": "observed",
+        "observed_reasoning_tokens_sum": 12079,
+        "reasoning_tokens_observed_calls": 2,
+        "reasoning_tokens_unknown_calls": 0,
+        "input_cost_usd": 0.003794712,
+        "output_cost_usd": 0.0149004,
+        "total_cost_usd": 0.018695112,
+        "cost_source": "laminar_reported",
+        "model_span_seconds": 51.5738705,
+        "forced_submission_reminder_calls": 0,
+        "thinking_wire_parameter_observed_calls": 0,
+        "tool_choice_wire_parameter_observed_calls": 0
+      },
+      "final_call": {
+        "span_id": "00000000-0000-0000-b292-af16695cab3e",
+        "forced_submission_reminder_observed": false,
+        "request_reasoning_messages": 1,
+        "thinking_wire_value": {
+          "status": "unknown",
+          "value": null
+        },
+        "tool_choice_wire_value": {
+          "status": "unknown",
+          "value": null
+        }
+      },
+      "calls": [
+        {
+          "call_index": 1,
+          "span_id": "00000000-0000-0000-d084-d5f6fa2733a7",
+          "raw_finish_reason": "length",
+          "pure_reasoning_length": true,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 29701,
+          "reply_tool_call_count": 0,
+          "schema_submission_tool_observed": false,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 4213,
+          "output_tokens": 8192,
+          "total_tokens": 12405,
+          "reasoning_tokens": 8192,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.0012639,
+          "output_cost_usd": 0.0098304,
+          "total_cost_usd": 0.0110943,
+          "span_duration_seconds": 32.0597076,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 0,
+          "request_reasoning_chars": 0
+        },
+        {
+          "call_index": 2,
+          "span_id": "00000000-0000-0000-b292-af16695cab3e",
+          "raw_finish_reason": "tool_calls",
+          "pure_reasoning_length": false,
+          "reply_text_chars": 0,
+          "reply_reasoning_chars": 13939,
+          "reply_tool_call_count": 1,
+          "schema_submission_tool_observed": true,
+          "request_model": "deepseek-v4-flash",
+          "response_model": "deepseek-flash",
+          "input_tokens": 12701,
+          "output_tokens": 4225,
+          "total_tokens": 16926,
+          "reasoning_tokens": 3887,
+          "reasoning_tokens_status": "observed",
+          "input_cost_usd": 0.002530812,
+          "output_cost_usd": 0.00507,
+          "total_cost_usd": 0.007600812,
+          "span_duration_seconds": 19.5141629,
+          "request_max_tokens_attribute": 8192,
+          "request_temperature_attribute": 0.0,
+          "request_stream_attribute": false,
+          "request_thinking": {
+            "status": "unknown",
+            "value": null
+          },
+          "request_tool_choice": {
+            "status": "unknown",
+            "value": null
+          },
+          "forced_submission_reminder_observed": false,
+          "request_reasoning_messages": 1,
+          "request_reasoning_chars": 29701
+        }
+      ]
+    }
+  ]
+}
