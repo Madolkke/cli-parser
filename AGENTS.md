@@ -31,6 +31,7 @@
 - 完整生成严格分为 Schema 和模板两个阶段。每阶段创建独立的 Agent、`OpenAIChatModel`、`AgentState` 和 Toolkit；对话上下文不跨阶段复用。
 - Schema 阶段只注册 `submit_result_schema`，第一个合法 Schema 永久冻结。v47 轻量草稿预试未达到门槛，候选运行接线已撤下；独立编译和来源诊断保留，见 [预试结果](docs/schema-draft-v47-pretrial-regression.md)。旧 SchemaPlan 实验也未采用，不恢复其坐标、实例或确认流程。
 - v48 在同一次直接生成中按业务值、实体归属、容器选择、标签名称和完整性复核的顺序建模。固定角色章节使用 object，同类实体使用 array；可靠英文标签保留词序、缩写、限定和单复数。规则属于模型指导，不是自动改名或确定性语义门禁，详见 [本轮协议](docs/schema-policy-v48-protocol.md)。
+- 当前 v51 候选保留 v48 首轮系统、任务和工具，只有已完成的纯推理截断后改用有界限定归属恢复提醒；最终强制提交提醒不再增加类型或 required 政策。未通过真实保护前不能宣称采用，见 [候选协议](docs/schema-length-recovery-v51-protocol.md)。全局 v50 叠加已撤下，诊断证据保留。
 - 模板阶段固定注册 `submit_ttp_template`、可选的 `test_ttp_template` 和无参数的 `finish_generation`。测试工具只对一份独立文本执行 parse-only 实验，不保存候选，也不执行 Schema 回验。
 - 模板提交与独立测试的模型反馈先返回有界 `<validation_feedback>`，再返回完整解析结果；校验事实来自当前确定性执行的白名单投影，不读取 Trace。反馈区分本次校验与保留候选，校验通过不代表内容完整或忠实。
 - 模板提交反馈还提供基于冻结 Schema 与本次 records 的有界字段覆盖事实；可选路径缺失只提示对照原文复核，不改变验收或推断原文存在字段。独立测试不提供 Schema 覆盖事实。

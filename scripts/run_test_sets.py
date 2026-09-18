@@ -729,6 +729,20 @@ _DRAFT_REJECTION_CODES = (
 )
 
 
+def _forced_submission_projection(value):
+    """Accept only the versioned runtime event, never infer it from text or usage."""
+    if (
+        not isinstance(value, Mapping)
+        or set(value) != {"reason", "consecutive_no_tool_responses", "runtime_policy"}
+        or value["reason"] != "pure_reasoning_length_retry_limit"
+        or value["runtime_policy"] != "schema-forced-submission-v1"
+        or type(value["consecutive_no_tool_responses"]) is not int
+        or value["consecutive_no_tool_responses"] <= 0
+    ):
+        return None
+    return dict(value)
+
+
 class _SchemaTracer:
     """Project observations; optionally retain only a frozen schema in memory."""
 
@@ -755,6 +769,8 @@ class _SchemaTracer:
         self.truncated_submission_rounds = []
         self.source_view_observations = []
         self.reasoning_history_observations = []
+        self.forced_submission_count = 0
+        self.forced_submission_events = []
         self._last_schema_submission = 0
 
     def _observe_source_and_protocol(self, event):
@@ -817,6 +833,14 @@ class _SchemaTracer:
                 "execution_error",
             }:
                 self.protocol_boundaries.append(category)
+        elif event.name == "cli_parser.schema.forced_submission":
+            if (event.metadata or {}).get("sensitive") is not False:
+                return
+            projection = _forced_submission_projection(value)
+            if projection is not None:
+                self.forced_submission_count += 1
+                if len(self.forced_submission_events) < 32:
+                    self.forced_submission_events.append(projection)
         elif event.name == "cli_parser.schema.reasoning_recovery":
             # This event carries fixed protocol facts only. Do not accept
             # future free-text extensions into persisted evaluation artifacts.
@@ -1215,6 +1239,14 @@ class _SchemaTracer:
                 if self.reasoning_history_observations
                 else "unavailable",
                 "events": list(self.reasoning_history_observations),
+            },
+            "forced_submission": {
+                # The event records activation, not a completed HTTP request,
+                # a tool submission or proof that the resulting Schema is valid.
+                # Legacy/missing events cannot be interpreted as zero activations.
+                "status": "observed" if self.forced_submission_count else "unavailable",
+                "activation_count": self.forced_submission_count or None,
+                "events": list(self.forced_submission_events),
             },
             # AgentScope's ModelCallEndEvent is a framework finish reason;
             # it does not expose the supplier's `length` finish_reason.
@@ -1695,6 +1727,7 @@ class _RoundTracer:
             "cli_parser.model.attempt",
             "cli_parser.protocol.repair",
             "cli_parser.protocol.boundary",
+            "cli_parser.schema.forced_submission",
         }
     )
 
@@ -1712,6 +1745,12 @@ class _RoundTracer:
             return
         custom_name = event.name if is_custom else None
         value = getattr(event, "value", None)
+        if custom_name == "cli_parser.schema.forced_submission":
+            if metadata.get("phase") != "schema":
+                return
+            value = _forced_submission_projection(value)
+            if value is None:
+                return
         if custom_name == "cli_parser.generation.execution_facts":
             self.execution_facts = project_execution_facts(value)
             value = self.execution_facts
@@ -1741,7 +1780,9 @@ class _RoundTracer:
             )
         elif custom_name is not None:
             row["name"] = custom_name
-        if isinstance(value, Mapping):
+        if custom_name == "cli_parser.schema.forced_submission":
+            row["value"] = value
+        elif isinstance(value, Mapping):
             row["value"] = {
                 key: item
                 for key, item in value.items()

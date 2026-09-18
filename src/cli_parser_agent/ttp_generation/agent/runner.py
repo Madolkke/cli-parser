@@ -43,6 +43,7 @@ from ...observability import finish_laminar_span, start_laminar_span
 from ..progress import ProgressEmitter
 from .prompt import (
     SCHEMA_NO_TOOL_RETRY_PROMPT,
+    SCHEMA_REASONING_LENGTH_RETRY_PROMPT,
     TTP_NO_TOOL_RETRY_PROMPT,
 )
 from .protocol import (
@@ -482,6 +483,18 @@ async def _run_generation_phase(
     def remaining_seconds() -> float:
         return session.remaining_seconds()
 
+    def raise_pending_external_cancellation(
+        internal_task: asyncio.Task[Any] | None = None,
+    ) -> None:
+        # AgentScope may consume CancelledError into an ordinary reply before
+        # yielding its next event. The task's outstanding cancellation still
+        # forbids tool execution or another provider request. Our own terminal
+        # tool cancellation is accounted for separately and must keep its
+        # existing token-aware cleanup path.
+        task = asyncio.current_task()
+        if task is not None and task.cancelling() > int(task is internal_task):
+            raise asyncio.CancelledError()
+
     def stop_for_deadline() -> bool:
         """Refuse a new round that cannot finish before the shared deadline."""
 
@@ -540,6 +553,7 @@ async def _run_generation_phase(
         )
 
     while session.agent_rounds < session.max_agent_rounds:
+        raise_pending_external_cancellation()
         if stop_for_deadline():
             break
         remaining_rounds = session.max_agent_rounds - session.agent_rounds
@@ -558,6 +572,7 @@ async def _run_generation_phase(
         stream = agent.reply_stream(next_message)
         try:
             async for event in stream:
+                raise_pending_external_cancellation(internal_cancel_task)
                 if stopped_after_terminal_tool:
                     # Cancellation can arrive just after AgentScope has
                     # yielded the next model-call marker. That marker is
@@ -813,6 +828,7 @@ async def _run_generation_phase(
                             raise RuntimeError(
                                 "Failed to interrupt the terminal reply stream.",
                             )
+            raise_pending_external_cancellation(internal_cancel_task)
         except asyncio.CancelledError as error:
             if internal_cancel_task is None:
                 round_outcome = "cancelled"
@@ -925,6 +941,9 @@ async def _run_generation_phase(
             )
         next_message = _retry_message(phase, expected_tools)
         if retained_reasoning is not None:
+            next_message = UserMsg(
+                name="user", content=SCHEMA_REASONING_LENGTH_RETRY_PROMPT
+            )
             agent.state.context.append(retained_reasoning)
             if progress is not None:
                 progress.custom(
