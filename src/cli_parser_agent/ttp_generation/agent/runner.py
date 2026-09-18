@@ -29,7 +29,9 @@ from agentscope.event import (
     ToolResultStartEvent,
 )
 from agentscope.message import (
+    AssistantMsg,
     TextBlock,
+    ThinkingBlock,
     ToolCallBlock,
     ToolResultBlock,
     ToolResultState,
@@ -119,6 +121,45 @@ def _restore_context(agent: Any, checkpoint: _ContextCheckpoint) -> None:
     del context[checkpoint.context_length :]
     if checkpoint.context_length:
         context[-1] = deepcopy(checkpoint.last_message)
+
+
+def _reasoning_delta(
+    agent: Any, checkpoint: _ContextCheckpoint, round_index: int
+) -> AssistantMsg | None:
+    """Copy only this request's completed, pure-reasoning length response."""
+
+    accepts = getattr(agent.model, "is_completed_reasoning_only_length", None)
+    if not callable(accepts) or not accepts(round_index):
+        return None
+    context = agent.state.context
+    if len(context) < checkpoint.context_length:
+        return None
+    blocks = []
+    if checkpoint.last_message is not None:
+        current = context[checkpoint.context_length - 1]
+        original = checkpoint.last_message
+        before = original.get_content_blocks()
+        after = current.get_content_blocks()
+        if (
+            current.id != original.id
+            or current.role != original.role
+            or current.name != original.name
+            or after[: len(before)] != before
+        ):
+            return None
+        added = after[len(before) :]
+        if added and (current.role != "assistant" or current.name != agent.name):
+            return None
+        blocks.extend(added)
+    for message in context[checkpoint.context_length :]:
+        if message.role != "assistant" or message.name != agent.name:
+            return None
+        blocks.extend(message.get_content_blocks())
+    if not blocks or not all(isinstance(block, ThinkingBlock) for block in blocks):
+        return None
+    if not any(block.thinking for block in blocks):
+        return None
+    return AssistantMsg(name=agent.name, content=deepcopy(blocks))
 
 
 _SUPERSEDED_TTP_RESULT = "该次提交的匹配结果已被后续提交取代"
@@ -835,8 +876,13 @@ async def _run_generation_phase(
         if not no_tool_response:
             break
 
+        retained_reasoning = (
+            _reasoning_delta(agent, last_checkpoint, session.agent_rounds)
+            if phase == "schema"
+            else None
+        )
         _restore_context(agent, last_checkpoint)
-        if progress is not None:
+        if progress is not None and retained_reasoning is None:
             progress.custom(
                 "cli_parser.model.output_discarded",
                 {
@@ -878,6 +924,23 @@ async def _run_generation_phase(
                 sensitive=False,
             )
         next_message = _retry_message(phase, expected_tools)
+        if retained_reasoning is not None:
+            agent.state.context.append(retained_reasoning)
+            if progress is not None:
+                progress.custom(
+                    "cli_parser.schema.reasoning_history",
+                    {
+                        "runtime_policy": "schema-reasoning-history-v1",
+                        "status": "retained",
+                        "round_index": session.agent_rounds,
+                        "reasoning_chars": sum(
+                            len(block.thinking)
+                            for block in retained_reasoning.get_content_blocks()
+                        ),
+                    },
+                    phase=phase,
+                    sensitive=False,
+                )
 
     phase_completed = _phase_completed(session, phase)
     if (

@@ -39,7 +39,7 @@
 - 有效模板提交只更新最新候选。模型复核完整解析结果后必须显式调用 `finish_generation`；未 finish 时，即使存在候选也不算成功。
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。
 - 两阶段请求都省略 `tool_choice`，并固定 `parallel_tool_calls=False`。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
-- 两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
+- 默认两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；Schema 的官方 DeepSeek 推理历史候选会在满足条件时原样发送并计数受控的 assistant Thinking，TTP 仍走默认路径。其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
 - 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；默认提示以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码；`schema_draft_prompt.py` 与 `schema_plan_prompt.py` 仅用于独立诊断，不进入产品请求。
 
 ## 确定性门禁
@@ -53,6 +53,7 @@
 - 连续工具协议失败最多三次受控修复，第四次停止；合法参数调用重置序列，业务拒绝与执行异常独立统计。官方 DeepSeek 端点以其文档规定的 `max_tokens` 发送输出预算；细节见 [v44运行契约](docs/schema-runtime-v44.md)。
 - Schema 原始供应商回复以 `length` 结束时，工具调用在框架 JSON 修复及执行前丢弃，不能冻结残缺提案；流式工具片段在结束原因已知前不释放。v48 提示及默认推理参数保持不变；自动关闭推理和低强度恢复实验均未采用，见 [恢复结果](docs/schema-reasoning-recovery-v2-results.md)。
 - 来源定位恢复实验未达到 SD-WAN 生成门槛，运行接线已撤下；逐字位置 helper 只保留独立诊断，默认请求不附加位置视图。见 [结果](docs/schema-source-recovery-v1-results.md)。
+- Schema 原生推理历史候选只在官方 DeepSeek 的 Schema 阶段传回已完整返回、无正文且无工具调用的 `length` 推理；首轮、TTP、显式关闭推理和其他供应商不变。容量不足时不触发摘要而受控结束，候选协议与离线验收见 [说明](docs/schema-reasoning-history-v1.md)。
 
 ## 代码与产品边界
 

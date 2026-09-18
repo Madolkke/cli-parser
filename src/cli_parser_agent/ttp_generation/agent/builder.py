@@ -21,6 +21,7 @@ from .prompt import (
     build_schema_task_prompt,
     build_ttp_task_prompt,
 )
+from .schema_reasoning_guard import SchemaReasoningHistoryGuard
 from .session import GenerationPhase, GenerationSession
 from .tools import (
     FINISH_GENERATION_TOOL_NAME,
@@ -164,7 +165,11 @@ def build_agent(
                 progress=progress,
             ),
         ),
-        middlewares=[],
+        middlewares=(
+            [SchemaReasoningHistoryGuard(session, progress)]
+            if model.schema_reasoning_history_enabled
+            else []
+        ),
         state=AgentState(),
         react_config=ReActConfig(
             max_iters=policy.max_agent_rounds,

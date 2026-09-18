@@ -107,14 +107,25 @@ async def test_schema_retries_preserve_parameters_and_ttp_isolation(
     assert result.artifact.result_schema == schema
     assert result.artifact.records == [{"value": "one"}]
     assert len(requests) == failed_rounds + 3
-    for request in requests:
+    for request_index, request in enumerate(requests):
         assert request["max_tokens"] == 8192
         assert "max_completion_tokens" not in request
         assert "tool_choice" not in request
         assert request["parallel_tool_calls"] is False
         assert "reasoning_effort" not in request
         assert "thinking" not in request
-        assert "private-unfinished-analysis" not in json.dumps(request)
+        # The candidate deliberately carries a completed pure-thinking Schema
+        # response into the next Schema request. TTP remains isolated; a
+        # truncated response containing a tool call is never carried forward.
+        serialized = json.dumps(request)
+        carries_reasoning = "private-unfinished-analysis" in serialized
+        schema_request_index = request_index <= failed_rounds
+        expected_carry = (
+            failed_rounds > int(truncated_submission)
+            and schema_request_index
+            and request_index > 0
+        )
+        assert carries_reasoning is expected_carry
     initial = requests[0]
     for request in requests[: failed_rounds + 1]:
         assert request["messages"][:2] == initial["messages"][:2]

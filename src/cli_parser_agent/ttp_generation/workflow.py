@@ -35,6 +35,7 @@ from .agent import (
     estimate_initial_model_tokens,
     run_generation_phase,
 )
+from .agent.schema_reasoning_guard import SchemaReasoningContextLimit
 from .contracts import (
     ArtifactBundle,
     GenerationMetadata,
@@ -853,7 +854,15 @@ class _GenerationWorkflow:
         error: Exception,
         phase: GenerationPhase,
     ) -> GenerationResult:
-        if _is_model_timeout(error):
+        if isinstance(error, SchemaReasoningContextLimit):
+            issue = _issue(
+                "model.context_budget_exceeded",
+                "Schema reasoning history cannot fit the configured model context.",
+                stage="model",
+                details={"phase": phase},
+            )
+            reason = "model_context_budget"
+        elif _is_model_timeout(error):
             issue = _issue(
                 "model.timeout",
                 "The configured model request exceeded its timeout.",

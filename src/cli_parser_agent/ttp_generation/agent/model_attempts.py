@@ -15,6 +15,7 @@ from typing import Any, TypeVar, cast
 from urllib.parse import urlsplit
 
 import openai
+from agentscope.formatter import OpenAIChatFormatter
 from agentscope.message import Msg, ThinkingBlock, ToolCallBlock
 from agentscope.model import ChatResponse, OpenAIChatModel
 from agentscope.tool import ToolChoice
@@ -24,6 +25,7 @@ from opentelemetry import trace as otel_trace
 
 from ...observability import finish_laminar_span
 from ..progress import ProgressEmitter
+from .schema_reasoning_formatter import SchemaReasoningOpenAIFormatter
 from .session import GenerationPhase, GenerationSession
 
 _T = TypeVar("_T")
@@ -320,6 +322,57 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
         self._provider_reply_facts: _ProviderReplyFacts | None = None
+        extra = self.extra_body or {}
+        thinking = extra.get("thinking")
+        explicitly_disabled = (
+            (
+                self.parameters.thinking_enable
+                and self.parameters.reasoning_effort == "none"
+            )
+            or extra.get("reasoning_effort") == "none"
+            or thinking is False
+            or (
+                isinstance(thinking, dict)
+                and (
+                    thinking.get("type") == "disabled"
+                    or thinking.get("enabled") is False
+                )
+            )
+        )
+        self._schema_reasoning_history_selected = (
+            attempt_recorder.phase == "schema"
+            and urlsplit(self.credential.base_url or "").hostname == "api.deepseek.com"
+            and not explicitly_disabled
+            and type(self.formatter) is OpenAIChatFormatter
+        )
+        if self._schema_reasoning_history_selected:
+            self.formatter = SchemaReasoningOpenAIFormatter()
+
+    @property
+    def schema_reasoning_history_enabled(self) -> bool:
+        """Whether this isolated model sends assistant Thinking to DeepSeek."""
+
+        return (
+            self._schema_reasoning_history_selected
+            and type(self.formatter) is SchemaReasoningOpenAIFormatter
+        )
+
+    def is_completed_reasoning_only_length(self, round_index: int) -> bool:
+        """Use completed raw provider facts, never repaired content or error text."""
+
+        facts = self._provider_reply_facts
+        return bool(
+            self.schema_reasoning_history_enabled
+            and facts is not None
+            and facts.round_index
+            == round_index
+            == self._attempt_recorder.session.agent_rounds
+            and facts.completed
+            and facts.finished_reason == "length"
+            and facts.reasoning_present
+            and not facts.text_present
+            and not facts.tool_calls_present
+        )
 
     def _parse_completion_response(
         self, start_datetime: datetime, response: Any, audio_format: str = "wav"
@@ -413,7 +466,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         messages: list[Msg],
         tools: list[dict] | None,
     ) -> int:
-        """Exclude unsent Thinking from counting copies, preserving history."""
+        """Count sent Thinking only, leaving original history untouched."""
 
         # The locked OpenAI formatter skips ThinkingBlock, while the generic
         # AgentScope estimator counts it. Keep every other estimate unchanged;
@@ -425,6 +478,10 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
                         block
                         for block in message.get_content_blocks()
                         if not isinstance(block, ThinkingBlock)
+                        or (
+                            self.schema_reasoning_history_enabled
+                            and message.role == "assistant"
+                        )
                     ],
                 },
             )

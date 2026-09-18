@@ -754,6 +754,7 @@ class _SchemaTracer:
         self.truncated_submission_count = 0
         self.truncated_submission_rounds = []
         self.source_view_observations = []
+        self.reasoning_history_observations = []
         self._last_schema_submission = 0
 
     def _observe_source_and_protocol(self, event):
@@ -896,6 +897,32 @@ class _SchemaTracer:
                             )
                         }
                     )
+        elif event.name == "cli_parser.schema.reasoning_history":
+            common = {"runtime_policy", "status", "round_index", "reasoning_chars"}
+            status = value.get("status")
+            expected = (
+                common
+                if status == "retained"
+                else common
+                | {"reasoning_blocks", "estimated_tokens", "context_limit_tokens"}
+            )
+            counts = expected - {"runtime_policy", "status", "estimated_tokens"}
+            if (
+                set(value) == expected
+                and value["runtime_policy"] == "schema-reasoning-history-v1"
+                and status in {"retained", "context_checked", "context_limit"}
+                and all(type(value[key]) is int and value[key] >= 0 for key in counts)
+                and (
+                    "estimated_tokens" not in value
+                    or value["estimated_tokens"] is None
+                    or (
+                        type(value["estimated_tokens"]) is int
+                        and value["estimated_tokens"] >= 0
+                    )
+                )
+                and len(self.reasoning_history_observations) < 64
+            ):
+                self.reasoning_history_observations.append(dict(value))
         elif event.name == "cli_parser.schema.source_view":
             counts = {
                 "input_count",
@@ -1182,6 +1209,12 @@ class _SchemaTracer:
                 if self.source_view_observations
                 else "unavailable",
                 "events": list(self.source_view_observations),
+            },
+            "reasoning_history": {
+                "status": "observed"
+                if self.reasoning_history_observations
+                else "unavailable",
+                "events": list(self.reasoning_history_observations),
             },
             # AgentScope's ModelCallEndEvent is a framework finish reason;
             # it does not expose the supplier's `length` finish_reason.

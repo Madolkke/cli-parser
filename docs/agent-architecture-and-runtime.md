@@ -383,3 +383,18 @@ v2 均未达到真实业务门槛，已撤下；保留截断防护与独立诊�
 四次 SD-WAN 均收到视图，但 16 轮全部截断且无提交，未启动保护回归。
 运行接线已撤下，原文位置 helper 仅保留独立诊断；默认仍为 v48 原参数及协议，
 保留独立截断工具防护。见 [结果](schema-source-recovery-v1-results.md)。
+
+
+## Schema 原生推理历史候选
+
+Trace 复核确认，当前无工具重试会恢复调用前上下文，且默认 OpenAI formatter 不发送
+Thinking；因此连续 `length` 轮会重复推理，而不是接续。候选仅针对官方 DeepSeek 的
+Schema Agent，使用私有 formatter 原样保留 assistant 分段的 `reasoning_content`，并在
+无工具、`length`、有推理、无正文且无原始工具调用时保留本轮新增 Thinking。截断工具调用、
+普通文本、取消和异常都不进入历史；首轮、TTP、外部注入、显式关闭推理及其他供应商不变。
+
+候选不改变 v48 提示、输出预算、重试次数或公共 API。模型计数包含实际发送的推理；保留
+推理会在 AgentScope 原生压缩前执行上下文容量检查，达到安全阈值时以已有上下文预算错误
+结束，不触发摘要模型调用或静默丢弃原任务。`cli_parser.schema.reasoning_history` 只记录
+状态、轮次、块数和长度，不保存思考正文。实现和分阶段门槛见
+[候选协议](schema-reasoning-history-v1.md)，真实结果未完成前不能视为默认质量修复。
