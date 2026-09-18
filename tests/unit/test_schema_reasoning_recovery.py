@@ -180,6 +180,50 @@ async def test_completed_length_facts_do_not_mutate_later_requests(
     assert "private" not in json.dumps([event.value for event in events])
 
 
+async def test_repeated_pure_reasoning_forces_schema_submission_tool() -> None:
+    requests = []
+    session = _session()
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content))
+        return _response(_body())
+
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "submit_result_schema",
+                "description": "submit",
+                "parameters": {"type": "object"},
+            },
+        }
+    ]
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        model = ObservedOpenAIChatModel(
+            attempt_recorder=ModelAttemptRecorder(session, "schema"),
+            credential=OpenAICredential(
+                api_key="offline", base_url="https://api.deepseek.com"
+            ),
+            model="offline",
+            parameters=OpenAIChatModel.Parameters(max_tokens=8192),
+            stream=False,
+            max_retries=0,
+            client_kwargs={"http_client": client, "max_retries": 0},
+        )
+        for _ in range(3):
+            await _round(model)
+            session.record_no_tool_response("schema")
+            session.record_no_tool_retry("schema")
+        await model([UserMsg(name="user", content="synthetic input")], tools=tools)
+
+    assert "tool_choice" not in requests[0]
+    assert requests[3]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "submit_result_schema"},
+    }
+    assert requests[3]["thinking"] == {"type": "disabled"}
+
+
 @pytest.mark.parametrize("stream", [False, True])
 @pytest.mark.parametrize(
     ("body", "finish", "reasoning", "text", "tools"),
@@ -340,7 +384,10 @@ async def test_runner_retains_existing_no_tool_and_budget_limits(limit: str) -> 
         )
     assert len(requests) == (4 if limit == "default" else 3)
     assert all("reasoning_effort" not in request for request in requests)
-    assert all("thinking" not in request for request in requests)
+    if limit in {"no_tool", "default"}:
+        assert requests[-1]["thinking"] == {"type": "disabled"}
+    else:
+        assert all("thinking" not in request for request in requests)
     assert session.frozen_schema is None
 
 

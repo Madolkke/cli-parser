@@ -110,10 +110,22 @@ async def test_schema_retries_preserve_parameters_and_ttp_isolation(
     for request_index, request in enumerate(requests):
         assert request["max_tokens"] == 8192
         assert "max_completion_tokens" not in request
-        assert "tool_choice" not in request
+        force_submission = (
+            failed_rounds == 3
+            and not truncated_submission
+            and request_index == failed_rounds
+        )
+        if force_submission:
+            assert request["tool_choice"] == {
+                "type": "function",
+                "function": {"name": "submit_result_schema"},
+            }
+            assert request["thinking"] == {"type": "disabled"}
+        else:
+            assert "tool_choice" not in request
+            assert "thinking" not in request
         assert request["parallel_tool_calls"] is False
         assert "reasoning_effort" not in request
-        assert "thinking" not in request
         # The candidate deliberately carries a completed pure-thinking Schema
         # response into the next Schema request. TTP remains isolated; a
         # truncated response containing a tool call is never carried forward.
@@ -124,6 +136,7 @@ async def test_schema_retries_preserve_parameters_and_ttp_isolation(
             failed_rounds > int(truncated_submission)
             and schema_request_index
             and request_index > 0
+            and not force_submission
         )
         assert carries_reasoning is expected_carry
     initial = requests[0]

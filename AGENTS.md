@@ -38,7 +38,7 @@
 - 每次模型回复最多调用一个阶段工具。普通文本不构成产物；零工具回复使用固定提醒重试，并计入阶段和总预算。
 - 有效模板提交只更新最新候选。模型复核完整解析结果后必须显式调用 `finish_generation`；未 finish 时，即使存在候选也不算成功。
 - finish 后在 Agent 外重新执行模板检查、完整输入解析、输入与 records 映射及冻结 Schema 校验。终验失败不重新进入模型阶段。
-- 两阶段请求都省略 `tool_choice`，并固定 `parallel_tool_calls=False`。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
+- 两阶段请求默认省略 `tool_choice`，并固定 `parallel_tool_calls=False`。Schema 官方 DeepSeek 推理连续纯截断达到既有零工具重试上限时，候选运行时在最后一次请求关闭 thinking 并将唯一 `submit_result_schema` 设为强制选择；TTP 和其他路径仍省略该字段。工具负责阶段、冻结和预算约束，不从 assistant 文本提取产物。
 - 默认两阶段模型计数在消息副本中排除 OpenAI formatter 未发送的 Thinking，原始历史和观察通道不变；Schema 的官方 DeepSeek 推理历史候选会在满足条件时原样发送并计数受控的 assistant Thinking，TTP 仍走默认路径。其余沿用 AgentScope 近似计数与原生压缩，不能据此保证摘要后的输入或 Schema 完整性。
 - 默认预算、采样、重试、上下文折叠和工具反馈协议以 [Agent 架构与运行流程](docs/agent-architecture-and-runtime.md) 为准；默认提示以 `src/cli_parser_agent/ttp_generation/agent/prompt.py` 为唯一源码；`schema_draft_prompt.py` 与 `schema_plan_prompt.py` 仅用于独立诊断，不进入产品请求。
 
@@ -54,6 +54,7 @@
 - Schema 原始供应商回复以 `length` 结束时，工具调用在框架 JSON 修复及执行前丢弃，不能冻结残缺提案；流式工具片段在结束原因已知前不释放。v48 提示及默认推理参数保持不变；自动关闭推理和低强度恢复实验均未采用，见 [恢复结果](docs/schema-reasoning-recovery-v2-results.md)。
 - 来源定位恢复实验未达到 SD-WAN 生成门槛，运行接线已撤下；逐字位置 helper 只保留独立诊断，默认请求不附加位置视图。见 [结果](docs/schema-source-recovery-v1-results.md)。
 - Schema 原生推理历史候选只在官方 DeepSeek 的 Schema 阶段传回已完整返回、无正文且无工具调用的 `length` 推理；首轮、TTP、显式关闭推理和其他供应商不变。容量不足时不触发摘要而受控结束，候选协议与离线验收见 [说明](docs/schema-reasoning-history-v1.md)。
+- 连续纯推理 `length` 回复达到 Schema 零工具重试上限后，候选运行时在下一次请求关闭 thinking 并强制选择唯一提交工具；普通文本、业务拒绝、截断工具调用、TTP 和其他供应商不触发，详见 [说明](docs/schema-forced-submission-v1.md)。
 
 ## 代码与产品边界
 
@@ -66,7 +67,7 @@
 ## 评测与测试
 
 - `evals/test_sets/` 是唯一标准测试集来源；每个 complete 数据集包含 `inputs/`、`schema.json`、`template.ttp` 和 `expected.json`。
-- `evals/datasets.toml` 使用版本 `2`，文件条目只登记 `{ file = "..." }`。当前登记 11 个数据集、38 份输入，其中 10 个 complete 数据集覆盖 34 份输入，Huawei 的 4 份输入处于 template 阶段。
+- `evals/datasets.toml` 使用版本 `2`，文件条目只登记 `{ file = "..." }`。当前登记 17 个数据集、52 份输入，其中 16 个 complete 数据集覆盖 48 份输入，Huawei VRP 的 4 份输入处于 template 阶段。Huawei SmartAX ONT（4 份输入）和暂时禁用的 Juniper uptime（2 份输入）已移出注册表，资产保留于 `evals/disabled_test_sets/`，不参与标准评测；Huawei 恢复计划见 [Roadmap](docs/ROADMAP.md)，Juniper 恢复条件见 [测试集说明](evals/standard-test-dataset.md)。
 - `scripts/run_test_sets.py` 是唯一标准评测入口。`list`、`preflight` 和 `baseline` 离线运行；`ttp-only` 只对 complete 数据集调用公共 `generate_from_schema()`。 `schema-only` 对 complete 数据集仅传入所选原始输入并调用 `propose_schema()`，独立统计命名、结构一致性和人工语义审阅，不与 TTP 准确率 baseline 混用。 `end-to-end` 调用 `generate()` 并用受限 Schema/解析审阅计算联合通过；当前入口只运行默认 v48，历史实验与受限指标读取保持兼容；Schema 审阅 v2 分开统计规则遵循、业务合理性和命名／层级一致性，详情见 [评测说明](docs/agent-evaluation.md)。
 - 标准答案只能根据输入文本人工核对，不读取被测产物、Trace、历史 artifact、上游模板或其他参考结构，也不使用被测模型生成。
 - 普通 pytest 必须离线、稳定且不依赖模型。真实模型集成测试使用 `live` marker 和显式环境配置；首版交付前至少完成一次真实模型端到端闭环。
@@ -78,6 +79,7 @@
 
 | 任务 | 必读文档 |
 | --- | --- |
+| 项目汇报、设计思路与演进概览 | [docs/agent-design.md](docs/agent-design.md) |
 | 产品架构、公共 API、目录职责 | [docs/architecture.md](docs/architecture.md) |
 | 阶段协议、预算、采样、事件和运行时 | [docs/agent-architecture-and-runtime.md](docs/agent-architecture-and-runtime.md) |
 | 评测边界、指标、脱敏和历史兼容 | [docs/agent-evaluation.md](docs/agent-evaluation.md) |

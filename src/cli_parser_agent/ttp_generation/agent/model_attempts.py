@@ -322,6 +322,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         super().__init__(**kwargs)
         self._attempt_recorder = attempt_recorder
         self._provider_reply_facts: _ProviderReplyFacts | None = None
+        self._force_schema_submission_request = False
         extra = self.extra_body or {}
         thinking = extra.get("thinking")
         explicitly_disabled = (
@@ -372,6 +373,34 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             and facts.reasoning_present
             and not facts.text_present
             and not facts.tool_calls_present
+        )
+
+    def _should_force_schema_submission(self) -> bool:
+        """Force the only Schema tool after repeated pure reasoning truncation.
+
+        DeepSeek can spend every retry budget token on reasoning and return no
+        assistant content or tool call.  Once the existing three no-tool
+        repairs have all been consumed, leaving tool selection on ``auto``
+        merely repeats the same provider behavior.  A forced call is scoped to
+        the same request-local facts and phase; ordinary text, business
+        rejections, truncated tool calls, TTP, and other providers retain the
+        historical auto-selection path.
+        """
+
+        facts = self._provider_reply_facts
+        session = self._attempt_recorder.session
+        return bool(
+            self._attempt_recorder.phase == "schema"
+            and self.schema_reasoning_history_enabled
+            and self.extra_body is None
+            and facts is not None
+            and facts.completed
+            and facts.finished_reason == "length"
+            and facts.reasoning_present
+            and not facts.text_present
+            and not facts.tool_calls_present
+            and session.consecutive_schema_no_tool_responses
+            >= session.max_schema_no_tool_retries
         )
 
     def _parse_completion_response(
@@ -513,6 +542,10 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             kwargs["max_completion_tokens"] = openai.NOT_GIVEN
             if self.parameters.max_tokens is not None:
                 kwargs["max_tokens"] = self.parameters.max_tokens
+        if self._force_schema_submission_request:
+            # DeepSeek thinking mode only accepts auto tool selection. The
+            # forced final retry therefore disables thinking on that request.
+            kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
         return await self._attempt_recorder.call(
             lambda: super(ObservedOpenAIChatModel, self)._call_api(
                 model_name,
@@ -530,6 +563,30 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         tool_choice: ToolChoice | None = None,
         **kwargs: Any,
     ) -> ChatResponse | AsyncGenerator[ChatResponse, None]:
+        force_submission = (
+            tool_choice is None and self._should_force_schema_submission()
+        )
+        previous_formatter = self.formatter
+        if force_submission:
+            tool_choice = ToolChoice(mode="submit_result_schema")
+            self._force_schema_submission_request = True
+            # Do not send the retained reasoning blocks with a request that
+            # explicitly disables DeepSeek thinking.
+            self.formatter = OpenAIChatFormatter()
+            progress = self._attempt_recorder.progress
+            if progress is not None:
+                progress.custom(
+                    "cli_parser.schema.forced_submission",
+                    {
+                        "reason": "pure_reasoning_length_retry_limit",
+                        "consecutive_no_tool_responses": (
+                            self._attempt_recorder.session.consecutive_schema_no_tool_responses
+                        ),
+                        "runtime_policy": "schema-forced-submission-v1",
+                    },
+                    phase="schema",
+                    sensitive=False,
+                )
         streams: list[_ObservedStream] = []
         token = _call_streams.set(streams)
         try:
@@ -540,6 +597,9 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
                 **kwargs,
             )
         finally:
+            if force_submission:
+                self.formatter = previous_formatter
+                self._force_schema_submission_request = False
             _call_streams.reset(token)
         if not inspect.isasyncgen(result):
             return result

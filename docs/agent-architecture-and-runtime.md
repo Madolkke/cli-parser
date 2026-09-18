@@ -111,7 +111,7 @@ TTP Agent    -> submit_ttp_template
              -> finish_generation
 ```
 
-HTTP 请求省略 `tool_choice`，因此模型自主决定调用哪个当前阶段工具。普通 assistant 文本不被解析为产物。若一次模型调用没有工具调用，runner 回滚该回复新增的文本、Thinking 和 usage，再追加不引用回复内容的固定中文提醒；TTP 提醒要求模型在继续提交、测试和确认 finish 之间选择。重试只发生在当前阶段，并继续消耗同一请求的全局轮次和 deadline。
+HTTP 请求默认省略 `tool_choice`，因此模型自主决定调用哪个当前阶段工具。Schema 官方 DeepSeek 在连续纯推理 `length` 回复达到既有零工具重试上限后，下一次请求候选运行时会关闭 thinking 并强制选择唯一的 `submit_result_schema`；其他情况仍由模型自主选择。普通 assistant 文本不被解析为产物。若一次模型调用没有工具调用，runner 回滚该回复新增的文本、Thinking 和 usage，再追加不引用回复内容的固定中文提醒；TTP 提醒要求模型在继续提交、测试和确认 finish 之间选择。重试只发生在当前阶段，并继续消耗同一请求的全局轮次和 deadline。
 
 ## 一次请求的运行流程
 
@@ -324,7 +324,7 @@ TUI 为这次运行启用流式模型事件；所有界面操作都不改变脚�
 
 总时间限制是协作式超时，而不是进程强杀，但越界被两道机制约束。剩余时长不足以完成一次模型调用（阈值取 `model_timeout_seconds`）时不再开启新轮次，请求直接以 `generation_timeout` 结束；超时后的取消清理有固定宽限期并重复投递取消，宽限期内仍未停止的阶段任务会被放弃等待而不是无限期 await。这两点共同防止被取消的阶段在截止时间之后又发起一次完整模型请求。`model_timeout_seconds` 被设置到 connect/read/write/pool 各阶段，且 OpenAI SDK 自身重试被关闭，重试只由 AgentScope 记账一层。但它**不是单次调用的总时长上限**：httpx 没有 total-request 超时，`read` 只约束两次读取之间的间隔，因此持续流式返回的慢响应不会被它切断（实测 `120` 秒配置下出现过 `599` 秒的单次调用）。单次调用的实际兜底是上面两道预算机制，不是这个值。实际墙钟仍可能略超配置值；TTP worker 的单次解析超时仍会终止独立子进程。
 
-确定性验收保证安全、结构一致、全文执行和 Schema 一致，但不判断 Schema 合法的空字符串、空根对象或空容器是否符合业务语义；该判断由模型结合独立解析结果块与原文完成。转换后的标量来源追踪暂未启用，后续方案记录在 `docs/ROADMAP.md`。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
+确定性验收保证安全、结构一致、全文执行和 Schema 一致，但不判断 Schema 合法的空字符串、空根对象或空容器是否符合业务语义；该判断由模型结合独立解析结果块与原文完成。转换后的标量来源追踪暂未启用。Huawei ONT 所需的受控动态路径合并仍处于规划阶段，见 [Roadmap](ROADMAP.md)；当前产品门禁未放开。当前主要质量风险仍是模型能否稳定生成足够细粒度的 Schema，并正确实现冻结 Schema 与 TTP group 结果之间的对应关系。
 
 
 ## v40 字段命名兼容性收紧
@@ -384,7 +384,6 @@ v2 均未达到真实业务门槛，已撤下；保留截断防护与独立诊�
 运行接线已撤下，原文位置 helper 仅保留独立诊断；默认仍为 v48 原参数及协议，
 保留独立截断工具防护。见 [结果](schema-source-recovery-v1-results.md)。
 
-
 ## Schema 原生推理历史候选
 
 Trace 复核确认，当前无工具重试会恢复调用前上下文，且默认 OpenAI formatter 不发送
@@ -398,3 +397,12 @@ Schema Agent，使用私有 formatter 原样保留 assistant 分段的 `reasonin
 结束，不触发摘要模型调用或静默丢弃原任务。`cli_parser.schema.reasoning_history` 只记录
 状态、轮次、块数和长度，不保存思考正文。实现和分阶段门槛见
 [候选协议](schema-reasoning-history-v1.md)，真实结果未完成前不能视为默认质量修复。
+
+## Schema 重复推理后的强制提交候选
+
+若官方 DeepSeek 在 Schema 阶段连续返回只有推理内容的 `length` 回复，并已达到既有
+零工具重试上限，下一次请求将关闭 thinking 并强制选择唯一的 `submit_result_schema`。该选择不增加
+轮次、预算或重试次数；正常首轮、普通文本、业务拒绝、截断工具回复、TTP 和其他
+供应商继续省略 `tool_choice`。强制调用后仍须通过原有工具入参和 Schema 校验，不能
+把工具调用或合法 Schema 视为业务正确。候选事件只记录脱敏触发事实，见
+[`schema-forced-submission-v1.md`](schema-forced-submission-v1.md)。

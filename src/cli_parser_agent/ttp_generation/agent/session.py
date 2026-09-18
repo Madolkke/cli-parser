@@ -200,6 +200,12 @@ class GenerationSession:
 
         return self.frozen_schema is not None
 
+    @property
+    def consecutive_schema_no_tool_responses(self) -> int:
+        """Return the current Schema no-tool sequence length."""
+
+        return self._schema_consecutive_no_tool_responses
+
     def remaining_seconds(self) -> float:
         """Return the wall clock left before the shared deadline."""
 
