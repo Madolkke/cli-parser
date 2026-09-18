@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 
 import openai
 from agentscope.formatter import OpenAIChatFormatter
-from agentscope.message import Msg, ThinkingBlock, ToolCallBlock
+from agentscope.message import Msg, ThinkingBlock, ToolCallBlock, UserMsg
 from agentscope.model import ChatResponse, OpenAIChatModel
 from agentscope.tool import ToolChoice
 from lmnr import Laminar
@@ -25,6 +25,7 @@ from opentelemetry import trace as otel_trace
 
 from ...observability import finish_laminar_span
 from ..progress import ProgressEmitter
+from .prompt import SCHEMA_FORCED_SUBMISSION_PROMPT
 from .schema_reasoning_formatter import SchemaReasoningOpenAIFormatter
 from .session import GenerationPhase, GenerationSession
 
@@ -323,6 +324,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         self._attempt_recorder = attempt_recorder
         self._provider_reply_facts: _ProviderReplyFacts | None = None
         self._force_schema_submission_request = False
+        self._last_pure_reasoning_length = False
         extra = self.extra_body or {}
         thinking = extra.get("thinking")
         explicitly_disabled = (
@@ -387,18 +389,12 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
         historical auto-selection path.
         """
 
-        facts = self._provider_reply_facts
         session = self._attempt_recorder.session
         return bool(
             self._attempt_recorder.phase == "schema"
             and self.schema_reasoning_history_enabled
             and self.extra_body is None
-            and facts is not None
-            and facts.completed
-            and facts.finished_reason == "length"
-            and facts.reasoning_present
-            and not facts.text_present
-            and not facts.tool_calls_present
+            and self._last_pure_reasoning_length
             and session.consecutive_schema_no_tool_responses
             >= session.max_schema_no_tool_retries
         )
@@ -414,6 +410,12 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             if response.choices:
                 facts.observe(response.choices[0], response.choices[0].message)
             facts.completed = True
+            self._last_pure_reasoning_length = bool(
+                facts.finished_reason == "length"
+                and facts.reasoning_present
+                and not facts.text_present
+                and not facts.tool_calls_present
+            )
             if self._discard_truncated_schema_tools(facts, result.content):
                 result.content = [
                     block
@@ -485,6 +487,12 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             await parsed.aclose()
         if facts is not None:
             facts.completed = True
+            self._last_pure_reasoning_length = bool(
+                facts.finished_reason == "length"
+                and facts.reasoning_present
+                and not facts.text_present
+                and not facts.tool_calls_present
+            )
             if pending_tools.content and not self._discard_truncated_schema_tools(
                 facts, pending_tools.content
             ):
@@ -530,6 +538,7 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             round_index=self._attempt_recorder.session.agent_rounds,
             attempt_index=self._attempt_recorder.session.model_attempts_observed + 1,
         )
+        self._last_pure_reasoning_length = False
         # AgentScope 2.0 maps Parameters.max_tokens to the OpenAI-specific
         # max_completion_tokens. DeepSeek's official API documents max_tokens
         # instead. Suppress the incompatible SDK argument without modifying
@@ -573,6 +582,10 @@ class ObservedOpenAIChatModel(OpenAIChatModel):
             # Do not send the retained reasoning blocks with a request that
             # explicitly disables DeepSeek thinking.
             self.formatter = OpenAIChatFormatter()
+            messages = [
+                *messages,
+                UserMsg(name="user", content=SCHEMA_FORCED_SUBMISSION_PROMPT),
+            ]
             progress = self._attempt_recorder.progress
             if progress is not None:
                 progress.custom(

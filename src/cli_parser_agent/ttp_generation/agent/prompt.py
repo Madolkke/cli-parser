@@ -14,6 +14,14 @@ SCHEMA_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的提交工具，普通文本不会被视为产物。"
     "请现在只调用 submit_result_schema，并提交 result_schema。"
 )
+SCHEMA_FORCED_SUBMISSION_PROMPT = (
+    "这是 Schema 阶段最后一次提交机会。请停止继续分析并立即调用 submit_result_schema。"
+    "只根据输入中直接可见的列、行和章节提交完整 result_schema：重复表格保持一个 array，"
+    "上层表头限定无法可靠归属时保留清楚的底层标签，不创造组合字段、不拆成邻列字段；"
+    "空值槽在所有展示行中都为空时字段可选，真正缺失的列不要设为 required；"
+    "名称或编号类字段保持 string，只有明确的计数才使用 integer。不要添加任何输入中"
+    "没有证据的字段、限定或层级。"
+)
 TTP_NO_TOOL_RETRY_PROMPT = (
     "你刚才没有调用当前阶段的可用工具，普通文本不会被视为产物。"
     "如果需要验证一个局部 TTP 特性，请调用 test_ttp_template；如果最近一次匹配结果尚未"
@@ -692,6 +700,7 @@ def build_ttp_task_prompt(
 __all__ = [
     "PROMPT_VERSION",
     "SCHEMA_NO_TOOL_RETRY_PROMPT",
+    "SCHEMA_FORCED_SUBMISSION_PROMPT",
     "SCHEMA_SYSTEM_PROMPT",
     "TTP_NO_TOOL_RETRY_PROMPT",
     "TTP_SYSTEM_PROMPT",
