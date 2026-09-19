@@ -1,0 +1,15 @@
+<group>
+{{ ignore("[ \t]+") }}TACACS+ SERVER Statistics
+<group name="servers">
+{{ ignore("[ \t]+") }}Tacacs+ Server  Address : {{ address | ORPHRASE }}
+{{ ignore("[ \t]+") }}Server port : {{ port | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of sockets open : {{ sockets_open | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of sockets closed : {{ sockets_closed | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of sockets aborted : {{ sockets_aborted | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of sockets error : {{ sockets_error | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of sockets timeout : {{ sockets_timeout | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of connect fails : {{ connect_fails | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of packets sent : {{ packets_sent | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of packets received : {{ packets_received | ORPHRASE }}
+</group>
+</group>

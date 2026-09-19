@@ -1,0 +1,20 @@
+<group>
+{{ ignore("[ \t]+") }}uptime: {{ uptime | ORPHRASE }}
+{{ ignore("[ \t]+") }}version: {{ version | ORPHRASE }}
+{{ ignore("[ \t]+") }}build-time: {{ build_time | ORPHRASE }}
+{{ ignore("[ \t]+") }}factory-software: {{ factory_software | ORPHRASE }}
+{{ ignore("[ \t]+") }}free-memory: {{ free_memory | ORPHRASE }}
+{{ ignore("[ \t]+") }}total-memory: {{ total_memory | ORPHRASE }}
+{{ ignore("[ \t]+") }}cpu: {{ cpu | ORPHRASE }}
+{{ ignore("[ \t]+") }}cpu-count: {{ cpu_count | ORPHRASE }}
+{{ ignore("[ \t]+") }}cpu-frequency: {{ cpu_frequency | ORPHRASE }}
+{{ ignore("[ \t]+") }}cpu-load: {{ cpu_load | ORPHRASE }}
+{{ ignore("[ \t]+") }}free-hdd-space: {{ free_hdd_space | ORPHRASE }}
+{{ ignore("[ \t]+") }}total-hdd-space: {{ total_hdd_space | ORPHRASE }}
+{{ ignore("[ \t]+") }}write-sect-since-reboot: {{ write_sect_since_reboot | ORPHRASE }}
+{{ ignore("[ \t]+") }}write-sect-total: {{ write_sect_total | ORPHRASE }}
+{{ ignore("[ \t]+") }}bad-blocks: {{ bad_blocks | ORPHRASE }}
+{{ ignore("[ \t]+") }}architecture-name: {{ architecture_name | ORPHRASE }}
+{{ ignore("[ \t]+") }}board-name: {{ board_name | ORPHRASE }}
+{{ ignore("[ \t]+") }}platform: {{ platform | ORPHRASE }}
+</group>

@@ -190,3 +190,107 @@ inputs = [
   { file = "inputs/001.txt" },
   { file = "inputs/002.txt" },
 ]
+
+
+# ID 12 is reserved for the temporarily disabled Juniper uptime case.
+# See docs/easy-medium-extra-v38-diagnosis.md and evals/standard-test-dataset.md.
+
+[[dataset]]
+id = 13
+name = "mikrotik_routeros.system_resource_print"
+command = "system resource print"
+platform = "mikrotik_routeros"
+source = "ntc-templates"
+tags = ["extra-easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+  { file = "inputs/003.txt" },
+  { file = "inputs/004.txt" },
+]
+
+[[dataset]]
+id = 14
+name = "arista_eos.show_version"
+command = "show version"
+platform = "arista_eos"
+source = "ntc-templates"
+tags = ["extra-easy"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+]
+
+# ID 15 is reserved for the disabled Huawei ONT case; see docs/ROADMAP.md.
+
+[[dataset]]
+id = 16
+name = "oneaccess_oneos.show_tacacs"
+command = "show tacacs"
+platform = "oneaccess_oneos"
+source = "ntc-templates"
+tags = ["extra-medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+]
+
+[[dataset]]
+id = 17
+name = "cisco_ios.show_ip_ospf_database_router"
+command = "show ip ospf database router"
+platform = "cisco_ios"
+source = "ntc-templates"
+tags = ["extra-medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+]
+
+[[dataset]]
+id = 18
+name = "cisco_nxos.show_port-channel_summary"
+command = "show port-channel summary"
+platform = "cisco_nxos"
+source = "ntc-templates"
+tags = ["extra-medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+]
+
+[[dataset]]
+id = 19
+name = "cisco_asa.show_vpn-sessiondb_anyconnect"
+command = "show vpn-sessiondb anyconnect"
+platform = "cisco_asa"
+source = "ntc-templates"
+tags = ["extra-medium"]
+default_input = "inputs/001.txt"
+template = { file = "template.ttp" }
+schema = { file = "schema.json" }
+expected = { file = "expected.json" }
+inputs = [
+  { file = "inputs/001.txt" },
+  { file = "inputs/002.txt" },
+]

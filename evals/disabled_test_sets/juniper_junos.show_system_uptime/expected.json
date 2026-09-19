@@ -1,0 +1,28 @@
+[
+  {
+    "cli_time": "8:48AM",
+    "cli_uptime": "154 days, 19:16",
+    "users": "2",
+    "load_average_1m": "0.04",
+    "load_average_5m": "0.04",
+    "load_average_15m": "0.01",
+    "last_configured": "2021-07-13 16:35:35 MSK (6w6d 16:12 ago) by admin",
+    "protocols_started": "2021-03-29 13:37:11 MSK (22w0d 19:11 ago)",
+    "system_booted": "2021-03-29 13:32:05 MSK (22w0d 19:16 ago)",
+    "time_source": "NTP CLOCK",
+    "current_time": "2021-08-31 08:48:11 MSK"
+  },
+  {
+    "cli_time": "12:29PM",
+    "cli_uptime": "185 days, 17:59",
+    "users": "1",
+    "load_average_1m": "0.11",
+    "load_average_5m": "0.05",
+    "load_average_15m": "0.01",
+    "last_configured": "2021-07-13 16:35:18 MSK (6w6d 19:54 ago) by admin",
+    "protocols_started": "2021-02-26 18:34:06 MSK (26w3d 17:55 ago)",
+    "system_booted": "2021-02-26 18:30:12 MSK (26w3d 17:59 ago)",
+    "time_source": "NTP CLOCK",
+    "current_time": "2021-08-31 12:29:34 MSK"
+  }
+]

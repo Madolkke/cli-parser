@@ -5,9 +5,12 @@
 单输入 corpus 与四件套之外的运行格式。重新导入时，每个测试集必须独立包含实际存在的
 `inputs/001.txt` 到 `005.txt`、`schema.json`、`template.ttp` 和 `expected.json`。
 
-当前包含 11 个目录、38 份回显：10 个完整四件套覆盖 34 份输入，另有
+当前注册 17 个目录、52 份回显：16 个完整四件套覆盖 48 份输入，另有
 `huawei_vrp.display_port_vlan` 的 4 份输入与维护者模板用于 smoke。完整用例按难度分为
-Easy 4 个、Medium 4 个、Hard 2 个。Hard 包括 `cisco_ios.show_lldp_neighbors_detail`
+Easy 4 个、Medium 4 个、Hard 2 个、Extra-easy 2 个、Extra-medium 4 个。
+Juniper uptime 的 2 份输入暂时移至 `evals/disabled_test_sets/`；字段语义与取值边界重新审定后再恢复 ID 12。
+Huawei SmartAX ONT 的 4 份输入已移至 `evals/disabled_test_sets/`，不参与标准评测；
+恢复计划见 [Roadmap](ROADMAP.md)。Hard 包括 `cisco_ios.show_lldp_neighbors_detail`
 （5 份，默认 `005.txt`）和 `cisco_ios.show_power_status`（3 份，默认 `001.txt`）。
 原始回显拷贝自
 [ntc-templates](https://github.com/networktocode/ntc-templates)（Network to Code，Apache-2.0）

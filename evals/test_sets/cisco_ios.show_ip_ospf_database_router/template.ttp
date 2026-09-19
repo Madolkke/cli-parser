@@ -1,0 +1,22 @@
+<group>
+{{ ignore("[ \t]*") }}OSPF Router with ID ({{ router_id }}) (Process ID {{ process_id }})
+{{ ignore("[ \t]*") }}Router Link States (Area {{ area_id }})
+<group name="lsas">
+{{ ignore("[ \t]+") }}LS age: {{ ls_age | DIGIT }}
+{{ ignore("[ \t]+") }}Options: {{ options | ORPHRASE }}
+{{ ignore("[ \t]+") }}LS Type: {{ ls_type | ORPHRASE }}
+{{ ignore("[ \t]+") }}Link State ID: {{ link_state_id | ORPHRASE }}
+{{ ignore("[ \t]+") }}Advertising Router: {{ advertising_router | ORPHRASE }}
+{{ ignore("[ \t]+") }}LS Seq Number: {{ ls_seq_number | ORPHRASE }}
+{{ ignore("[ \t]+") }}Checksum: {{ checksum | ORPHRASE }}
+{{ ignore("[ \t]+") }}Length: {{ length | DIGIT }}
+{{ ignore("[ \t]+") }}Number of Links: {{ number_of_links | DIGIT }}
+<group name="links">
+{{ ignore("[ \t]+") }}Link connected to: {{ link_type | ORPHRASE }}
+{{ ignore("[ \t]+") }}(Link ID) {{ link_id_label | re("([^:]+)") }}: {{ link_id | ORPHRASE }}
+{{ ignore("[ \t]+") }}(Link Data) {{ link_data_label | re("([^:]+)") }}: {{ link_data | ORPHRASE }}
+{{ ignore("[ \t]+") }}Number of MTID metrics: {{ mtid_metrics | DIGIT }}
+{{ ignore("[ \t]+") }}TOS 0 Metrics: {{ tos0_metrics | DIGIT }}
+</group>
+</group>
+</group>

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "model": {
+      "type": "string"
+    },
+    "hardware_version": {
+      "type": "string"
+    },
+    "serial_number": {
+      "type": "string"
+    },
+    "hardware_mac_address": {
+      "type": "string"
+    },
+    "system_mac_address": {
+      "type": "string"
+    },
+    "software_image_version": {
+      "type": "string"
+    },
+    "architecture": {
+      "type": "string"
+    },
+    "internal_build_version": {
+      "type": "string"
+    },
+    "internal_build_id": {
+      "type": "string"
+    },
+    "image_format_version": {
+      "type": "string"
+    },
+    "image_optimization": {
+      "type": "string"
+    },
+    "uptime": {
+      "type": "string"
+    },
+    "total_memory": {
+      "type": "string"
+    },
+    "free_memory": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "model",
+    "hardware_version",
+    "serial_number",
+    "hardware_mac_address",
+    "system_mac_address",
+    "software_image_version",
+    "architecture",
+    "internal_build_version",
+    "internal_build_id",
+    "image_format_version",
+    "image_optimization",
+    "uptime",
+    "total_memory",
+    "free_memory"
+  ]
+}

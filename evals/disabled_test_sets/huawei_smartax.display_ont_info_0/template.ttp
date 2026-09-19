@@ -1,0 +1,5 @@
+<group>
+<group name="onts">
+{{ ignore("[ \t]+") }}{{ fsp | re("(\d+/[ \t]*\d+/\d+)") }} {{ ont_id | DIGIT }} {{ serial_number | re("(\S+)") }} {{ control_flag }} {{ run_state }} {{ config_state }} {{ match_state }} {{ protect_side }}
+</group>
+</group>

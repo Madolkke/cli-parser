@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "port_channels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "group_number": {
+            "type": "string"
+          },
+          "port_channel": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "member_ports": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "group_number",
+          "port_channel",
+          "type",
+          "protocol",
+          "member_ports"
+        ]
+      }
+    }
+  },
+  "required": [
+    "port_channels"
+  ]
+}

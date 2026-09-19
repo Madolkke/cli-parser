@@ -1,0 +1,16 @@
+<group>
+Arista {{ model | ORPHRASE }}
+Hardware version: {{ hardware_version | ORPHRASE }}
+Serial number: {{ serial_number | ORPHRASE }}
+Hardware MAC address: {{ hardware_mac_address | ORPHRASE }}
+System MAC address: {{ system_mac_address | ORPHRASE }}
+Software image version: {{ software_image_version | ORPHRASE }}
+Architecture: {{ architecture | ORPHRASE }}
+Internal build version: {{ internal_build_version | ORPHRASE }}
+Internal build ID: {{ internal_build_id | ORPHRASE }}
+Image format version: {{ image_format_version | ORPHRASE }}
+Image optimization: {{ image_optimization | ORPHRASE }}
+Uptime: {{ uptime | ORPHRASE }}
+Total memory: {{ total_memory | ORPHRASE }}
+Free memory: {{ free_memory | ORPHRASE }}
+</group>

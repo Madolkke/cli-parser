@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "session_type": {
+      "type": "string"
+    },
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "index": {
+            "type": "string"
+          },
+          "assigned_ip": {
+            "type": "string"
+          },
+          "public_ip": {
+            "type": "string"
+          },
+          "protocol": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "encryption": {
+            "type": "string"
+          },
+          "hashing": {
+            "type": "string"
+          },
+          "bytes_tx": {
+            "type": "string"
+          },
+          "bytes_rx": {
+            "type": "string"
+          },
+          "group_policy": {
+            "type": "string"
+          },
+          "tunnel_group": {
+            "type": "string"
+          },
+          "login_time": {
+            "type": "string"
+          },
+          "duration": {
+            "type": "string"
+          },
+          "inactivity": {
+            "type": "string"
+          },
+          "vlan_mapping": {
+            "type": "string"
+          },
+          "vlan": {
+            "type": "string"
+          },
+          "audt_sess_id": {
+            "type": "string"
+          },
+          "security_grp": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "index",
+          "assigned_ip",
+          "public_ip",
+          "protocol",
+          "license",
+          "encryption",
+          "hashing",
+          "bytes_tx",
+          "bytes_rx",
+          "group_policy",
+          "tunnel_group",
+          "login_time",
+          "duration",
+          "inactivity",
+          "vlan_mapping",
+          "vlan",
+          "audt_sess_id",
+          "security_grp"
+        ]
+      }
+    }
+  },
+  "required": [
+    "session_type",
+    "sessions"
+  ]
+}

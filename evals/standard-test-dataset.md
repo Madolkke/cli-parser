@@ -143,8 +143,16 @@ inputs = [                              # 相对数据集目录的路径
 
 ## 当前状态
 
-当前注册 11 个数据集、38 份输入，其中 10 个完整四件套覆盖 34 份输入：Easy 4 个、
-Medium 4 个、Hard 2 个；另有 Huawei 的 4 份输入供模板 smoke。
+当前注册 17 个数据集、52 份输入，其中 16 个完整四件套覆盖 48 份输入：Easy 4 个、
+Medium 4 个、Hard 2 个、Extra-easy 2 个、Extra-medium 4 个；另有 Huawei VRP 的 4 份输入供模板 smoke。
+Juniper uptime 的 2 份输入暂时禁用，四件套原样保留于
+`evals/disabled_test_sets/juniper_junos.show_system_uptime/`，ID 12 保留，不计入上述数字。
+恢复前根据原始输入与业务用途明确字段语义及标签边界，通过默认和 full-scope preflight/baseline，
+再移回标准目录、恢复登记并同步计数。历史回归结果不改写；原因见
+[失败诊断](../docs/easy-medium-extra-v38-diagnosis.md)。
+Huawei SmartAX ONT 的 4 份输入已禁用，不计入上述数字；资产保留于
+`evals/disabled_test_sets/huawei_smartax.display_ont_info_0/`，该目录不属于标准测试集来源。
+恢复计划见 [Roadmap](../docs/ROADMAP.md)。
 
 2026-08 重新接入第一批数据集，见 `evals/datasets.toml`。
 `broadcom_icos.show_version`（5 份）、`fortinet.get_system_status`（3 份）、
@@ -179,6 +187,38 @@ variant + `method="table"` 方案交付：8/7/6/5/4 个 token 的五种行模式
 按变体省键；表头与分隔线由 `config_mode` 的 `re("([^\- \t\n]+)")` 排除（配置值不含
 连字符，而 `Config-mode` 表头与分隔线由连字符构成）；自定义字符类必须排除 `\n`，
 否则 TTP 的 DOTALL 语义会让 4-token 行跨行吸收下一行。原语料为 CRLF，已规范化为 LF。
+2026-09 增补 extra 档：`extra-easy` 与 `extra-medium` 标签分别标记冒烟级与结构组合级
+测试例。
+`juniper_junos.show_system_uptime`（2 份，原 `extra-easy`，当前暂时禁用）为 5 个 kv 行加 1 行 CLI 摘要：
+CLI 行拆为 `cli_time`、仅含运行时长的 `cli_uptime`、`users` 和
+`load_average_1m`/`load_average_5m`/`load_average_15m`，均保留原始字符串；
+以用户数及 `user`/`users` 标签界定运行时长的结束，避免将用户数和负载并入 uptime。
+前导空白用 `ignore("[ \t]*")` 同时兼容带缩进与 0 缩进两种行；
+`mikrotik_routeros.system_resource_print`（4 份，`extra-easy`）右对齐键以
+`ignore("[ \t]+")` 消耗，`factory_software`、`cpu_frequency`、`bad_blocks` 跨文件可选；
+`arista_eos.show_version`（2 份，`extra-easy`）模型行以字面 `Arista ` 锚定，避免全变量
+行匹配任意文本行。
+`huawei_smartax.display_ont_info_0`（4 份，已禁用）包含状态表、描述表及端口汇总。
+旧资产仅覆盖状态表，完整性不足；需在受控动态路径合并方案验收后补齐资产再恢复。
+`oneaccess_oneos.show_tacacs`（2 份，`extra-medium`）重复服务器块以锚点行所属组的再次
+匹配开新记录；
+`cisco_ios.show_ip_ospf_database_router`（2 份，`extra-medium`）为 LSA → links 两级嵌套，
+根层保留查询设备 `router_id`、本机 `process_id` 和 `area_id`，均为必填字符串；
+当前两份输入只含单个区域，根 `area_id` 适用于全部 LSA，多区域输出需另行调整归属结构。
+完整 OSPF 首行启动匿名根组，兼容有缩进与无缩进两种形式。
+三种链路类型的标签差异作为值捕获，`(Link ID) 标签` 以 `re("([^:]+)")` 取到冒号前；
+asbr_abr 输入未收入，因其"1 条 link 的 LSA"会使子组产出 dict 而非数组（TTP 单子记录
+限制）；
+`cisco_nxos.show_port-channel_summary`（2 份，`extra-medium`）成员端口列换行续行 +
+`--` 占位行，行模式以 `re("(\S(?:[^\n]*[^\n \t])?)")` 捕获行内其余部分统一兼容两者
+（端点锚定同时剥除行尾填充空格），续行以 `joinmatches(" ")` 拼接，无需
+`method="table"`；
+`cisco_asa.show_vpn-sessiondb_anyconnect`（2 份，`extra-medium`）每行两对 kv + 重复会话
+块：Encryption/Hashing 值含双空格且可能为单 token，TTP 内建 ROW 要求至少两个 token
+（`(\S+ +)+?\S+`），单 token 值直接失配，改用端点锚定正则；只收入全会话字段齐全的
+两份，单会话输入同样触发上述单子记录 dict 限制。本轮另确认：`re()` 参数中的字面
+`|` 会被白名单预检直接拒绝（`ttp.incompatible_argument_pipe`），多分支匹配须改写为
+字符类、量词或行内其余部分捕获。
 `fortinet` 为每键一行的扁平 `Key: value` 结构（值用 `ORPHRASE` 捕获）；
 `broadcom` 的点线填充用 `ignore("[.]+[ ]*")` 消耗，`Additional Packages` 跨行续行经
 `joinmatches` 合并为单字符串，含双空格的两个自由文本字段用 `ROW` 捕获；`paloalto` 以嵌套

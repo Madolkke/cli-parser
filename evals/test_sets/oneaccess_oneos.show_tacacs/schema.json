@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "servers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "port": {
+            "type": "string"
+          },
+          "sockets_open": {
+            "type": "string"
+          },
+          "sockets_closed": {
+            "type": "string"
+          },
+          "sockets_aborted": {
+            "type": "string"
+          },
+          "sockets_error": {
+            "type": "string"
+          },
+          "sockets_timeout": {
+            "type": "string"
+          },
+          "connect_fails": {
+            "type": "string"
+          },
+          "packets_sent": {
+            "type": "string"
+          },
+          "packets_received": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "address",
+          "port",
+          "sockets_open",
+          "sockets_closed",
+          "sockets_aborted",
+          "sockets_error",
+          "sockets_timeout",
+          "connect_fails",
+          "packets_sent",
+          "packets_received"
+        ]
+      }
+    }
+  },
+  "required": [
+    "servers"
+  ]
+}

@@ -1,0 +1,82 @@
+[
+  {
+    "servers": [
+      {
+        "packets_received": "14590",
+        "packets_sent": "14590",
+        "connect_fails": "4",
+        "sockets_timeout": "0",
+        "sockets_error": "0",
+        "sockets_aborted": "0",
+        "sockets_closed": "13677",
+        "sockets_open": "14196",
+        "port": "49",
+        "address": "91.208.220.142"
+      },
+      {
+        "packets_received": "5264",
+        "packets_sent": "5264",
+        "connect_fails": "0",
+        "sockets_timeout": "0",
+        "sockets_error": "0",
+        "sockets_aborted": "0",
+        "sockets_closed": "4933",
+        "sockets_open": "5124",
+        "port": "49",
+        "address": "1.2.3.4"
+      },
+      {
+        "packets_received": "105",
+        "packets_sent": "105",
+        "connect_fails": "21",
+        "sockets_timeout": "0",
+        "sockets_error": "0",
+        "sockets_aborted": "0",
+        "sockets_closed": "119",
+        "sockets_open": "126",
+        "port": "49",
+        "address": "11.22.33.44"
+      }
+    ]
+  },
+  {
+    "servers": [
+      {
+        "packets_received": "70",
+        "packets_sent": "55",
+        "connect_fails": "40",
+        "sockets_timeout": "0",
+        "sockets_error": "8",
+        "sockets_aborted": "0",
+        "sockets_closed": "73",
+        "sockets_open": "73",
+        "port": "49",
+        "address": "1.1.1.1"
+      },
+      {
+        "packets_received": "97",
+        "packets_sent": "88",
+        "connect_fails": "0",
+        "sockets_timeout": "0",
+        "sockets_error": "3",
+        "sockets_aborted": "0",
+        "sockets_closed": "88",
+        "sockets_open": "88",
+        "port": "49",
+        "address": "2.2.2.2"
+      },
+      {
+        "packets_received": "38",
+        "packets_sent": "38",
+        "connect_fails": "0",
+        "sockets_timeout": "0",
+        "sockets_error": "0",
+        "sockets_aborted": "0",
+        "sockets_closed": "38",
+        "sockets_open": "38",
+        "port": "49",
+        "address": "3.3.3.3"
+      }
+    ]
+  }
+]

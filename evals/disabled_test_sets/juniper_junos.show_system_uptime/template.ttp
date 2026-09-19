@@ -1,0 +1,8 @@
+<group>
+Current time: {{ current_time | ORPHRASE }}
+Time Source: {{ time_source | ORPHRASE }}
+System booted: {{ system_booted | ORPHRASE }}
+Protocols started: {{ protocols_started | ORPHRASE }}
+Last configured: {{ last_configured | ROW }}
+{{ ignore("[ \t]*") }}{{ cli_time | re("(\d+:\d+[AP]M)") }} up {{ cli_uptime | ROW }}, {{ users | DIGIT }} {{ ignore("users?") }}, load averages: {{ load_average_1m }}, {{ load_average_5m }}, {{ load_average_15m }}
+</group>

@@ -1,0 +1,6 @@
+<group>
+<group name="port_channels">
+{{ ignore("[ \t]*") }}{{ group_number | DIGIT }} {{ port_channel }} {{ type }} {{ protocol }} {{ member_ports | re("(\S(?:[^\n]*[^\n \t])?)") | joinmatches(" ") }}
+{{ ignore("[ \t]+") }}{{ member_ports | re("(Eth\S*\(\S\))") | joinmatches(" ") }}
+</group>
+</group>

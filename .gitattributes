@@ -8,3 +8,6 @@ evals/datasets.toml text eol=lf
 evals/test_sets/**/*.txt text eol=lf -whitespace
 evals/test_sets/**/*.json text eol=lf
 evals/test_sets/**/*.ttp text eol=lf
+evals/disabled_test_sets/**/*.txt text eol=lf -whitespace
+evals/disabled_test_sets/**/*.json text eol=lf
+evals/disabled_test_sets/**/*.ttp text eol=lf

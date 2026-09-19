@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "uptime": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string"
+    },
+    "build_time": {
+      "type": "string"
+    },
+    "factory_software": {
+      "type": "string"
+    },
+    "free_memory": {
+      "type": "string"
+    },
+    "total_memory": {
+      "type": "string"
+    },
+    "cpu": {
+      "type": "string"
+    },
+    "cpu_count": {
+      "type": "string"
+    },
+    "cpu_frequency": {
+      "type": "string"
+    },
+    "cpu_load": {
+      "type": "string"
+    },
+    "free_hdd_space": {
+      "type": "string"
+    },
+    "total_hdd_space": {
+      "type": "string"
+    },
+    "write_sect_since_reboot": {
+      "type": "string"
+    },
+    "write_sect_total": {
+      "type": "string"
+    },
+    "bad_blocks": {
+      "type": "string"
+    },
+    "architecture_name": {
+      "type": "string"
+    },
+    "board_name": {
+      "type": "string"
+    },
+    "platform": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "uptime",
+    "version",
+    "build_time",
+    "free_memory",
+    "total_memory",
+    "cpu",
+    "cpu_count",
+    "cpu_load",
+    "free_hdd_space",
+    "total_hdd_space",
+    "write_sect_since_reboot",
+    "write_sect_total",
+    "architecture_name",
+    "board_name",
+    "platform"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "onts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "fsp": {
+            "type": "string"
+          },
+          "ont_id": {
+            "type": "string"
+          },
+          "serial_number": {
+            "type": "string"
+          },
+          "control_flag": {
+            "type": "string"
+          },
+          "run_state": {
+            "type": "string"
+          },
+          "config_state": {
+            "type": "string"
+          },
+          "match_state": {
+            "type": "string"
+          },
+          "protect_side": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "fsp",
+          "ont_id",
+          "serial_number",
+          "control_flag",
+          "run_state",
+          "config_state",
+          "match_state",
+          "protect_side"
+        ]
+      }
+    }
+  },
+  "required": [
+    "onts"
+  ]
+}

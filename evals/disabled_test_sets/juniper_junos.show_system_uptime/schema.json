@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "current_time": {
+      "type": "string"
+    },
+    "time_source": {
+      "type": "string"
+    },
+    "system_booted": {
+      "type": "string"
+    },
+    "protocols_started": {
+      "type": "string"
+    },
+    "last_configured": {
+      "type": "string"
+    },
+    "cli_time": {
+      "type": "string"
+    },
+    "cli_uptime": {
+      "type": "string"
+    },
+    "users": {
+      "type": "string"
+    },
+    "load_average_1m": {
+      "type": "string"
+    },
+    "load_average_5m": {
+      "type": "string"
+    },
+    "load_average_15m": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "current_time",
+    "time_source",
+    "system_booted",
+    "protocols_started",
+    "last_configured",
+    "cli_time",
+    "cli_uptime",
+    "users",
+    "load_average_1m",
+    "load_average_5m",
+    "load_average_15m"
+  ]
+}

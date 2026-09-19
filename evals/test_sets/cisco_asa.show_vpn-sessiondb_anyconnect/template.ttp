@@ -1,0 +1,19 @@
+<group>
+Session Type: {{ session_type | ORPHRASE }}
+<group name="sessions">
+Username : {{ username | ORPHRASE }} Index : {{ index | ORPHRASE }}
+Assigned IP : {{ assigned_ip | ORPHRASE }} Public IP : {{ public_ip | ORPHRASE }}
+Protocol : {{ protocol | ORPHRASE }}
+License : {{ license | ORPHRASE }}
+Encryption : {{ encryption | re("(\S(?:[^\n]*[^\n \t])?)") }}
+Hashing : {{ hashing | re("(\S(?:[^\n]*[^\n \t])?)") }}
+Bytes Tx : {{ bytes_tx | ORPHRASE }} Bytes Rx : {{ bytes_rx | ORPHRASE }}
+Group Policy : {{ group_policy | ORPHRASE }} Tunnel Group : {{ tunnel_group | ORPHRASE }}
+Login Time : {{ login_time | ORPHRASE }}
+Duration : {{ duration | ORPHRASE }}
+Inactivity : {{ inactivity | ORPHRASE }}
+VLAN Mapping : {{ vlan_mapping | ORPHRASE }} VLAN : {{ vlan | ORPHRASE }}
+Audt Sess ID : {{ audt_sess_id | ORPHRASE }}
+Security Grp : {{ security_grp | ORPHRASE }}
+</group>
+</group>

@@ -1,0 +1,34 @@
+[
+  {
+    "free_memory": "1807180 kB",
+    "total_memory": "3982820 kB",
+    "uptime": "134 weeks, 5 days, 23 hours and 44 minutes",
+    "image_optimization": "DEFAULT",
+    "image_format_version": "2.0",
+    "internal_build_id": "f62c8154-2e05-4650-be1e-c30774deec7e",
+    "internal_build_version": "4.27.6M-28481162.4276M",
+    "architecture": "i686",
+    "software_image_version": "4.27.6M",
+    "system_mac_address": "fcbd.67c7.ffe7",
+    "hardware_mac_address": "fcbd.67c7.ffe7",
+    "serial_number": "JPE11400249",
+    "hardware_version": "11.00",
+    "model": "CCS-720XP-24ZY4-F"
+  },
+  {
+    "free_memory": "2076700 kB",
+    "total_memory": "3982456 kB",
+    "uptime": "3 weeks, 0 days, 20 hours and 45 minutes",
+    "image_optimization": "Strata-4GB",
+    "image_format_version": "3.0",
+    "internal_build_id": "ecbeee98-6249-4e05-84e6-60b46a08f83e",
+    "internal_build_version": "4.28.9M-33818481.4289M",
+    "architecture": "i686",
+    "software_image_version": "4.28.9M",
+    "system_mac_address": "985d.82b8.faf5",
+    "hardware_mac_address": "985d.82b8.faf5",
+    "serial_number": "JPE18523609",
+    "hardware_version": "12.03",
+    "model": "DCS-7010T-48-R"
+  }
+]

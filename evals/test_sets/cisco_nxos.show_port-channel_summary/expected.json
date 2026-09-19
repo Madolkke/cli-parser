@@ -1,0 +1,311 @@
+[
+  {
+    "port_channels": [
+      {
+        "group_number": "1",
+        "port_channel": "Po1(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/1(P)    Eth2/1(P)"
+      },
+      {
+        "group_number": "2",
+        "port_channel": "Po2(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/2(P)    Eth2/2(P)"
+      },
+      {
+        "group_number": "3",
+        "port_channel": "Po3(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/3(P)    Eth2/3(P)"
+      },
+      {
+        "group_number": "4",
+        "port_channel": "Po4(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/4(P)    Eth2/4(P)"
+      },
+      {
+        "group_number": "12",
+        "port_channel": "Po12(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/5(P)    Eth2/5(P)"
+      },
+      {
+        "group_number": "13",
+        "port_channel": "Po13(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/6(P)    Eth2/6(P)"
+      },
+      {
+        "group_number": "14",
+        "port_channel": "Po14(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/7(P)    Eth2/7(P)"
+      },
+      {
+        "group_number": "801",
+        "port_channel": "Po801(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth5/6(P)    Eth6/6(P)"
+      },
+      {
+        "group_number": "802",
+        "port_channel": "Po802(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth5/7(P)    Eth6/7(P)"
+      },
+      {
+        "group_number": "803",
+        "port_channel": "Po803(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/17(P)  Eth16/17(P)"
+      },
+      {
+        "group_number": "804",
+        "port_channel": "Po804(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/24(P)  Eth16/24(P)"
+      },
+      {
+        "group_number": "811",
+        "port_channel": "Po811(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/8(P)   Eth15/28(P)  Eth16/8(P) Eth16/28(P)"
+      },
+      {
+        "group_number": "812",
+        "port_channel": "Po812(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/36(P)  Eth16/36(P)  Eth17/8(P) Eth18/8(P)"
+      },
+      {
+        "group_number": "813",
+        "port_channel": "Po813(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/15(P)  Eth16/15(P)"
+      },
+      {
+        "group_number": "814",
+        "port_channel": "Po814(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/22(P)  Eth16/22(P)"
+      },
+      {
+        "group_number": "821",
+        "port_channel": "Po821(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/30(P)  Eth16/30(P)  Eth17/29(P) Eth18/29(P)"
+      },
+      {
+        "group_number": "822",
+        "port_channel": "Po822(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth15/38(P)  Eth16/38(P)  Eth17/30(P) Eth18/30(P)"
+      },
+      {
+        "group_number": "823",
+        "port_channel": "Po823(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth3/9(P)    Eth4/9(P)"
+      },
+      {
+        "group_number": "824",
+        "port_channel": "Po824(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth3/10(P)   Eth4/10(P)"
+      },
+      {
+        "group_number": "825",
+        "port_channel": "Po825(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth3/3(P)"
+      },
+      {
+        "group_number": "826",
+        "port_channel": "Po826(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth4/3(P)"
+      },
+      {
+        "group_number": "827",
+        "port_channel": "Po827(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth5/3(P)"
+      },
+      {
+        "group_number": "828",
+        "port_channel": "Po828(RU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth6/3(P)"
+      }
+    ]
+  },
+  {
+    "port_channels": [
+      {
+        "group_number": "131",
+        "port_channel": "Po131(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/1(P)"
+      },
+      {
+        "group_number": "132",
+        "port_channel": "Po132(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/2(P)"
+      },
+      {
+        "group_number": "133",
+        "port_channel": "Po133(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/3(P)"
+      },
+      {
+        "group_number": "134",
+        "port_channel": "Po134(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/4(P)"
+      },
+      {
+        "group_number": "135",
+        "port_channel": "Po135(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "136",
+        "port_channel": "Po136(SD)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/6(D)"
+      },
+      {
+        "group_number": "137",
+        "port_channel": "Po137(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "138",
+        "port_channel": "Po138(SD)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/24(D)"
+      },
+      {
+        "group_number": "141",
+        "port_channel": "Po141(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "142",
+        "port_channel": "Po142(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "151",
+        "port_channel": "Po151(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "171",
+        "port_channel": "Po171(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/14(P)"
+      },
+      {
+        "group_number": "172",
+        "port_channel": "Po172(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/15(P)"
+      },
+      {
+        "group_number": "173",
+        "port_channel": "Po173(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/16(P)"
+      },
+      {
+        "group_number": "174",
+        "port_channel": "Po174(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/17(P)"
+      },
+      {
+        "group_number": "175",
+        "port_channel": "Po175(SD)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/25(D)"
+      },
+      {
+        "group_number": "176",
+        "port_channel": "Po176(SD)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/27(D)"
+      },
+      {
+        "group_number": "177",
+        "port_channel": "Po177(SD)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/28(D)"
+      },
+      {
+        "group_number": "178",
+        "port_channel": "Po178(SD)",
+        "type": "Eth",
+        "protocol": "NONE",
+        "member_ports": "--"
+      },
+      {
+        "group_number": "200",
+        "port_channel": "Po200(SU)",
+        "type": "Eth",
+        "protocol": "LACP",
+        "member_ports": "Eth1/21(P)   Eth1/22(P)"
+      }
+    ]
+  }
+]

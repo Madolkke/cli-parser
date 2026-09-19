@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "router_id": {
+      "type": "string"
+    },
+    "process_id": {
+      "type": "string"
+    },
+    "area_id": {
+      "type": "string"
+    },
+    "lsas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ls_age": {
+            "type": "string"
+          },
+          "options": {
+            "type": "string"
+          },
+          "ls_type": {
+            "type": "string"
+          },
+          "link_state_id": {
+            "type": "string"
+          },
+          "advertising_router": {
+            "type": "string"
+          },
+          "ls_seq_number": {
+            "type": "string"
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "length": {
+            "type": "string"
+          },
+          "number_of_links": {
+            "type": "string"
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "link_type": {
+                  "type": "string"
+                },
+                "link_id_label": {
+                  "type": "string"
+                },
+                "link_id": {
+                  "type": "string"
+                },
+                "link_data_label": {
+                  "type": "string"
+                },
+                "link_data": {
+                  "type": "string"
+                },
+                "mtid_metrics": {
+                  "type": "string"
+                },
+                "tos0_metrics": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "link_type",
+                "link_id_label",
+                "link_id",
+                "link_data_label",
+                "link_data",
+                "mtid_metrics",
+                "tos0_metrics"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ls_age",
+          "options",
+          "ls_type",
+          "link_state_id",
+          "advertising_router",
+          "ls_seq_number",
+          "checksum",
+          "length",
+          "number_of_links",
+          "links"
+        ]
+      }
+    }
+  },
+  "required": [
+    "router_id",
+    "process_id",
+    "area_id",
+    "lsas"
+  ]
+}
