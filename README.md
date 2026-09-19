@@ -265,6 +265,8 @@ the user cancels an in-progress run.
 
 ## Documentation
 
+- [CLI 输出解析 Agent 设计方案（整体设计与协作架构）](docs/agent-design.md)
+- [CLI 输出解析 Agent 测试报告模板（测试报告编写与结果汇总）](docs/agent-test-report-template.md)
 - [Architecture and exact constraints](docs/architecture.md)
 - [Agent architecture and runtime walkthrough](docs/agent-architecture-and-runtime.md)
 - [Live corpus test plan](docs/live-corpus-test-plan.md)

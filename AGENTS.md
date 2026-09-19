@@ -80,7 +80,8 @@
 
 | 任务 | 必读文档 |
 | --- | --- |
-| 项目汇报、设计思路与演进概览 | [docs/agent-design.md](docs/agent-design.md) |
+| 项目汇报、整体设计与协作架构 | [docs/agent-design.md](docs/agent-design.md) |
+| 测试报告编写与结果汇总 | [docs/agent-test-report-template.md](docs/agent-test-report-template.md) |
 | 产品架构、公共 API、目录职责 | [docs/architecture.md](docs/architecture.md) |
 | 阶段协议、预算、采样、事件和运行时 | [docs/agent-architecture-and-runtime.md](docs/agent-architecture-and-runtime.md) |
 | 评测边界、指标、脱敏和历史兼容 | [docs/agent-evaluation.md](docs/agent-evaluation.md) |
